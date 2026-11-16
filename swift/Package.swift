@@ -35,12 +35,12 @@ let package = Package(
     // macOS 12 is the floor (Monterey, including Intel). Newer APIs are
     // runtime-gated; see Shared/MacOS12Compat.swift.
     platforms: [.macOS(.v12)],
-    dependencies: [
-        .package(url: "https://github.com/pointfreeco/swift-perception", from: "2.0.12"),
-    ],
     products: [
         .executable(name: "OstMac", targets: ["OstMac"]),
         .executable(name: "ostmac-mcp", targets: ["ostmac-mcp"]),
+    ],
+    dependencies: [
+        .package(url: "https://github.com/pointfreeco/swift-perception", from: "2.0.12"),
     ],
     targets: [
         .target(name: "COstMac", publicHeadersPath: "include"),
