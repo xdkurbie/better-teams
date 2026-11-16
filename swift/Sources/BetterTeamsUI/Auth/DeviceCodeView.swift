@@ -2,6 +2,7 @@
 // in large monospaced type, Copy Code, Open Browser, a waiting status.
 import OstMacCore
 import SwiftUI
+import Perception
 
 struct DeviceCodeView: View {
     let code: AuthCodeInfo
@@ -11,42 +12,44 @@ struct DeviceCodeView: View {
     let onCancel: () -> Void
 
     var body: some View {
-        VStack(spacing: 16) {
-            // The address is a link (opens the default browser).
-            Text(Self.instruction(code.verificationURI))
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-            // Exactly as Microsoft issued it; Copy Code copies the same string.
-            GroupBox {
-                Text(code.userCode)
-                    .font(AppFont.deviceCode)
-                    .textSelection(.enabled)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 4)
-            }
-                .accessibilityLabel("Code \(code.userCode.map(String.init).joined(separator: " "))")
-            HStack(spacing: 8) {
-                ProgressView().controlSize(.small)
-                Text("Waiting for you to sign in…").foregroundStyle(.secondary)
-            }
-            // HIG button order: the auxiliary action (Copy Code) at the
-            // leading edge, Cancel just left of the default button.
-            HStack(spacing: 10) {
-                Button("Copy Code") { if !isEvidence { auth.copyCode() } }
-                    .controlSize(.large)
-                Spacer(minLength: 20)
-                Button("Cancel", role: .cancel) {
-                    if !isEvidence { auth.cancel() }
-                    onCancel()
+        WithPerceptionTracking {
+            VStack(spacing: 16) {
+                // The address is a link (opens the default browser).
+                Text(Self.instruction(code.verificationURI))
+                    .compatForeground(.secondary)
+                    .multilineTextAlignment(.center)
+                // Exactly as Microsoft issued it; Copy Code copies the same string.
+                GroupBox {
+                    Text(code.userCode)
+                        .font(AppFont.deviceCode)
+                        .textSelection(.enabled)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 4)
                 }
-                .keyboardShortcut(.cancelAction)
-                .controlSize(.large)
-                Button("Open Browser") { if !isEvidence { auth.openBrowser() } }
-                    .buttonStyle(.borderedProminent)
+                    .accessibilityLabel("Code \(code.userCode.map(String.init).joined(separator: " "))")
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("Waiting for you to sign in…").compatForeground(.secondary)
+                }
+                // HIG button order: the auxiliary action (Copy Code) at the
+                // leading edge, Cancel just left of the default button.
+                HStack(spacing: 10) {
+                    Button("Copy Code") { if !isEvidence { auth.copyCode() } }
+                        .controlSize(.large)
+                    Spacer(minLength: 20)
+                    Button("Cancel", role: .cancel) {
+                        if !isEvidence { auth.cancel() }
+                        onCancel()
+                    }
+                    .keyboardShortcut(.cancelAction)
                     .controlSize(.large)
-                    .keyboardShortcut(.defaultAction)
+                    Button("Open Browser") { if !isEvidence { auth.openBrowser() } }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.large)
+                        .keyboardShortcut(.defaultAction)
+                }
+                .padding(.top, 4)
             }
-            .padding(.top, 4)
         }
     }
 
@@ -65,13 +68,15 @@ struct SignInHeader: View {
     let title: String
 
     var body: some View {
-        VStack(spacing: 12) {
-            Image(nsImage: NSApp.applicationIconImage)
-                .resizable()
-                .frame(width: 64, height: 64)
-                .accessibilityHidden(true)
-            Text(title)
-                .font(.title.weight(.semibold))
+        WithPerceptionTracking {
+            VStack(spacing: 12) {
+                Image(nsImage: NSApp.applicationIconImage)
+                    .resizable()
+                    .frame(width: 64, height: 64)
+                    .accessibilityHidden(true)
+                Text(title)
+                    .font(.title.weight(.semibold))
+            }
         }
     }
 }

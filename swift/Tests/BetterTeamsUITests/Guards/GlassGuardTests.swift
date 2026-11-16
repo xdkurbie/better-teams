@@ -117,6 +117,7 @@ final class GlassGuardTests: XCTestCase {
 
     // (e) Live toggle: rail, AppKit bar and toolbar items swap in place.
     func testGlassFreeSwapsLive() throws {
+        guard #available(macOS 26, *) else { throw XCTSkip("Liquid Glass needs macOS 26") }
         AppSettings.useDemoStorage()
         let settings = AppSettings.shared
         XCTAssertFalse(settings.glassFree, "Glass by default")

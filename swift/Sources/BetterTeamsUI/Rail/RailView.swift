@@ -7,6 +7,7 @@
 // container height only.
 import OstMacCore
 import SwiftUI
+import Perception
 
 struct RailView: View {
     let navigator: Navigator
@@ -16,46 +17,55 @@ struct RailView: View {
     @State private var railHeight: CGFloat = 0
 
     var body: some View {
-        if let model {
-            let h = RailModel.itemHeight(model.options.railSize ?? RailSize(systemRowSize))
-            let call = model.call.flatMap { $0.showsRailItem ? $0 : nil }
-            let fixed = SectionID.builtIns.count + 1 + (model.rail.transient == nil ? 0 : 1) + (call == nil ? 0 : 1)
-            let layout = RailModel.layout(railHeight: railHeight, itemHeight: h,
-                                          pinnedCount: model.rail.pinned.count, fixedItems: fixed)
-            // Search mode keeps the section it started from selected (it
-            // is where Esc returns).
-            let current = model.nav.section
-            VStack(spacing: RailModel.spacing) {
-                ForEach(SectionID.builtIns, id: \.key) { s in
-                    item(s, title: RailInfo.title(s), symbol: RailInfo.symbol(s),
-                         badge: model.provider(s).badge(model), current: current, height: h)
+        WithPerceptionTracking {
+            if let model {
+                let h = RailModel.itemHeight(model.options.railSize ?? RailSize(systemRowSize))
+                let call = model.call.flatMap { $0.showsRailItem ? $0 : nil }
+                let fixed = SectionID.builtIns.count + 1 + (model.rail.transient == nil ? 0 : 1) + (call == nil ? 0 : 1)
+                let layout = RailModel.layout(railHeight: railHeight, itemHeight: h,
+                                              pinnedCount: model.rail.pinned.count, fixedItems: fixed)
+                // Search mode keeps the section it started from selected (it
+                // is where Esc returns).
+                let current = model.nav.section
+                VStack(spacing: RailModel.spacing) {
+                    ForEach(SectionID.builtIns, id: \.key) { s in
+                        item(s, title: RailInfo.title(s), symbol: RailInfo.symbol(s),
+                             badge: model.provider(s).badge(model), current: current, height: h)
+                    }
+                    Rectangle()
+                        .fill(Palette.railDivider)
+                        .frame(height: 1)
+                        .padding(.horizontal, 16)
+                        .accessibilityHidden(true)
+                        .padding(.vertical, (RailModel.dividerHeight - 1) / 2)
+                    ForEach(model.rail.pinned.prefix(layout.visiblePinned), id: \.key) { e in
+                        item(e.section, title: e.title, symbol: e.symbol, badge: nil, current: current, height: h)
+                    }
+                    if let t = model.rail.transient {
+                        item(t.section, title: t.title, symbol: t.symbol, badge: nil, current: current, height: h)
+                    }
+                    if let call {
+                        CallRailItem(session: call, navigator: navigator, current: current, height: h)
+                    }
+                    if layout.showsMore {
+                        more(Array(model.rail.pinned.dropFirst(layout.visiblePinned)), current: current, height: h)
+                    }
+                    item(.apps, title: "Apps", symbol: "square.grid.2x2", badge: nil, current: current, height: h)
                 }
-                Rectangle()
-                    .fill(Palette.railDivider)
-                    .frame(height: 1)
-                    .padding(.horizontal, 16)
-                    .accessibilityHidden(true)
-                    .padding(.vertical, (RailModel.dividerHeight - 1) / 2)
-                ForEach(model.rail.pinned.prefix(layout.visiblePinned), id: \.key) { e in
-                    item(e.section, title: e.title, symbol: e.symbol, badge: nil, current: current, height: h)
+                .padding(.vertical, RailModel.verticalPadding)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .background {
+                    GeometryReader { proxy in
+                        Color.clear
+                            .onAppear { railHeight = proxy.size.height }
+                            .onChange(of: proxy.size.height) { new in railHeight = new }
+                    }
                 }
-                if let t = model.rail.transient {
-                    item(t.section, title: t.title, symbol: t.symbol, badge: nil, current: current, height: h)
-                }
-                if let call {
-                    CallRailItem(session: call, navigator: navigator, current: current, height: h)
-                }
-                if layout.showsMore {
-                    more(Array(model.rail.pinned.dropFirst(layout.visiblePinned)), current: current, height: h)
-                }
-                item(.apps, title: "Apps", symbol: "square.grid.2x2", badge: nil, current: current, height: h)
+                .accessibilityElement(children: .contain)
+                .accessibilityLabel("Sections")
+                .onAppear { navigator.railItemHeightDidChange(h) }
+                .onChange(of: h) { new in navigator.railItemHeightDidChange(new) }
             }
-            .padding(.vertical, RailModel.verticalPadding)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { railHeight = $0 }
-            .accessibilityElement(children: .contain)
-            .accessibilityLabel("Sections")
-            .onChange(of: h, initial: true) { _, new in navigator.railItemHeightDidChange(new) }
         }
     }
 

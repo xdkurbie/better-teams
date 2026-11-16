@@ -5,6 +5,7 @@
 import AppKit
 import OstMacCore
 import SwiftUI
+import Perception
 
 enum ContactHoverTiming {
     /// Dwell before the first card (Teams waits about a second).
@@ -16,20 +17,20 @@ enum ContactHoverTiming {
 }
 
 @MainActor
-@Observable
+@Perceptible
 final class ContactHover {
     /// Anchor whose card is up.
     private(set) var shownAnchor: String?
     /// Evidence pin: the first anchor for this name shows its card.
     var pinnedName: String?
-    @ObservationIgnored private(set) var pinnedAnchor: String?
-    @ObservationIgnored private(set) var pointerAnchor: String?
-    @ObservationIgnored private(set) var inCard = false
-    @ObservationIgnored private let scheduler: HoverScheduler
-    @ObservationIgnored private var observers: [NSObjectProtocol] = []
+    @PerceptionIgnored private(set) var pinnedAnchor: String?
+    @PerceptionIgnored private(set) var pointerAnchor: String?
+    @PerceptionIgnored private(set) var inCard = false
+    @PerceptionIgnored private let scheduler: HoverScheduler
+    @PerceptionIgnored private var observers: [NSObjectProtocol] = []
     /// The cards' own popover windows: their scroll view is not a scroll
     /// under the anchor.
-    @ObservationIgnored private let cardWindows = NSHashTable<NSWindow>.weakObjects()
+    @PerceptionIgnored private let cardWindows = NSHashTable<NSWindow>.weakObjects()
 
     init(scheduler: HoverScheduler? = nil, observeScrolling: Bool = false) {
         self.scheduler = scheduler ?? DebounceHoverScheduler()
@@ -171,22 +172,24 @@ struct ContactHoverModifier: ViewModifier {
     }
 
     func body(content: Content) -> some View {
-        if enabled {
-            content
-                .background { PopoverAnchorReader(box: anchorBox) }
-                .onHover { inside in hover.pointer(inside, anchor: anchor) }
-                .onAppear { hover.claimPin(anchor: anchor, name: ref.name) }
-                .popover(isPresented: Binding(
-                    get: { hover.isShown(anchor) },
-                    set: { if !$0, hover.isShown(anchor) { hover.dismiss() } }
-                ), arrowEdge: arrowEdge) {
-                    ContactHoverCard(ref: ref, hover: hover)
-                        .background { PopoverWindowClamp(anchor: anchorBox) }
-                        .environment(\.windowModel, model)
-                        .onHover { hover.card($0) }
-                }
-        } else {
-            content
+        WithPerceptionTracking {
+            if enabled {
+                content
+                    .background { PopoverAnchorReader(box: anchorBox) }
+                    .onHover { inside in hover.pointer(inside, anchor: anchor) }
+                    .onAppear { hover.claimPin(anchor: anchor, name: ref.name) }
+                    .popover(isPresented: Binding(
+                        get: { hover.isShown(anchor) },
+                        set: { if !$0, hover.isShown(anchor) { hover.dismiss() } }
+                    ), arrowEdge: arrowEdge) {
+                        ContactHoverCard(ref: ref, hover: hover)
+                            .background { PopoverWindowClamp(anchor: anchorBox) }
+                            .environment(\.windowModel, model)
+                            .onHover { hover.card($0) }
+                    }
+            } else {
+                content
+            }
         }
     }
 }

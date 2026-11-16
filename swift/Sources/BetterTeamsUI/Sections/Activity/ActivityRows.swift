@@ -8,6 +8,7 @@
 import Foundation
 import OstMacCore
 import SwiftUI
+import Perception
 
 /// Filter pop-up (§6.1).
 enum ActivityFilter: String, CaseIterable, Sendable {
@@ -171,47 +172,49 @@ struct ActivityRow: View {
     @Environment(\.contentTextScale) private var scale
 
     var body: some View {
-        HStack(alignment: .top, spacing: 8) {
-            Circle()
-                .fill(.tint)
-                .frame(width: 7, height: 7)
-                .opacity(row.unread ? 1 : 0)
-                .padding(.top, 11)
-                .accessibilityHidden(true)
-            avatar
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    // Up to two lines, grown vertically so a List row
-                    // never clips it to one ("…in Sho…"); the time keeps
-                    // its width (fixedSize) and the headline takes the rest.
-                    // Three lines: the place name ends the headline, so
-                    // two lines at the default list width cut it off
-                    // ("…in Demo — S…").
-                    Text(row.headline)
-                        .font(row.unread ? AppFont.headline(scale) : AppFont.body(scale))
-                        .lineLimit(3)
-                        .truncationMode(.tail)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    Text(Self.time(row.date, now: now))
-                        .font(AppFont.caption(scale))
-                        .foregroundStyle(.secondary)
-                        .fixedSize()
-                }
-                // No snippet = no line (no reserved blank height).
-                if !row.snippet.isEmpty {
-                    Text(row.snippet)
-                        .font(AppFont.subheadline(scale))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                        .truncationMode(.tail)
-                        .fixedSize(horizontal: false, vertical: true)
+        WithPerceptionTracking {
+            HStack(alignment: .top, spacing: 8) {
+                Circle()
+                    .fill(.tint)
+                    .frame(width: 7, height: 7)
+                    .opacity(row.unread ? 1 : 0)
+                    .padding(.top, 11)
+                    .accessibilityHidden(true)
+                avatar
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        // Up to two lines, grown vertically so a List row
+                        // never clips it to one ("…in Sho…"); the time keeps
+                        // its width (fixedSize) and the headline takes the rest.
+                        // Three lines: the place name ends the headline, so
+                        // two lines at the default list width cut it off
+                        // ("…in Demo — S…").
+                        Text(row.headline)
+                            .font(row.unread ? AppFont.headline(scale) : AppFont.body(scale))
+                            .lineLimit(3)
+                            .truncationMode(.tail)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        Text(Self.time(row.date, now: now))
+                            .font(AppFont.caption(scale))
+                            .compatForeground(.secondary)
+                            .fixedSize()
+                    }
+                    // No snippet = no line (no reserved blank height).
+                    if !row.snippet.isEmpty {
+                        Text(row.snippet)
+                            .font(AppFont.subheadline(scale))
+                            .compatForeground(.secondary)
+                            .lineLimit(2)
+                            .truncationMode(.tail)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
             }
+            .padding(.vertical, 3)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(accessibility)
         }
-        .padding(.vertical, 3)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(accessibility)
     }
 
     /// Kind symbol over the avatar's trailing-bottom corner: a white
@@ -228,7 +231,7 @@ struct ActivityRow: View {
                 Image(systemName: row.symbol)
                     .symbolVariant(.fill)
                     .font(AppFont.avatarBadgeGlyph)
-                    .foregroundStyle(Palette.badgeText)
+                    .compatForeground(Palette.badgeText)
                     .frame(width: 15, height: 15)
                     .background(Circle().fill(row.isMissedCall ? Palette.failed : Palette.activityBadge))
                     .background(Circle().fill(.background).padding(-1.5))

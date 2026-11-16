@@ -1,0 +1,105 @@
+name: macOS 12 Intel
+
+on:
+  push:
+    branches: [main, "cursor/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: macos12-intel-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-26-intel
+    timeout-minutes: 180
+    env:
+      MACOSX_DEPLOYMENT_TARGET: "12.0"
+      CI: "true"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode 26
+        run: |
+          set -euo pipefail
+          ls -d /Applications/Xcode*.app
+          XCODE="$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1 || true)"
+          if [[ -z "${XCODE}" && -d /Applications/Xcode.app ]]; then
+            XCODE=/Applications/Xcode.app
+          fi
+          if [[ -n "${XCODE}" ]]; then
+            sudo xcode-select -s "$XCODE"
+          fi
+          xcodebuild -version
+          swift --version
+          xcrun --show-sdk-path
+          xcrun --show-sdk-version
+          uname -m
+
+      - name: Rust
+        run: |
+          set -euo pipefail
+          curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+          # shellcheck disable=SC1091
+          source "$HOME/.cargo/env"
+          echo "$HOME/.cargo/env" >> "$GITHUB_PATH"
+          rustc --version
+          cargo --version
+
+      - name: Build x86_64 app
+        run: |
+          set -euo pipefail
+          # shellcheck disable=SC1091
+          source "$HOME/.cargo/env"
+          ARCH="$(uname -m)"
+          if [[ "$ARCH" != "x86_64" ]]; then
+            echo "Runner is $ARCH; cross-compiling for x86_64-apple-darwin"
+            export RUST_TARGET=x86_64-apple-darwin
+            export SWIFT_ARCH=x86_64
+          fi
+          export MACOSX_DEPLOYMENT_TARGET=12.0
+          ./scripts/make-dmg.sh
+          APP="tmp/Better Teams.app"
+          ditto -c -k --keepParent "$APP" "tmp/BetterTeams-1.0.0-macos12-x86_64.zip"
+          DMG="$(echo tmp/Better\ Teams-*.dmg)"
+          cp "$DMG" "tmp/BetterTeams-1.0.0-macos12-x86_64.dmg"
+          chmod +x scripts/check-macos12-binary.sh
+          ./scripts/check-macos12-binary.sh \
+            "$APP/Contents/MacOS/OstMac" \
+            "$APP/Contents/MacOS/ostmac-mcp"
+          echo "linked libraries:"
+          xcrun otool -L "$APP/Contents/MacOS/OstMac"
+
+      - name: Upload app artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BetterTeams-1.0.0-macos12-x86_64
+          path: |
+            tmp/BetterTeams-1.0.0-macos12-x86_64.zip
+            tmp/BetterTeams-1.0.0-macos12-x86_64.dmg
+          if-no-files-found: error
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG=v1.0.0-macos12-intel
+          cat > /tmp/release-notes.md << 'EOF'
+          Ad-hoc signed Intel build of Better Teams for macOS 12.0 or later (including 12.7.x Monterey on x86_64).
+
+          Gatekeeper will block the first open of a downloaded app. Right-click Better Teams.app, choose Open, then Open again. Or, after copying it out of the disk image: xattr -dr com.apple.quarantine "/Applications/Better Teams.app"
+
+          On macOS 12, Apple Intelligence Catch Up, on-device message translation, Liquid Glass, the system screen-sharing picker, and Open at Login are unavailable. Chats, sign-in, and standard notifications are the supported path. See the README section "macOS 12 on Intel".
+          EOF
+          # Recreate so the tag always points at this green commit.
+          gh release delete "$TAG" --yes --cleanup-tag || true
+          gh release create "$TAG" --target "$GITHUB_SHA" \
+            --title "Better Teams 1.0.0 for macOS 12 Intel" \
+            --notes-file /tmp/release-notes.md \
+            tmp/BetterTeams-1.0.0-macos12-x86_64.zip \
+            tmp/BetterTeams-1.0.0-macos12-x86_64.dmg
+          gh release view "$TAG"

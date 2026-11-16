@@ -5,6 +5,7 @@
 // details), fakes in tests and the demo calendar in `--demo`.
 import OstMacCore
 import SwiftUI
+import Perception
 
 /// "Series" pull-down: View Series (the series master's details) and
 /// Show All Instances.
@@ -13,15 +14,17 @@ struct SeriesLinks: View {
     let model: WindowModel
 
     var body: some View {
-        Menu("Series") {
-            if meeting.info?.kind != .seriesMaster {
-                Button("View Series") { CalendarSection.viewSeries(meeting, model) }
+        WithPerceptionTracking {
+            Menu("Series") {
+                if meeting.info?.kind != .seriesMaster {
+                    Button("View Series") { CalendarSection.viewSeries(meeting, model) }
+                }
+                Button("Show All Instances") { CalendarSection.showInstances(meeting, model) }
             }
-            Button("Show All Instances") { CalendarSection.showInstances(meeting, model) }
+            .menuStyle(.button)
+            .controlSize(.small)
+            .fixedSize()
         }
-        .menuStyle(.button)
-        .controlSize(.small)
-        .fixedSize()
     }
 }
 
@@ -41,54 +44,56 @@ struct EventInstancesSheet: View {
     private var rows: [MeetingItem]? { week.seriesInstances[seriesID] }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("All instances").font(.headline)
-                Text(rows?.first?.subject ?? title).foregroundStyle(.secondary).lineLimit(1)
-            }
-            Group {
-                if let rows, !rows.isEmpty {
-                    ScrollViewReader { proxy in
-                        List(rows, selection: $selection) { row in
-                            instanceRow(row).tag(row.id)
+        WithPerceptionTracking {
+            VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("All instances").font(.headline)
+                    Text(rows?.first?.subject ?? title).compatForeground(.secondary).lineLimit(1)
+                }
+                Group {
+                    if let rows, !rows.isEmpty {
+                        ScrollViewReader { proxy in
+                            List(rows, selection: $selection) { row in
+                                instanceRow(row).tag(row.id)
+                            }
+                            .compatSelectionMenu(forSelectionType: String.self) { _ in } primaryAction: { ids in
+                                if let id = ids.first { open(id) }
+                            }
+                            .onAppear { focus(rows, proxy) }
+                            .onChange(of: rows.count) { _ in focus(rows, proxy) }
                         }
-                        .contextMenu(forSelectionType: String.self) { _ in } primaryAction: { ids in
-                            if let id = ids.first { open(id) }
+                    } else if let error = week.instancesError[seriesID] {
+                        HStack(spacing: 6) {
+                            Image(systemName: "exclamationmark.triangle.fill").compatForeground(Palette.failed)
+                            Text(error).compatForeground(.secondary)
+                            Button("Try Again") { week.loadInstances(series: seriesID, force: true) }
                         }
-                        .onAppear { focus(rows, proxy) }
-                        .onChange(of: rows.count) { _, _ in focus(rows, proxy) }
+                    } else if rows == nil {
+                        HStack(spacing: 6) {
+                            ProgressView().controlSize(.small)
+                            Text("Reading the series\u{2026}").compatForeground(.secondary)
+                        }
+                    } else {
+                        Text("No instances in this period").compatForeground(.secondary)
                     }
-                } else if let error = week.instancesError[seriesID] {
-                    HStack(spacing: 6) {
-                        Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Palette.failed)
-                        Text(error).foregroundStyle(.secondary)
-                        Button("Try Again") { week.loadInstances(series: seriesID, force: true) }
-                    }
-                } else if rows == nil {
-                    HStack(spacing: 6) {
-                        ProgressView().controlSize(.small)
-                        Text("Reading the series\u{2026}").foregroundStyle(.secondary)
-                    }
-                } else {
-                    Text("No instances in this period").foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                HStack {
+                    Text(rows.map { "\($0.count) instance\($0.count == 1 ? "" : "s")" } ?? "")
+                        .font(AppFont.caption(scale)).compatForeground(.secondary)
+                    Spacer()
+                    Button("Done") { model?.dismissSheet() }.keyboardShortcut(.cancelAction)
+                    Button("Open") { if let selection { open(selection) } }
+                        .keyboardShortcut(.defaultAction)
+                        .disabled(selection == nil)
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            HStack {
-                Text(rows.map { "\($0.count) instance\($0.count == 1 ? "" : "s")" } ?? "")
-                    .font(AppFont.caption(scale)).foregroundStyle(.secondary)
-                Spacer()
-                Button("Done") { model?.dismissSheet() }.keyboardShortcut(.cancelAction)
-                Button("Open") { if let selection { open(selection) } }
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(selection == nil)
-            }
+            .font(AppFont.body(scale))
+            .padding(20)
+            .frame(width: 520, height: 460)
+            .background(Color(nsColor: .windowBackgroundColor))
+            .onAppear { week.loadInstances(series: seriesID) }
         }
-        .font(AppFont.body(scale))
-        .padding(20)
-        .frame(width: 520, height: 460)
-        .background(Color(nsColor: .windowBackgroundColor))
-        .onAppear { week.loadInstances(series: seriesID) }
     }
 
     private func open(_ id: String) {
@@ -113,17 +118,17 @@ struct EventInstancesSheet: View {
     private func instanceRow(_ row: MeetingItem) -> some View {
         HStack(spacing: 10) {
             Image(systemName: row.isOrganizer ? "checkmark.circle" : CalendarDetailsText.responseSymbol(row.info?.myResponse ?? .none))
-                .foregroundStyle(.secondary)
+                .compatForeground(.secondary)
                 .frame(width: 18)
             VStack(alignment: .leading, spacing: 1) {
                 Text(CalendarFormat.when(row)).monospacedDigit()
                 if row.info?.kind == .exception {
-                    Text("Changed from the series").font(AppFont.caption(scale)).foregroundStyle(.secondary)
+                    Text("Changed from the series").font(AppFont.caption(scale)).compatForeground(.secondary)
                 }
             }
             Spacer(minLength: 8)
             if !row.isOrganizer, let r = row.info?.myResponse, !r.isPending {
-                Text(r.label).font(AppFont.caption(scale)).foregroundStyle(.secondary)
+                Text(r.label).font(AppFont.caption(scale)).compatForeground(.secondary)
             }
         }
         .padding(.vertical, 3)

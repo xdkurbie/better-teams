@@ -6,7 +6,7 @@
 import AppKit
 import OstMacCore
 import SwiftUI
-import Translation
+import Perception
 
 @MainActor
 final class ChannelWindowController: NSWindowController, NSWindowDelegate {
@@ -67,18 +67,20 @@ struct ChannelPopoutView: View {
     @Environment(\.windowModel) private var model
 
     var body: some View {
-        if let model {
-            if let (team, channel) = TeamsListPane.locate(channelID, in: teams.teams), team.teamId == teamID {
-                VStack(spacing: 0) {
-                    header(team, channel)
-                    Divider()
-                    posts(team, channel, model)
+        WithPerceptionTracking {
+            if let model {
+                if let (team, channel) = TeamsListPane.locate(channelID, in: teams.teams), team.teamId == teamID {
+                    VStack(spacing: 0) {
+                        header(team, channel)
+                        Divider()
+                        posts(team, channel, model)
+                    }
+                } else if teams.deletedChannelIDs.contains(channelID) {
+                    EmptyPane("This channel was deleted", systemImage: "trash",
+                              message: "It's no longer available in Teams. You can close this window.")
+                } else {
+                    LoadingPane("Loading Posts\u{2026}")
                 }
-            } else if teams.deletedChannelIDs.contains(channelID) {
-                EmptyPane("This channel was deleted", systemImage: "trash",
-                          message: "It's no longer available in Teams. You can close this window.")
-            } else {
-                LoadingPane("Loading Posts\u{2026}")
             }
         }
     }
@@ -87,7 +89,7 @@ struct ChannelPopoutView: View {
         VStack(alignment: .leading, spacing: 2) {
             Text("\(team.name) \u{203A} \(channel.name)").font(.headline).lineLimit(1).truncationMode(.head)
             if let d = channel.description, !d.isEmpty {
-                Text(d).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                Text(d).font(.caption).compatForeground(.secondary).lineLimit(2)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -118,9 +120,7 @@ struct ChannelPopoutView: View {
                          placeholder: "Start a post in #\(channel.name)", conv: conv,
                          composer: services.composer, attachments: services.attachments, services: services)
             }
-            .translationTask(TranslationSession.Configuration(target: services.translation.sessionTarget)) { session in
-                services.translation.attached(session)
-            }
+            .compatTranslationTask(services.translation)
         }
     }
 }

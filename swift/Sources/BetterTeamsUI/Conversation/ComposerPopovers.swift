@@ -4,6 +4,7 @@
 // when a popover auto-closes (the draft lives in `ComposerModel`).
 import OstMacCore
 import SwiftUI
+import Perception
 
 /// R4: index-stable identity for picker rows with no model id, built
 /// before the ForEach so no banned identity form appears inside it.
@@ -29,32 +30,34 @@ struct ComposerPopoverContent: View {
     @Environment(\.windowModel) private var model
 
     var body: some View {
-        switch popover {
-        case .mention:
-            MentionPicker(names: roster, selected: mentionIndex, pick: pickMention)
-        case .reaction(let id):
-            ReactionPicker { emoji in
-                conv.react(messageID: id, emoji: emoji)
-                composer.popover = nil
-            }
-        case .gif:
-            GIFPicker(services: services) { gif in
-                let d = composer.draft(chatID)
-                composer.setDraft(d.isEmpty ? gif.fullURL : "\(d) \(gif.fullURL)", for: chatID)
-                composer.popover = nil
-                composer.focusRequest += 1
-            }
-        case .sendLater:
-            if let scheduled = services.scheduled(model) {
-                SendLaterPicker(text: composer.draft(chatID)) { date in
-                    if scheduled.enqueue(chatID: chatID, chatName: chatName, text: composer.draft(chatID),
-                                         fireAt: date) != nil
-                    {
-                        composer.setDraft("", for: chatID)
+        WithPerceptionTracking {
+            switch popover {
+            case .mention:
+                MentionPicker(names: roster, selected: mentionIndex, pick: pickMention)
+            case .reaction(let id):
+                ReactionPicker { emoji in
+                    conv.react(messageID: id, emoji: emoji)
+                    composer.popover = nil
+                }
+            case .gif:
+                GIFPicker(services: services) { gif in
+                    let d = composer.draft(chatID)
+                    composer.setDraft(d.isEmpty ? gif.fullURL : "\(d) \(gif.fullURL)", for: chatID)
+                    composer.popover = nil
+                    composer.focusRequest += 1
+                }
+            case .sendLater:
+                if let scheduled = services.scheduled(model) {
+                    SendLaterPicker(text: composer.draft(chatID)) { date in
+                        if scheduled.enqueue(chatID: chatID, chatName: chatName, text: composer.draft(chatID),
+                                             fireAt: date) != nil
+                        {
+                            composer.setDraft("", for: chatID)
+                        }
+                        composer.popover = nil
+                    } cancel: {
+                        composer.popover = nil
                     }
-                    composer.popover = nil
-                } cancel: {
-                    composer.popover = nil
                 }
             }
         }
@@ -69,45 +72,47 @@ struct MentionPicker: View {
     let pick: (String) -> Void
 
     var body: some View {
-        Group {
-            if names.isEmpty {
-                Text("No Matching People")
-                    .foregroundStyle(.secondary)
-                    .frame(width: 240, height: 60)
-            } else {
-                // System selection (no custom row background, §6): the
-                // composer's arrows move it; a click or Return picks.
-                // Plain list, no separators: rows sit evenly, edge to edge.
-                List(selection: Binding<String?>(
-                    get: { names.indices.contains(selected) ? names[selected] : nil },
-                    set: { if let n = $0 { pick(n) } })) {
-                    ForEach(Indexed.wrap(names)) { n in
-                        let on = names.indices.contains(selected) && names[selected] == n.value
-                        HStack(spacing: 8) {
-                            Avatar(name: n.value, diameter: 22)
-                            Text(n.value).lineLimit(1)
-                                .foregroundStyle(on ? Color(nsColor: .alternateSelectedControlTextColor) : .primary)
+        WithPerceptionTracking {
+            Group {
+                if names.isEmpty {
+                    Text("No Matching People")
+                        .compatForeground(.secondary)
+                        .frame(width: 240, height: 60)
+                } else {
+                    // System selection (no custom row background, §6): the
+                    // composer's arrows move it; a click or Return picks.
+                    // Plain list, no separators: rows sit evenly, edge to edge.
+                    List(selection: Binding<String?>(
+                        get: { names.indices.contains(selected) ? names[selected] : nil },
+                        set: { if let n = $0 { pick(n) } })) {
+                        ForEach(Indexed.wrap(names)) { n in
+                            let on = names.indices.contains(selected) && names[selected] == n.value
+                            HStack(spacing: 8) {
+                                Avatar(name: n.value, diameter: 22)
+                                Text(n.value).lineLimit(1)
+                                    .compatForeground(on ? Color(nsColor: .alternateSelectedControlTextColor) : .primary)
+                            }
+                            .frame(height: Self.rowHeight - 4)
+                            .compatListRowSeparatorHidden()
+                            // Focus stays in the composer, so the list draws its
+                            // unemphasized (gray) selection, lost on the dark
+                            // popover: the arrow-key row gets the emphasized
+                            // system selection color instead.
+                            .listRowBackground(on ? RoundedRectangle(cornerRadius: 5, style: .continuous)
+                                .fill(Color(nsColor: .selectedContentBackgroundColor))
+                                .padding(.horizontal, 4) : nil)
+                            .tag(n.value)
                         }
-                        .frame(height: Self.rowHeight - 4)
-                        .listRowSeparator(.hidden)
-                        // Focus stays in the composer, so the list draws its
-                        // unemphasized (gray) selection, lost on the dark
-                        // popover: the arrow-key row gets the emphasized
-                        // system selection color instead.
-                        .listRowBackground(on ? RoundedRectangle(cornerRadius: 5, style: .continuous)
-                            .fill(Color(nsColor: .selectedContentBackgroundColor))
-                            .padding(.horizontal, 4) : nil)
-                        .tag(n.value)
                     }
+                    .listStyle(.plain)
+                    .environment(\.defaultMinListRowHeight, Self.rowHeight)
+                    .compatScrollContentBackgroundHidden()
+                    .compatScrollIndicators(visible: names.count > 6)
+                    .frame(width: 240, height: CGFloat(min(names.count, 6)) * Self.rowHeight + 8)
                 }
-                .listStyle(.plain)
-                .environment(\.defaultMinListRowHeight, Self.rowHeight)
-                .scrollContentBackground(.hidden)
-                .scrollIndicators(names.count > 6 ? .automatic : .never)
-                .frame(width: 240, height: CGFloat(min(names.count, 6)) * Self.rowHeight + 8)
             }
+            .accessibilityLabel("Mention Suggestions")
         }
-        .accessibilityLabel("Mention Suggestions")
     }
 
     static let rowHeight: CGFloat = 30
@@ -152,52 +157,54 @@ struct ReactionPicker: View {
     private var searching: Bool { !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
     var body: some View {
-        VStack(spacing: 8) {
-            SearchField(text: $query, placeholder: "Search Emoji", onSubmit: pickHighlighted, onMove: move,
-                        focusOnAppear: true)
-                .frame(height: 24)
-            if !searching {
-                Picker("Category", selection: $tab) {
-                    Text("Recent").tag(EmojiPage.recentsID)
-                    ForEach(ReactionCatalog.categories, id: \.id) { Text($0.title).tag($0.id) }
+        WithPerceptionTracking {
+            VStack(spacing: 8) {
+                SearchField(text: $query, placeholder: "Search Emoji", onSubmit: pickHighlighted, onMove: move,
+                            focusOnAppear: true)
+                    .frame(height: 24)
+                if !searching {
+                    Picker("Category", selection: $tab) {
+                        Text("Recent").tag(EmojiPage.recentsID)
+                        ForEach(ReactionCatalog.categories, id: \.id) { Text($0.title).tag($0.id) }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
                 }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-            }
-            ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVGrid(columns: Array(repeating: GridItem(.fixed(Self.cell), spacing: 2), count: Self.columns),
-                              spacing: 2) {
-                        // R4: index identity from the helper above, so the
-                        // ForEach itself carries no banned identity form.
-                        ForEach(indexed(entries)) { item in
-                            Button { pick(item.entry.emoji) } label: {
-                                Text(item.entry.emoji).font(.title2).frame(width: Self.cell, height: Self.cell)
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVGrid(columns: Array(repeating: GridItem(.fixed(Self.cell), spacing: 2), count: Self.columns),
+                                  spacing: 2) {
+                            // R4: index identity from the helper above, so the
+                            // ForEach itself carries no banned identity form.
+                            ForEach(indexed(entries)) { item in
+                                Button { pick(item.entry.emoji) } label: {
+                                    Text(item.entry.emoji).font(.title2).frame(width: Self.cell, height: Self.cell)
+                                }
+                                .buttonStyle(.borderless)
+                                .background(item.id == highlight
+                                    ? RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                        .fill(Color(nsColor: .selectedContentBackgroundColor).opacity(0.35))
+                                    : nil)
+                                .help(item.entry.keywords)
+                                .accessibilityLabel(item.entry.keywords.isEmpty ? item.entry.emoji : item.entry.keywords)
                             }
-                            .buttonStyle(.borderless)
-                            .background(item.id == highlight
-                                ? RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                    .fill(Color(nsColor: .selectedContentBackgroundColor).opacity(0.35))
-                                : nil)
-                            .help(item.entry.keywords)
-                            .accessibilityLabel(item.entry.keywords.isEmpty ? item.entry.emoji : item.entry.keywords)
+                        }
+                    }
+                    .onChange(of: highlight) { i in proxy.scrollTo(i, anchor: .center) }
+                }
+                .overlay {
+                    if entries.isEmpty {
+                        if searching { ContentUnavailableView.search(text: query) } else {
+                            Text("No recent emoji yet.").compatForeground(.secondary)
                         }
                     }
                 }
-                .onChange(of: highlight) { _, i in proxy.scrollTo(i, anchor: .center) }
             }
-            .overlay {
-                if entries.isEmpty {
-                    if searching { ContentUnavailableView.search(text: query) } else {
-                        Text("No recent emoji yet.").foregroundStyle(.secondary)
-                    }
-                }
-            }
+            .padding(12)
+            .frame(width: 338, height: 330)
+            .onChange(of: query) { _ in highlight = 0 }
+            .onChange(of: tab) { _ in highlight = 0 }
         }
-        .padding(12)
-        .frame(width: 338, height: 330)
-        .onChange(of: query) { highlight = 0 }
-        .onChange(of: tab) { highlight = 0 }
     }
 
     private func move(_ dx: Int, _ dy: Int) -> Bool {
@@ -226,47 +233,49 @@ struct GIFPicker: View {
     static let columns = 3
 
     var body: some View {
-        VStack(spacing: 8) {
-            // Return searches (a network call per query, not per keystroke).
-            SearchField(text: $query, placeholder: "Search GIFs", onSubmit: submit, onMove: move, focusOnAppear: true)
-                .frame(height: 24)
-            Group {
-                if searching && results.isEmpty {
-                    ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if results.isEmpty {
-                    ContentUnavailableView(searched.isEmpty ? "Search for a GIF" : "No GIFs Found",
-                                           systemImage: "photo.on.rectangle.angled",
-                                           description: Text(searched.isEmpty ? "Results come from Klipy." : ""))
-                } else {
-                    ScrollViewReader { proxy in
-                        ScrollView {
-                            LazyVGrid(columns: Array(repeating: GridItem(.fixed(110), spacing: 6), count: Self.columns),
-                                      spacing: 6) {
-                                ForEach(indexed(results)) { item in
-                                    Button { pick(item.entry) } label: {
-                                        GIFThumb(model: services.media.image(url: item.entry.previewURL, messageID: "gif-picker"))
-                                            .overlay {
-                                                if item.id == highlight {
-                                                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                                        .strokeBorder(Color(nsColor: .selectedContentBackgroundColor),
-                                                                      lineWidth: 3)
+        WithPerceptionTracking {
+            VStack(spacing: 8) {
+                // Return searches (a network call per query, not per keystroke).
+                SearchField(text: $query, placeholder: "Search GIFs", onSubmit: submit, onMove: move, focusOnAppear: true)
+                    .frame(height: 24)
+                Group {
+                    if searching && results.isEmpty {
+                        ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else if results.isEmpty {
+                        ContentUnavailableView(searched.isEmpty ? "Search for a GIF" : "No GIFs Found",
+                                               systemImage: "photo.on.rectangle.angled",
+                                               description: Text(searched.isEmpty ? "Results come from Klipy." : ""))
+                    } else {
+                        ScrollViewReader { proxy in
+                            ScrollView {
+                                LazyVGrid(columns: Array(repeating: GridItem(.fixed(110), spacing: 6), count: Self.columns),
+                                          spacing: 6) {
+                                    ForEach(indexed(results)) { item in
+                                        Button { pick(item.entry) } label: {
+                                            GIFThumb(model: services.media.image(url: item.entry.previewURL, messageID: "gif-picker"))
+                                                .overlay {
+                                                    if item.id == highlight {
+                                                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                                            .strokeBorder(Color(nsColor: .selectedContentBackgroundColor),
+                                                                          lineWidth: 3)
+                                                    }
                                                 }
-                                            }
+                                        }
+                                        .buttonStyle(.plain)
+                                        .help(item.entry.title)
+                                        .accessibilityLabel(item.entry.title.isEmpty ? "GIF" : item.entry.title)
                                     }
-                                    .buttonStyle(.plain)
-                                    .help(item.entry.title)
-                                    .accessibilityLabel(item.entry.title.isEmpty ? "GIF" : item.entry.title)
                                 }
                             }
+                            .onChange(of: highlight) { i in proxy.scrollTo(i, anchor: .center) }
                         }
-                        .onChange(of: highlight) { _, i in proxy.scrollTo(i, anchor: .center) }
                     }
                 }
+                .frame(maxHeight: .infinity)
             }
-            .frame(maxHeight: .infinity)
+            .padding(12)
+            .frame(width: 380, height: 320)
         }
-        .padding(12)
-        .frame(width: 380, height: 320)
     }
 
     private func move(_ dx: Int, _ dy: Int) -> Bool {
@@ -306,18 +315,20 @@ private struct GIFThumb: View {
     @ObservedObject var model: RemoteImageModel
 
     var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 6, style: .continuous).fill(.fill.quaternary)
-            if let img = model.image {
-                Image(nsImage: img).resizable().aspectRatio(contentMode: .fill)
-            } else if case .failed = model.phase {
-                Image(systemName: "photo").foregroundStyle(.secondary)
-            } else {
-                ProgressView().controlSize(.small)
+        WithPerceptionTracking {
+            ZStack {
+                RoundedRectangle(cornerRadius: 6, style: .continuous).fill(.fill.quaternary)
+                if let img = model.image {
+                    Image(nsImage: img).resizable().aspectRatio(contentMode: .fill)
+                } else if case .failed = model.phase {
+                    Image(systemName: "photo").compatForeground(.secondary)
+                } else {
+                    ProgressView().controlSize(.small)
+                }
             }
+            .frame(width: 110, height: 82)
+            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
         }
-        .frame(width: 110, height: 82)
-        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
     }
 }
 
@@ -360,42 +371,44 @@ struct SendLaterPicker: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Send Later").font(.headline)
-            Picker("Send", selection: Binding(get: { preset }, set: { p in
-                preset = p
-                if let d = p.date { date = d }
-            })) {
-                ForEach(Preset.allCases, id: \.title) { p in Text(p.title).tag(p) }
+        WithPerceptionTracking {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Send Later").font(.headline)
+                Picker("Send", selection: Binding(get: { preset }, set: { p in
+                    preset = p
+                    if let d = p.date { date = d }
+                })) {
+                    ForEach(Preset.allCases, id: \.title) { p in Text(p.title).tag(p) }
+                }
+                .pickerStyle(.radioGroup)
+                .labelsHidden()
+                // Date and time are the Custom choice's fields: live only
+                // while Custom is picked; aligned with the radio column.
+                Group {
+                    DatePicker("Date", selection: customDate, in: Date()..., displayedComponents: .date)
+                        .datePickerStyle(.graphical)
+                        .labelsHidden()
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    DatePicker("Time", selection: customDate, displayedComponents: .hourAndMinute)
+                        .fixedSize()
+                }
+                .disabled(preset != .custom)
+                Text("Sends \(ScheduledPresets.fireLabel(for: date))")
+                    .font(.caption)
+                    .compatForeground(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack {
+                    Spacer()
+                    Button("Cancel", role: .cancel, action: cancel)
+                        .keyboardShortcut(.cancelAction)
+                    Button("Schedule") { schedule(date) }
+                        .keyboardShortcut(.defaultAction)
+                        .disabled(!canSchedule)
+                }
             }
-            .pickerStyle(.radioGroup)
-            .labelsHidden()
-            // Date and time are the Custom choice's fields: live only
-            // while Custom is picked; aligned with the radio column.
-            Group {
-                DatePicker("Date", selection: customDate, in: Date()..., displayedComponents: .date)
-                    .datePickerStyle(.graphical)
-                    .labelsHidden()
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                DatePicker("Time", selection: customDate, displayedComponents: .hourAndMinute)
-                    .fixedSize()
-            }
-            .disabled(preset != .custom)
-            Text("Sends \(ScheduledPresets.fireLabel(for: date))")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            HStack {
-                Spacer()
-                Button("Cancel", role: .cancel, action: cancel)
-                    .keyboardShortcut(.cancelAction)
-                Button("Schedule") { schedule(date) }
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(!canSchedule)
-            }
+            .padding(16)
+            .frame(width: Self.width)
         }
-        .padding(16)
-        .frame(width: Self.width)
     }
 
     /// Editing the date or time makes the choice Custom.

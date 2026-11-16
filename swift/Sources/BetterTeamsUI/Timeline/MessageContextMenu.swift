@@ -11,49 +11,52 @@ import AppKit
 import OstMacCore
 import SwiftUI
 import UniformTypeIdentifiers
+import Perception
 
 struct MessageContextMenu: View {
     let row: MessageRowData
     let actions: TimelineActions
 
     var body: some View {
-        let m = row.message
-        if row.send == .failed {
-            Button("Retry") { actions.retry(m) }
-            Button("Copy") { actions.copy(m) }
-            Divider()
-            Button("Delete", role: .destructive) { actions.discard(m) }
-        } else if m.deleted && !row.deleteFailed {
-            Button("Copy Link") { actions.copyLink(m) }
-        } else {
-            // A delete the server did not confirm restores the message: it
-            // keeps every normal action, with Retry Delete on top.
-            if row.deleteFailed {
-                Button("Retry Delete") { actions.retryDelete(m) }
+        WithPerceptionTracking {
+            let m = row.message
+            if row.send == .failed {
+                Button("Retry") { actions.retry(m) }
+                Button("Copy") { actions.copy(m) }
                 Divider()
-            }
-            Menu("React") {
-                ForEach(Indexed.wrap(ConversationStore.reactionEmojis)) { e in
-                    Button(e.value) { actions.react(m, e.value) }
+                Button("Delete", role: .destructive) { actions.discard(m) }
+            } else if m.deleted && !row.deleteFailed {
+                Button("Copy Link") { actions.copyLink(m) }
+            } else {
+                // A delete the server did not confirm restores the message: it
+                // keeps every normal action, with Retry Delete on top.
+                if row.deleteFailed {
+                    Button("Retry Delete") { actions.retryDelete(m) }
+                    Divider()
                 }
+                Menu("React") {
+                    ForEach(Indexed.wrap(ConversationStore.reactionEmojis)) { e in
+                        Button(e.value) { actions.react(m, e.value) }
+                    }
+                    Divider()
+                    Button("More…") { actions.moreReactions(m) }
+                }
+                Button("Reply") { actions.reply(m) }
+                Button("Forward…") { actions.forward(m) }
+                Button("Copy") { actions.copy(m) }
+                Button("Copy Link") { actions.copyLink(m) }
                 Divider()
-                Button("More…") { actions.moreReactions(m) }
-            }
-            Button("Reply") { actions.reply(m) }
-            Button("Forward…") { actions.forward(m) }
-            Button("Copy") { actions.copy(m) }
-            Button("Copy Link") { actions.copyLink(m) }
-            Divider()
-            Button(SavedMessages.menuTitle(isSaved: row.isSaved)) { actions.toggleSave(m) }
-            Button(PinnedMessages.menuTitle(isPinned: row.isPinned)) { actions.togglePin(m) }
-            if MessageTranslation.isEligible(m) {
-                Button(actions.translateTitle(m)) { actions.translate(m) }
-            }
-            Button("Mark as Unread") { actions.markUnread(from: m) }
-            if m.isOwn && row.send == .none {
-                Divider()
-                Button("Edit") { actions.edit(m) }
-                Button("Delete…", role: .destructive) { actions.delete(m) }
+                Button(SavedMessages.menuTitle(isSaved: row.isSaved)) { actions.toggleSave(m) }
+                Button(PinnedMessages.menuTitle(isPinned: row.isPinned)) { actions.togglePin(m) }
+                if MessageTranslation.isEligible(m) {
+                    Button(actions.translateTitle(m)) { actions.translate(m) }
+                }
+                Button("Mark as Unread") { actions.markUnread(from: m) }
+                if m.isOwn && row.send == .none {
+                    Divider()
+                    Button("Edit") { actions.edit(m) }
+                    Button("Delete…", role: .destructive) { actions.delete(m) }
+                }
             }
         }
     }

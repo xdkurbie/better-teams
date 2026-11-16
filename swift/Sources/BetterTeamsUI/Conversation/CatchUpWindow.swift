@@ -10,6 +10,7 @@
 import AppKit
 import OstMacCore
 import SwiftUI
+import Perception
 
 @MainActor
 final class CatchUpWindowController: NSWindowController, NSWindowDelegate {
@@ -86,13 +87,15 @@ struct CatchUpDigestView: View {
     let jump: (CatchUpMention) -> Void
 
     var body: some View {
-        VStack(spacing: 0) {
-            if catchUp.mode != .off { CatchUpPeriodBar(digest: digest) }
-            content
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            if catchUp.mode != .off { statusBar }
+        WithPerceptionTracking {
+            VStack(spacing: 0) {
+                if catchUp.mode != .off { CatchUpPeriodBar(digest: digest) }
+                content
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            .compatSafeAreaInset(edge: .bottom, spacing: 0) {
+                if catchUp.mode != .off { statusBar }
+            }
         }
     }
 
@@ -124,7 +127,7 @@ struct CatchUpDigestView: View {
                     HStack(spacing: 8) {
                         ProgressView().controlSize(.small)
                         Text("Catching up on the last \(digest.period.title.lowercased())\u{2026}")
-                            .foregroundStyle(.secondary)
+                            .compatForeground(.secondary)
                     }
                 }
             }
@@ -153,7 +156,7 @@ struct CatchUpDigestView: View {
                 }
             }
         }
-        .formStyle(.grouped)
+        .compatFormStyleGrouped()
     }
 
     private func name(_ chatID: String, _ stored: String) -> String {
@@ -186,7 +189,7 @@ struct CatchUpDigestView: View {
             }
             Text(status)
                 .font(.callout)
-                .foregroundStyle(.secondary)
+                .compatForeground(.secondary)
                 .lineLimit(1)
                 .truncationMode(.tail)
             Spacer()

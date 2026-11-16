@@ -7,6 +7,7 @@ import AppKit
 import OstMacCore
 import SwiftUI
 import UniformTypeIdentifiers
+import Perception
 
 /// How a pop-out window reaches the screen. Tests replace it so no window
 /// is ever ordered in (they still see the controller and its window).
@@ -88,18 +89,20 @@ struct MeetingPopoutView: View {
     @Environment(\.contentTextScale) private var scale
 
     var body: some View {
-        VStack(spacing: 0) {
-            Picker("Show", selection: $segment) {
-                Text("Chat").tag("chat")
-                Text("People").tag("people")
+        WithPerceptionTracking {
+            VStack(spacing: 0) {
+                Picker("Show", selection: $segment) {
+                    Text("Chat").tag("chat")
+                    Text("People").tag("people")
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .padding(10)
+                Divider()
+                if segment == "people" { people } else { thread }
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .padding(10)
-            Divider()
-            if segment == "people" { people } else { thread }
+            .onAppear { draft = pops.draft(for: key) }
         }
-        .onAppear { draft = pops.draft(for: key) }
     }
 
     @ViewBuilder
@@ -113,8 +116,8 @@ struct MeetingPopoutView: View {
                     Avatar(name: p.name)
                     Text(p.name).font(AppFont.body(scale)).lineLimit(1)
                     Spacer(minLength: 4)
-                    if p.speaking { Image(systemName: "waveform").foregroundStyle(.tint).accessibilityLabel("Speaking") }
-                    if p.muted { Image(systemName: "mic.slash.fill").foregroundStyle(.secondary).accessibilityLabel("Muted") }
+                    if p.speaking { Image(systemName: "waveform").compatForeground(.tint).accessibilityLabel("Speaking") }
+                    if p.muted { Image(systemName: "mic.slash.fill").compatForeground(.secondary).accessibilityLabel("Muted") }
                 }
             }
         }
@@ -139,7 +142,7 @@ struct MeetingPopoutView: View {
             TextField("Message", text: $draft)
                 .textFieldStyle(.roundedBorder)
                 .padding(10)
-                .onChange(of: draft) { _, new in pops.saveDraft(new, for: key) }
+                .onChange(of: draft) { new in pops.saveDraft(new, for: key) }
                 .onSubmit {
                     let t = draft.trimmingCharacters(in: .whitespacesAndNewlines)
                     guard !t.isEmpty else { return }
@@ -189,32 +192,34 @@ struct FilePopoutView: View {
     @Environment(\.windowModel) private var model
 
     var body: some View {
-        if let file = pops.entry(for: key)?.file {
-            Form {
-                Section {
-                    HStack(spacing: 10) {
-                        Image(nsImage: Self.icon(file)).resizable().frame(width: 32, height: 32).accessibilityHidden(true)
-                        Text(file.name).font(.headline).lineLimit(2).truncationMode(.middle).textSelection(.enabled)
+        WithPerceptionTracking {
+            if let file = pops.entry(for: key)?.file {
+                Form {
+                    Section {
+                        HStack(spacing: 10) {
+                            Image(nsImage: Self.icon(file)).resizable().frame(width: 32, height: 32).accessibilityHidden(true)
+                            Text(file.name).font(.headline).lineLimit(2).truncationMode(.middle).textSelection(.enabled)
+                        }
+                    }
+                    Section("Info") {
+                        LabeledContent("Kind", value: Self.kind(file))
+                        if !file.isFolder { LabeledContent("Size", value: FilesFormat.size(file.size)) }
+                        if let m = file.modified ?? file.created { LabeledContent("Modified", value: FilesFormat.date(iso: m)) }
+                        if let s = file.sender, !s.isEmpty { LabeledContent("Modified By", value: s) }
+                        if let loc = file.source_name, !loc.isEmpty { LabeledContent("Location", value: loc) }
+                    }
+                    Section {
+                        HStack {
+                            Button("Open in Browser") { open(file) }
+                                .disabled(Self.url(file) == nil || model?.options.demo == true)
+                            Button("Copy Link") { copy(file) }.disabled(Self.url(file) == nil)
+                        }
                     }
                 }
-                Section("Info") {
-                    LabeledContent("Kind", value: Self.kind(file))
-                    if !file.isFolder { LabeledContent("Size", value: FilesFormat.size(file.size)) }
-                    if let m = file.modified ?? file.created { LabeledContent("Modified", value: FilesFormat.date(iso: m)) }
-                    if let s = file.sender, !s.isEmpty { LabeledContent("Modified By", value: s) }
-                    if let loc = file.source_name, !loc.isEmpty { LabeledContent("Location", value: loc) }
-                }
-                Section {
-                    HStack {
-                        Button("Open in Browser") { open(file) }
-                            .disabled(Self.url(file) == nil || model?.options.demo == true)
-                        Button("Copy Link") { copy(file) }.disabled(Self.url(file) == nil)
-                    }
-                }
+                .compatFormStyleGrouped()
+            } else {
+                EmptyPane("File Not Available", systemImage: "doc", message: "This file is no longer available.")
             }
-            .formStyle(.grouped)
-        } else {
-            EmptyPane("File Not Available", systemImage: "doc", message: "This file is no longer available.")
         }
     }
 

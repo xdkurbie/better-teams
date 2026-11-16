@@ -6,6 +6,7 @@
 import AppKit
 import OstMacCore
 import SwiftUI
+import Perception
 
 @MainActor
 final class TransfersPopover: NSObject, NSPopoverDelegate {
@@ -54,28 +55,30 @@ struct TransfersView: View {
     static let maxRows = 6
 
     var body: some View {
-        let items = transfers.popoverItems
-        VStack(spacing: 0) {
-            if items.isEmpty {
-                Text("No Transfers")
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 28)
-            } else {
-                List(items) { t in
-                    TransferRow(transfer: t) { reveal(t) }
-                        .frame(minHeight: Self.rowHeight - 8)
+        WithPerceptionTracking {
+            let items = transfers.popoverItems
+            VStack(spacing: 0) {
+                if items.isEmpty {
+                    Text("No Transfers")
+                        .compatForeground(.secondary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 28)
+                } else {
+                    List(items) { t in
+                        TransferRow(transfer: t) { reveal(t) }
+                            .frame(minHeight: Self.rowHeight - 8)
+                    }
+                    .listStyle(.inset)
+                    .frame(height: CGFloat(min(items.count, Self.maxRows)) * Self.rowHeight + 8)
                 }
-                .listStyle(.inset)
-                .frame(height: CGFloat(min(items.count, Self.maxRows)) * Self.rowHeight + 8)
+                Divider()
+                HStack {
+                    Spacer()
+                    Button("Clear") { transfers.clearFinished() }
+                        .disabled(!items.contains { !$0.isRunning })
+                }
+                .padding(10)
             }
-            Divider()
-            HStack {
-                Spacer()
-                Button("Clear") { transfers.clearFinished() }
-                    .disabled(!items.contains { !$0.isRunning })
-            }
-            .padding(10)
         }
     }
 
@@ -92,33 +95,35 @@ struct TransferRow: View {
     let reveal: () -> Void
 
     var body: some View {
-        HStack(spacing: 10) {
-            Image(nsImage: FileItem.local(transfer).icon)
-                .resizable()
-                .frame(width: 32, height: 32)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(transfer.name).lineLimit(1).truncationMode(.middle)
-                if transfer.isRunning {
-                    if let p = transfer.progress {
-                        ProgressView(value: p).controlSize(.small)
-                    } else {
-                        ProgressView().progressViewStyle(.linear).controlSize(.small)
+        WithPerceptionTracking {
+            HStack(spacing: 10) {
+                Image(nsImage: FileItem.local(transfer).icon)
+                    .resizable()
+                    .frame(width: 32, height: 32)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(transfer.name).lineLimit(1).truncationMode(.middle)
+                    if transfer.isRunning {
+                        if let p = transfer.progress {
+                            ProgressView(value: p).controlSize(.small)
+                        } else {
+                            ProgressView().progressViewStyle(.linear).controlSize(.small)
+                        }
                     }
+                    status
+                        .font(.caption)
+                        .compatForeground(.secondary)
+                        .lineLimit(1)
                 }
-                status
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-            Spacer(minLength: 4)
-            if transfer.direction == .download, transfer.status == .done, transfer.path != nil {
-                Button(action: reveal) {
-                    Image(systemName: "magnifyingglass")
+                Spacer(minLength: 4)
+                if transfer.direction == .download, transfer.status == .done, transfer.path != nil {
+                    Button(action: reveal) {
+                        Image(systemName: "magnifyingglass")
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Show in Finder")
+                    .accessibilityLabel("Show in Finder")
                 }
-                .buttonStyle(.borderless)
-                .help("Show in Finder")
-                .accessibilityLabel("Show in Finder")
             }
         }
     }

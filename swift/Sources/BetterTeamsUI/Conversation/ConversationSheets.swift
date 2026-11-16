@@ -4,6 +4,7 @@
 // Buttons: Cancel + a default action, never a lone Done.
 import OstMacCore
 import SwiftUI
+import Perception
 
 @MainActor
 enum ConversationSheets {
@@ -42,52 +43,54 @@ struct ForwardSheet: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Forward Message").font(.headline)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(message.isOwn ? "You" : message.sender).font(.caption.weight(.semibold))
-                Text(MessageActions.forwardPreview(for: message))
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(3)
-            }
-            .padding(10)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(.fill.quaternary, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            SearchField(text: $query, placeholder: "Search Chats")
-                .frame(height: 24)
-            // Group label over a bordered list (the in-sheet list idiom,
-            // as New Chat): its edge lines up with the title and quote.
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Chats")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                List(selection: $picked) {
-                    ForEach(candidates) { c in
-                        HStack(spacing: 8) {
-                            Avatar(name: c.name, isGroup: c.is_group)
-                            Text(c.name).lineLimit(1)
+        WithPerceptionTracking {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Forward Message").font(.headline)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(message.isOwn ? "You" : message.sender).font(.caption.weight(.semibold))
+                    Text(MessageActions.forwardPreview(for: message))
+                        .font(.callout)
+                        .compatForeground(.secondary)
+                        .lineLimit(3)
+                }
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(.fill.quaternary, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                SearchField(text: $query, placeholder: "Search Chats")
+                    .frame(height: 24)
+                // Group label over a bordered list (the in-sheet list idiom,
+                // as New Chat): its edge lines up with the title and quote.
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Chats")
+                        .font(.subheadline.weight(.semibold))
+                        .compatForeground(.secondary)
+                    List(selection: $picked) {
+                        ForEach(candidates) { c in
+                            HStack(spacing: 8) {
+                                Avatar(name: c.name, isGroup: c.is_group)
+                                Text(c.name).lineLimit(1)
+                            }
+                            .tag(c.id)
                         }
-                        .tag(c.id)
+                    }
+                    .compatBorderedList(alternates: false)
+                    .frame(height: 220)
+                    .overlay {
+                        if candidates.isEmpty { ContentUnavailableView.search(text: query) }
                     }
                 }
-                .listStyle(.bordered(alternatesRowBackgrounds: false))
-                .frame(height: 220)
-                .overlay {
-                    if candidates.isEmpty { ContentUnavailableView.search(text: query) }
+                HStack {
+                    Spacer()
+                    Button("Cancel", role: .cancel) { model?.dismissSheet() }
+                        .keyboardShortcut(.cancelAction)
+                    Button("Forward") { forward() }
+                        .keyboardShortcut(.defaultAction)
+                        .disabled(picked == nil)
                 }
             }
-            HStack {
-                Spacer()
-                Button("Cancel", role: .cancel) { model?.dismissSheet() }
-                    .keyboardShortcut(.cancelAction)
-                Button("Forward") { forward() }
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(picked == nil)
-            }
+            .padding(20)
+            .frame(width: 440)
         }
-        .padding(20)
-        .frame(width: 440)
     }
 
     private func forward() {
@@ -118,47 +121,49 @@ struct ScheduledQueueSheet: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Scheduled Messages").font(.headline)
-            List(selection: $picked) {
-                ForEach(items) { item in
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(item.text).lineLimit(1)
-                        Label(ScheduledPresets.fireLabel(for: item.fireAt), systemImage: "clock")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .frame(height: Self.rowHeight - 8)
-                    .tag(item.id)
-                    .contextMenu {
-                        Button("Send Now") { sendNow(item) }
-                        Button("Delete Message", role: .destructive) { delete(item) }
+        WithPerceptionTracking {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Scheduled Messages").font(.headline)
+                List(selection: $picked) {
+                    ForEach(items) { item in
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(item.text).lineLimit(1)
+                            Label(ScheduledPresets.fireLabel(for: item.fireAt), systemImage: "clock")
+                                .font(.caption)
+                                .compatForeground(.secondary)
+                        }
+                        .frame(height: Self.rowHeight - 8)
+                        .tag(item.id)
+                        .contextMenu {
+                            Button("Send Now") { sendNow(item) }
+                            Button("Delete Message", role: .destructive) { delete(item) }
+                        }
                     }
                 }
-            }
-            .listStyle(.bordered(alternatesRowBackgrounds: false))
-            .environment(\.defaultMinListRowHeight, Self.rowHeight)
-            .frame(height: listHeight)
-            .overlay {
-                if items.isEmpty {
-                    ContentUnavailableView("No Scheduled Messages", systemImage: "clock",
-                                           description: Text("Use Send Later in the composer to schedule one."))
+                .compatBorderedList(alternates: false)
+                .environment(\.defaultMinListRowHeight, Self.rowHeight)
+                .frame(height: listHeight)
+                .overlay {
+                    if items.isEmpty {
+                        ContentUnavailableView("No Scheduled Messages", systemImage: "clock",
+                                               description: Text("Use Send Later in the composer to schedule one."))
+                    }
+                }
+                HStack {
+                    Button("Delete Message", role: .destructive) { if let item = selected { delete(item) } }
+                        .disabled(selected == nil)
+                    Spacer()
+                    Button("Cancel", role: .cancel) { model?.dismissSheet() }
+                        .keyboardShortcut(.cancelAction)
+                    Button("Send Now") { if let item = selected { sendNow(item) } }
+                        .keyboardShortcut(.defaultAction)
+                        .disabled(selected == nil)
                 }
             }
-            HStack {
-                Button("Delete Message", role: .destructive) { if let item = selected { delete(item) } }
-                    .disabled(selected == nil)
-                Spacer()
-                Button("Cancel", role: .cancel) { model?.dismissSheet() }
-                    .keyboardShortcut(.cancelAction)
-                Button("Send Now") { if let item = selected { sendNow(item) } }
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(selected == nil)
-            }
+            .padding(20)
+            .frame(width: 460)
+            .onAppear { if picked == nil { picked = items.first?.id } }
         }
-        .padding(20)
-        .frame(width: 460)
-        .onAppear { if picked == nil { picked = items.first?.id } }
     }
 
     private var selected: ScheduledItem? { picked.flatMap { p in items.first { $0.id == p } } }
@@ -196,29 +201,31 @@ struct SnoozeCustomSheet: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Snooze Until").font(.headline)
-            Text(name.map { "Notifications from \($0) resume at the time you choose." }
-                 ?? "Notifications from this chat resume at the time you choose.")
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            DatePicker("Snooze Until", selection: $until, in: Date()...,
-                       displayedComponents: [.date, .hourAndMinute])
-                .datePickerStyle(.graphical)
-                .labelsHidden()
-            HStack {
-                Spacer()
-                Button("Cancel", role: .cancel) { model?.dismissSheet() }
-                    .keyboardShortcut(.cancelAction)
-                Button("Snooze") {
-                    snooze.snooze(chatID: chatID, until: until)
-                    model?.dismissSheet()
+        WithPerceptionTracking {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Snooze Until").font(.headline)
+                Text(name.map { "Notifications from \($0) resume at the time you choose." }
+                     ?? "Notifications from this chat resume at the time you choose.")
+                    .compatForeground(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                DatePicker("Snooze Until", selection: $until, in: Date()...,
+                           displayedComponents: [.date, .hourAndMinute])
+                    .datePickerStyle(.graphical)
+                    .labelsHidden()
+                HStack {
+                    Spacer()
+                    Button("Cancel", role: .cancel) { model?.dismissSheet() }
+                        .keyboardShortcut(.cancelAction)
+                    Button("Snooze") {
+                        snooze.snooze(chatID: chatID, until: until)
+                        model?.dismissSheet()
+                    }
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(until <= Date())
                 }
-                .keyboardShortcut(.defaultAction)
-                .disabled(until <= Date())
             }
+            .padding(20)
+            .frame(width: 360)
         }
-        .padding(20)
-        .frame(width: 360)
     }
 }

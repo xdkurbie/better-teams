@@ -5,7 +5,7 @@
 // fixtures, no user defaults.
 import CryptoKit
 import Foundation
-import Observation
+import Perception
 import OstMacCore
 
 /// One library row: a native app or a web app.
@@ -53,7 +53,7 @@ struct LibraryItem: Identifiable, Equatable {
     }
 }
 
-@Observable
+@Perceptible
 @MainActor
 final class AppsLibrary {
     private(set) var webLinks: [FrameApp] = []
@@ -104,13 +104,13 @@ final class AppsLibrary {
     /// Teams app bar order, catalog app ids mapped to library ids.
     private(set) var catalogPinned: [FrameAppID] = []
     /// Called once per successful catalog fetch with `catalogPinned`.
-    @ObservationIgnored var onCatalogPinned: (([FrameAppID]) -> Void)?
-    @ObservationIgnored let demo: Bool
-    @ObservationIgnored private let accountKey: String
+    @PerceptionIgnored var onCatalogPinned: (([FrameAppID]) -> Void)?
+    @PerceptionIgnored let demo: Bool
+    @PerceptionIgnored private let accountKey: String
     /// The Apps store (APPHOST-B2): browse, search, detail, install.
-    @ObservationIgnored let store: AppStoreModel
+    @PerceptionIgnored let store: AppStoreModel
     /// Installed catalog manifests (store "Installed", tab matching).
-    @ObservationIgnored private var catalogManifests: [TeamsAppManifest] = []
+    @PerceptionIgnored private var catalogManifests: [TeamsAppManifest] = []
 
     init(accountKey: String) {
         self.accountKey = accountKey

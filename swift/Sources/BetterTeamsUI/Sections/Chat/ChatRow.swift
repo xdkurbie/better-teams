@@ -7,6 +7,7 @@
 // text.
 import OstMacCore
 import SwiftUI
+import Perception
 
 struct ChatRow: View {
     let chat: ChatItem
@@ -35,76 +36,78 @@ struct ChatRow: View {
     }
 
     var body: some View {
-        let style = style
-        HStack(spacing: 8) {
-            Circle()
-                .fill(.tint)
-                .frame(width: 7, height: 7)
-                .opacity(style.showsUnreadDot ? 1 : 0)
-                .accessibilityHidden(true)
-            Avatar(name: chat.name, isGroup: chat.is_group, diameter: density.metrics.chatAvatar)
-                .contactHover(name: chat.is_group ? "" : chat.name, arrowEdge: .bottom)
-                .overlay(alignment: .bottomTrailing) {
-                    // 4 pt out, as in Search People: at 2 pt the ring
-                    // clipped the monogram's trailing letter.
-                    if let presence {
-                        PresenceBadge(status: presence, size: ChatRowStyle.badgeSize).offset(x: 4, y: 4)
-                    } else if style.muteCorner == .bottomTrailing {
-                        MuteBadge(size: ChatRowStyle.badgeSize).offset(x: 4, y: 4)
-                    }
-                }
-                .overlay(alignment: .topTrailing) {
-                    if style.muteCorner == .topTrailing {
-                        MuteBadge(size: ChatRowStyle.badgeSize).offset(x: 4, y: -4)
-                    }
-                }
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 4) {
-                    Text(chat.name)
-                        .font(AppFont.body(scale).weight(style.nameWeight))
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                    Spacer(minLength: 4)
-                    Text(ChatListFormat.previewTime(chat.last_message_time, now: now))
-                        .font(AppFont.caption(scale).weight(style.timeWeight))
-                        .foregroundStyle(style.previewPrimary ? .primary : .secondary)
-                        .fixedSize()
-                }
-                // Send state leads line 2 in a reserved slot (R13): the
-                // preview starts at the same x whether or not the newest
-                // message failed. Trailing status indicators sit on line 2,
-                // off the name line, laid out only when present.
-                HStack(spacing: 2) {
-                    Image(systemName: "exclamationmark.circle")
-                        .font(AppFont.caption(scale).weight(.semibold))
-                        .foregroundStyle(Palette.failed)
-                        .frame(width: Self.sendStateSlot * scale, alignment: .leading)
-                        .opacity(notSent ? 1 : 0)
-                        .accessibilityHidden(true)
-                    Group {
-                        if let conv, previewLine.isEmpty {
-                            EmptyChatPreview(conv: conv, chatID: chat.id,
-                                             hadMessages: chat.last_message_time != nil)
-                        } else {
-                            Text(preview)
+        WithPerceptionTracking {
+            let style = style
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(.tint)
+                    .frame(width: 7, height: 7)
+                    .opacity(style.showsUnreadDot ? 1 : 0)
+                    .accessibilityHidden(true)
+                Avatar(name: chat.name, isGroup: chat.is_group, diameter: density.metrics.chatAvatar)
+                    .contactHover(name: chat.is_group ? "" : chat.name, arrowEdge: .bottom)
+                    .overlay(alignment: .bottomTrailing) {
+                        // 4 pt out, as in Search People: at 2 pt the ring
+                        // clipped the monogram's trailing letter.
+                        if let presence {
+                            PresenceBadge(status: presence, size: ChatRowStyle.badgeSize).offset(x: 4, y: 4)
+                        } else if style.muteCorner == .bottomTrailing {
+                            MuteBadge(size: ChatRowStyle.badgeSize).offset(x: 4, y: 4)
                         }
                     }
-                    .font(AppFont.subheadline(scale).weight(style.previewWeight))
-                    .foregroundStyle(style.previewPrimary ? .primary : .secondary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    Spacer(minLength: 4)
-                    if pinned { slot("pin.fill") }
-                    if muted { slot("bell.slash") }
-                    if snoozed { slot("moon.zzz") }
-                    if mentioned { slot("at") }
+                    .overlay(alignment: .topTrailing) {
+                        if style.muteCorner == .topTrailing {
+                            MuteBadge(size: ChatRowStyle.badgeSize).offset(x: 4, y: -4)
+                        }
+                    }
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 4) {
+                        Text(chat.name)
+                            .font(AppFont.body(scale).weight(style.nameWeight))
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                        Spacer(minLength: 4)
+                        Text(ChatListFormat.previewTime(chat.last_message_time, now: now))
+                            .font(AppFont.caption(scale).weight(style.timeWeight))
+                            .compatForeground(style.previewPrimary ? .primary : .secondary)
+                            .fixedSize()
+                    }
+                    // Send state leads line 2 in a reserved slot (R13): the
+                    // preview starts at the same x whether or not the newest
+                    // message failed. Trailing status indicators sit on line 2,
+                    // off the name line, laid out only when present.
+                    HStack(spacing: 2) {
+                        Image(systemName: "exclamationmark.circle")
+                            .font(AppFont.caption(scale).weight(.semibold))
+                            .compatForeground(Palette.failed)
+                            .frame(width: Self.sendStateSlot * scale, alignment: .leading)
+                            .opacity(notSent ? 1 : 0)
+                            .accessibilityHidden(true)
+                        Group {
+                            if let conv, previewLine.isEmpty {
+                                EmptyChatPreview(conv: conv, chatID: chat.id,
+                                                 hadMessages: chat.last_message_time != nil)
+                            } else {
+                                Text(preview)
+                            }
+                        }
+                        .font(AppFont.subheadline(scale).weight(style.previewWeight))
+                        .compatForeground(style.previewPrimary ? .primary : .secondary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        Spacer(minLength: 4)
+                        if pinned { slot("pin.fill") }
+                        if muted { slot("bell.slash") }
+                        if snoozed { slot("moon.zzz") }
+                        if mentioned { slot("at") }
+                    }
                 }
             }
+            .padding(.vertical, density.metrics.chatRowVertical)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(accessibility)
+            .badge(Self.mentionBadge(mentioned: mentioned, unreadCount: mentionCount).map { Text($0) })
         }
-        .padding(.vertical, density.metrics.chatRowVertical)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(accessibility)
-        .badge(Self.mentionBadge(mentioned: mentioned, unreadCount: mentionCount).map { Text($0) })
     }
 
     /// Stock List-row badge for a mentioned chat (§6.2): the unread
@@ -134,7 +137,7 @@ struct ChatRow: View {
     private func slot(_ symbol: String) -> some View {
         Image(systemName: symbol)
             .font(AppFont.caption(scale))
-            .foregroundStyle(.secondary)
+            .compatForeground(.secondary)
             .frame(width: 12)
             .accessibilityHidden(true)
     }
@@ -169,10 +172,12 @@ private struct EmptyChatPreview: View {
     var hadMessages = false
 
     var body: some View {
-        // A space, not "", keeps the line's height when blank.
-        Text(Self.line(open: conv.chatID == chatID, loading: conv.loading || !conv.didLoad,
-                       failed: conv.error != nil, hasMessages: !conv.messages.isEmpty,
-                       hadMessages: hadMessages))
+        WithPerceptionTracking {
+            // A space, not "", keeps the line's height when blank.
+            Text(Self.line(open: conv.chatID == chatID, loading: conv.loading || !conv.didLoad,
+                           failed: conv.error != nil, hasMessages: !conv.messages.isEmpty,
+                           hadMessages: hadMessages))
+        }
     }
 
     /// Blank while the open chat is unsettled (loading, failed) or already

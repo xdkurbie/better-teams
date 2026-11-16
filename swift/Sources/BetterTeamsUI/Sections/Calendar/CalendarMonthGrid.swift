@@ -5,6 +5,7 @@
 // (its weeks land together, so a month never paints half-empty).
 import OstMacCore
 import SwiftUI
+import Perception
 
 struct MonthGrid: View {
     @ObservedObject var week: CalendarWeekStore
@@ -39,40 +40,42 @@ struct MonthGrid: View {
     }
 
     var body: some View {
-        let now = RelativeClock.shared.now
-        let buckets = Dictionary(uniqueKeysWithValues: zip(week.monthDayKeys,
-                                                           CalWeek.bucket(week.monthMeetings, keys: week.monthDayKeys)))
-        let month = week.calendar.component(.month, from: week.monthStart)
-        VStack(spacing: 0) {
-            HStack(spacing: 0) {
-                ForEach(weekdays) { d in
-                    Text(d.id)
-                        .font(AppFont.caption(scale))
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 6)
-                }
-            }
-            Divider()
+        WithPerceptionTracking {
+            let now = RelativeClock.shared.now
+            let buckets = Dictionary(uniqueKeysWithValues: zip(week.monthDayKeys,
+                                                               CalWeek.bucket(week.monthMeetings, keys: week.monthDayKeys)))
+            let month = week.calendar.component(.month, from: week.monthStart)
             VStack(spacing: 0) {
-                ForEach(rows) { row in
-                    HStack(spacing: 0) {
-                        ForEach(row.keys) { cell in
-                            let key = cell.id
-                            MonthDayCell(
-                                key: key, meetings: buckets[key] ?? [],
-                                inMonth: CalendarFormat.day(key).map { week.calendar.component(.month, from: $0) == month } ?? false,
-                                today: CalendarFormat.day(key).map { Calendar.current.isDate($0, inSameDayAs: now) } ?? false,
-                                selectedID: selectedID, week: week, select: select, openDay: openDay)
-                                .overlay(alignment: .leading) { Divider() }
-                        }
+                HStack(spacing: 0) {
+                    ForEach(weekdays) { d in
+                        Text(d.id)
+                            .font(AppFont.caption(scale))
+                            .compatForeground(.secondary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 6)
                     }
-                    .frame(maxHeight: .infinity)
-                    Divider()
+                }
+                Divider()
+                VStack(spacing: 0) {
+                    ForEach(rows) { row in
+                        HStack(spacing: 0) {
+                            ForEach(row.keys) { cell in
+                                let key = cell.id
+                                MonthDayCell(
+                                    key: key, meetings: buckets[key] ?? [],
+                                    inMonth: CalendarFormat.day(key).map { week.calendar.component(.month, from: $0) == month } ?? false,
+                                    today: CalendarFormat.day(key).map { Calendar.current.isDate($0, inSameDayAs: now) } ?? false,
+                                    selectedID: selectedID, week: week, select: select, openDay: openDay)
+                                    .overlay(alignment: .leading) { Divider() }
+                            }
+                        }
+                        .frame(maxHeight: .infinity)
+                        Divider()
+                    }
                 }
             }
+            .background(Color(nsColor: .controlBackgroundColor))
         }
-        .background(Color(nsColor: .controlBackgroundColor))
     }
 }
 
@@ -88,36 +91,38 @@ private struct MonthDayCell: View {
     @Environment(\.contentTextScale) private var scale
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Button { openDay(key) } label: {
-                Text(CalendarFormat.day(key)?.formatted(.dateTime.day()) ?? key)
-                    .font(today ? AppFont.headline(scale) : AppFont.caption(scale))
-                    .monospacedDigit()
-                    .foregroundStyle(today ? AnyShapeStyle(.white) : inMonth ? AnyShapeStyle(.primary) : AnyShapeStyle(.tertiary))
-                    .padding(.horizontal, 5)
-                    .background { if today { Capsule().fill(.tint) } }
+        WithPerceptionTracking {
+            VStack(alignment: .leading, spacing: 2) {
+                Button { openDay(key) } label: {
+                    Text(CalendarFormat.day(key)?.formatted(.dateTime.day()) ?? key)
+                        .font(today ? AppFont.headline(scale) : AppFont.caption(scale))
+                        .monospacedDigit()
+                        .compatForeground(today ? AnyShapeStyle(.white) : inMonth ? AnyShapeStyle(.primary) : AnyShapeStyle(.tertiary))
+                        .padding(.horizontal, 5)
+                        .background { if today { Capsule().fill(.tint) } }
+                }
+                .buttonStyle(.plain)
+                .help("Show this day")
+                .accessibilityLabel(CalendarFormat.dayTitle(key, now: RelativeClock.shared.now))
+                ForEach(meetings.prefix(MonthGrid.chipsPerDay)) { m in
+                    CalendarChip(meeting: m, selected: m.id == selectedID, showTime: !m.isAllDay) { select(m.id) }
+                        .contextMenu { CalendarMeetingMenu(meeting: m, week: week) }
+                }
+                if meetings.count > MonthGrid.chipsPerDay {
+                    Button("+\(meetings.count - MonthGrid.chipsPerDay) more") { openDay(key) }
+                        .buttonStyle(.plain)
+                        .font(AppFont.caption(scale))
+                        .compatForeground(.tint)
+                        .help("Show all events on this day")
+                }
+                Spacer(minLength: 0)
             }
-            .buttonStyle(.plain)
-            .help("Show this day")
-            .accessibilityLabel(CalendarFormat.dayTitle(key, now: RelativeClock.shared.now))
-            ForEach(meetings.prefix(MonthGrid.chipsPerDay)) { m in
-                CalendarChip(meeting: m, selected: m.id == selectedID, showTime: !m.isAllDay) { select(m.id) }
-                    .contextMenu { CalendarMeetingMenu(meeting: m, week: week) }
-            }
-            if meetings.count > MonthGrid.chipsPerDay {
-                Button("+\(meetings.count - MonthGrid.chipsPerDay) more") { openDay(key) }
-                    .buttonStyle(.plain)
-                    .font(AppFont.caption(scale))
-                    .foregroundStyle(.tint)
-                    .help("Show all events on this day")
-            }
-            Spacer(minLength: 0)
+            .padding(4)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .background(inMonth ? AnyShapeStyle(Color.clear) : AnyShapeStyle(.quaternary.opacity(0.3)))
+            .contentShape(Rectangle())
+            .onTapGesture(count: 2) { openDay(key) }
         }
-        .padding(4)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(inMonth ? AnyShapeStyle(Color.clear) : AnyShapeStyle(.quaternary.opacity(0.3)))
-        .contentShape(Rectangle())
-        .onTapGesture(count: 2) { openDay(key) }
     }
 }
 
@@ -136,28 +141,30 @@ struct CalendarChip: View {
     }
 
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: 4) {
-                RoundedRectangle(cornerRadius: 1).fill(color).frame(width: 3)
-                if showTime, let s = CalendarFormat.date(meeting.start) {
-                    Text(CalendarFormat.time(s))
-                        .monospacedDigit()
-                        .foregroundStyle(.secondary)
+        WithPerceptionTracking {
+            Button(action: action) {
+                HStack(spacing: 4) {
+                    RoundedRectangle(cornerRadius: 1).fill(color).frame(width: 3)
+                    if showTime, let s = CalendarFormat.date(meeting.start) {
+                        Text(CalendarFormat.time(s))
+                            .monospacedDigit()
+                            .compatForeground(.secondary)
+                    }
+                    Text(meeting.subject)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                    Spacer(minLength: 0)
                 }
-                Text(meeting.subject)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                Spacer(minLength: 0)
+                .font(AppFont.caption(scale))
+                .padding(.vertical, 1)
+                .padding(.trailing, 3)
+                .fixedSize(horizontal: false, vertical: true)
+                .background(RoundedRectangle(cornerRadius: 3).fill(color.opacity(selected ? 0.32 : 0.12)))
+                .contentShape(Rectangle())
             }
-            .font(AppFont.caption(scale))
-            .padding(.vertical, 1)
-            .padding(.trailing, 3)
-            .fixedSize(horizontal: false, vertical: true)
-            .background(RoundedRectangle(cornerRadius: 3).fill(color.opacity(selected ? 0.32 : 0.12)))
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+            .accessibilityLabel("\(meeting.subject), \(CalendarFormat.range(meeting))")
+            .accessibilityAddTraits(selected ? .isSelected : [])
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("\(meeting.subject), \(CalendarFormat.range(meeting))")
-        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }

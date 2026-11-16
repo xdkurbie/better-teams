@@ -5,6 +5,7 @@
 // or Return opens the app.
 import AppKit
 import SwiftUI
+import Perception
 
 struct AppsListPane: View {
     let library: AppsLibrary
@@ -12,13 +13,15 @@ struct AppsListPane: View {
     @Environment(\.windowModel) private var model
 
     var body: some View {
-        if let m = model {
-            VStack(spacing: 0) {
-                SearchField(text: $filter, placeholder: "Filter Apps")
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 8)
-                    .accessibilityLabel("Filter Apps")
-                content(m)
+        WithPerceptionTracking {
+            if let m = model {
+                VStack(spacing: 0) {
+                    SearchField(text: $filter, placeholder: "Filter Apps")
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 8)
+                        .accessibilityLabel("Filter Apps")
+                    content(m)
+                }
             }
         }
     }
@@ -85,7 +88,7 @@ struct AppsListPane: View {
         // section comes first; the rules between sections stay inset.
         .listSectionSeparator(.hidden, edges: .top)
         .listStyle(.inset)
-        .contextMenu(forSelectionType: String.self) { tags in
+        .compatSelectionMenu(forSelectionType: String.self) { tags in
             if let tag = tags.first, let item = library.item(Self.selection(for: tag).id ?? "") {
                 rowMenu(item, m)
             }
@@ -131,13 +134,15 @@ private struct StoreNavRow: View {
     let symbol: String
 
     var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: symbol)
-                .symbolRenderingMode(.hierarchical)
-                .foregroundStyle(.tint)
-                .frame(width: 20)
-                .accessibilityHidden(true)
-            Text(title).lineLimit(1)
+        WithPerceptionTracking {
+            HStack(spacing: 8) {
+                Image(systemName: symbol)
+                    .symbolRenderingMode(.hierarchical)
+                    .compatForeground(.tint)
+                    .frame(width: 20)
+                    .accessibilityHidden(true)
+                Text(title).lineLimit(1)
+            }
         }
     }
 
@@ -166,28 +171,30 @@ private struct AppRow: View {
     var titleOverride: String?
 
     var body: some View {
-        let title = titleOverride ?? item.title
-        HStack(spacing: 8) {
-            Image(systemName: item.symbol)
-                .symbolRenderingMode(.hierarchical)
-                .foregroundStyle(.tint)
-                .frame(width: 20)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(title).lineLimit(1)
-                if let detail {
-                    Text(detail).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+        WithPerceptionTracking {
+            let title = titleOverride ?? item.title
+            HStack(spacing: 8) {
+                Image(systemName: item.symbol)
+                    .symbolRenderingMode(.hierarchical)
+                    .compatForeground(.tint)
+                    .frame(width: 20)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(title).lineLimit(1)
+                    if let detail {
+                        Text(detail).font(.caption).compatForeground(.secondary).lineLimit(1)
+                    }
+                }
+                Spacer(minLength: 4)
+                if pinned {
+                    Image(systemName: "pin.fill")
+                        .font(.caption)
+                        .compatForeground(.secondary)
+                        .accessibilityLabel("Pinned")
                 }
             }
-            Spacer(minLength: 4)
-            if pinned {
-                Image(systemName: "pin.fill")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .accessibilityLabel("Pinned")
-            }
+            .help(title)
         }
-        .help(title)
     }
 }
 
@@ -198,17 +205,19 @@ struct AppsDetailPane: View {
     @Environment(\.windowModel) private var model
 
     var body: some View {
-        if let m = model {
-            let sel = m.nav.selection(in: .apps)
-            if let page = AppStoreRoute.page(sel) {
-                switch page {
-                case .home(let category): AppStoreHome(library: library, category: category)
-                case .detail(let id): AppStoreDetail(library: library, appID: id)
+        WithPerceptionTracking {
+            if let m = model {
+                let sel = m.nav.selection(in: .apps)
+                if let page = AppStoreRoute.page(sel) {
+                    switch page {
+                    case .home(let category): AppStoreHome(library: library, category: category)
+                    case .detail(let id): AppStoreDetail(library: library, appID: id)
+                    }
+                } else if let id = sel?.id, let item = library.item(id) {
+                    AppCard(item: item, library: library)
+                } else {
+                    NoSelectionPane("No App Selected")
                 }
-            } else if let id = sel?.id, let item = library.item(id) {
-                AppCard(item: item, library: library)
-            } else {
-                NoSelectionPane("No App Selected")
             }
         }
     }
@@ -220,8 +229,10 @@ private struct AppCard: View {
     @Environment(\.windowModel) private var model
 
     var body: some View {
-        if let m = model {
-            card(m)
+        WithPerceptionTracking {
+            if let m = model {
+                card(m)
+            }
         }
     }
 
@@ -232,17 +243,17 @@ private struct AppCard: View {
                 Image(systemName: item.symbol)
                     .font(.largeTitle)
                     .symbolRenderingMode(.hierarchical)
-                    .foregroundStyle(.tint)
+                    .compatForeground(.tint)
                     .frame(width: 64, height: 64)
                     .background(.tint.quaternary, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(item.title).font(.title2.weight(.semibold))
-                    Text(item.sourceLine).foregroundStyle(.secondary)
+                    Text(item.sourceLine).compatForeground(.secondary)
                 }
             }
             Label(capability, systemImage: item.runsInApp ? "app.badge.checkmark" : "arrow.up.forward.app")
-                .foregroundStyle(.secondary)
+                .compatForeground(.secondary)
             HStack(spacing: 8) {
                 Button("Open") { AppActions.open(item, m) }
                     .buttonStyle(.borderedProminent)
@@ -261,7 +272,7 @@ private struct AppCard: View {
             if !item.runsInApp {
                 InfoLabel(title: "Can\u{2019}t pin to the tab bar", subject: "pinning browser apps",
                           text: "Apps that open in your browser can\u{2019}t be pinned to the tab bar.")
-                    .foregroundStyle(.secondary)
+                    .compatForeground(.secondary)
             }
         }
         .padding(24)

@@ -2,6 +2,7 @@
 // for explanatory text. Explanations open in a popover next to their
 // control and are never laid out inline (no footers, no captions).
 import SwiftUI
+import Perception
 
 /// The (i) button beside a setting: its explanation opens in a popover,
 /// never inline. A plain button, so VoiceOver reads its label and Full
@@ -15,23 +16,25 @@ struct InfoButton: View {
     static func label(for subject: String) -> String { "About \(subject)" }
 
     var body: some View {
-        Button {
-            shown.toggle()
-        } label: {
-            Image(systemName: "info.circle")
-        }
-        .buttonStyle(.borderless)
-        .foregroundStyle(.secondary)
-        .focusable()
-        .accessibilityLabel(Self.label(for: subject))
-        .accessibilityHint("Shows an explanation")
-        .help(Self.label(for: subject))
-        .popover(isPresented: $shown, arrowEdge: .bottom) {
-            Text(text)
-                .padding(12)
-                .frame(width: 260, alignment: .leading)
-                .fixedSize(horizontal: false, vertical: true)
-                .accessibilityLabel(text)
+        WithPerceptionTracking {
+            Button {
+                shown.toggle()
+            } label: {
+                Image(systemName: "info.circle")
+            }
+            .buttonStyle(.borderless)
+            .compatForeground(.secondary)
+            .focusable()
+            .accessibilityLabel(Self.label(for: subject))
+            .accessibilityHint("Shows an explanation")
+            .help(Self.label(for: subject))
+            .popover(isPresented: $shown, arrowEdge: .bottom) {
+                Text(text)
+                    .padding(12)
+                    .frame(width: 260, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityLabel(text)
+            }
         }
     }
 }
@@ -43,9 +46,11 @@ struct InfoLabel: View {
     let text: String
 
     var body: some View {
-        HStack(spacing: 4) {
-            Text(title)
-            InfoButton(subject: subject, text: text)
+        WithPerceptionTracking {
+            HStack(spacing: 4) {
+                Text(title)
+                InfoButton(subject: subject, text: text)
+            }
         }
     }
 }
@@ -57,9 +62,11 @@ struct InfoHeader: View {
     let text: String
 
     var body: some View {
-        HStack(spacing: 4) {
-            Text(title)
-            InfoButton(subject: subject, text: text)
+        WithPerceptionTracking {
+            HStack(spacing: 4) {
+                Text(title)
+                InfoButton(subject: subject, text: text)
+            }
         }
     }
 }

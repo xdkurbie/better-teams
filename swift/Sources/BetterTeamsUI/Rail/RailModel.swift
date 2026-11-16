@@ -6,7 +6,7 @@
 // call item, More) can never overflow.
 import Combine
 import Foundation
-import Observation
+import Perception
 
 /// A pinned rail entry (§7.1): a native app or a web app.
 public enum RailEntry: Hashable, Codable, Sendable {
@@ -48,15 +48,15 @@ public struct RailLayout: Equatable, Sendable {
     public var showsMore: Bool
 }
 
-@Observable
+@Perceptible
 @MainActor
 public final class RailModel {
     public private(set) var pinned: [RailEntry] = []
     /// At most one transient (unpinned, opened from the Library) app.
     public private(set) var transient: RailEntry?
 
-    @ObservationIgnored private let accountKey: String
-    @ObservationIgnored private let persist: Bool
+    @PerceptionIgnored private let accountKey: String
+    @PerceptionIgnored private let persist: Bool
 
     public init(accountKey: String, persist: Bool) {
         self.accountKey = accountKey

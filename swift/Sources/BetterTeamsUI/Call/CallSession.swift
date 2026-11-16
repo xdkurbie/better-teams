@@ -14,7 +14,7 @@
 // core end call.
 import AppKit
 import Combine
-import Observation
+import Perception
 import OstMacCore
 import UserNotifications
 
@@ -28,25 +28,25 @@ public enum CallKind: Equatable, Sendable {
     case test
 }
 
-@Observable
+@Perceptible
 @MainActor
 public final class CallSession {
     /// Host chosen when the call started (no mid-call move, DL1).
     public let presentation: CallPresentation
     public let kind: CallKind
-    @ObservationIgnored public weak var model: WindowModel?
+    @PerceptionIgnored public weak var model: WindowModel?
     /// The stage, created once per call and released at call end; both
     /// hosts attach this same controller (§8 shared parts).
-    @ObservationIgnored public let stage: CallStageViewController
+    @PerceptionIgnored public let stage: CallStageViewController
     /// The separate-window host (nil In Main Window).
-    @ObservationIgnored public private(set) var window: CallWindowController?
+    @PerceptionIgnored public private(set) var window: CallWindowController?
     /// The core call slot this session follows (nil without an account).
-    @ObservationIgnored let store: CallStore?
+    @PerceptionIgnored let store: CallStore?
     /// Local camera for the self view (live only; demo shows a
     /// placeholder feed and never touches hardware or defaults).
-    @ObservationIgnored let camera: CameraCapture?
+    @PerceptionIgnored let camera: CameraCapture?
     /// Mic / speaker / camera pickers + level meter (§8 Devices).
-    @ObservationIgnored let devices: CallDevices
+    @PerceptionIgnored let devices: CallDevices
     /// A video call. 1:1 (VIDEO1): the stage shows the remote video large
     /// with the self view as a picture-in-picture, and the camera starts
     /// on. Group chats and meetings (MEETVIDEO): the tile grid of
@@ -83,15 +83,15 @@ public final class CallSession {
     public private(set) var preMicOn = true
     public private(set) var preCameraOn = false
 
-    @ObservationIgnored private let live: Bool
-    @ObservationIgnored private let evidence: Bool
-    @ObservationIgnored private var subs: Set<AnyCancellable> = []
-    @ObservationIgnored private var shareSub: AnyCancellable?
-    @ObservationIgnored private var ticker: Timer?
-    @ObservationIgnored private var connectedAt: Date?
+    @PerceptionIgnored private let live: Bool
+    @PerceptionIgnored private let evidence: Bool
+    @PerceptionIgnored private var subs: Set<AnyCancellable> = []
+    @PerceptionIgnored private var shareSub: AnyCancellable?
+    @PerceptionIgnored private var ticker: Timer?
+    @PerceptionIgnored private var connectedAt: Date?
     /// The core slot reached inviting/active for this call, so a later
     /// ended/idle is this call ending (never a previous call's leftover).
-    @ObservationIgnored private var armed = false
+    @PerceptionIgnored private var armed = false
 
     /// Evidence shows a fixed duration (deterministic captures).
     static let evidenceElapsed = 1_127

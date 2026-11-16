@@ -4,6 +4,7 @@
 import AppKit
 import OstMacCore
 import SwiftUI
+import Perception
 
 /// What the page side shows. Titles state the condition (R18).
 enum NotesPaneState: Equatable {
@@ -65,33 +66,35 @@ struct NotesPageList: View {
     static let width: CGFloat = 220
 
     var body: some View {
-        VStack(spacing: 0) {
-            if store.notebooks.count > 1 {
-                Picker("Notebook", selection: Binding(
-                    get: { store.selectedNotebookID ?? "" },
-                    set: { if !$0.isEmpty { store.selectNotebook($0) } })) {
-                    ForEach(store.notebooks) { nb in Text(nb.name).tag(nb.notebookId) }
+        WithPerceptionTracking {
+            VStack(spacing: 0) {
+                if store.notebooks.count > 1 {
+                    Picker("Notebook", selection: Binding(
+                        get: { store.selectedNotebookID ?? "" },
+                        set: { if !$0.isEmpty { store.selectNotebook($0) } })) {
+                        ForEach(store.notebooks) { nb in Text(nb.name).tag(nb.notebookId) }
+                    }
+                    .labelsHidden()
+                    .padding(8)
+                    Divider()
                 }
-                .labelsHidden()
-                .padding(8)
-                Divider()
-            }
-            List(selection: Binding<String?>(
-                get: { store.selectedPageID },
-                set: { id in
-                    guard let id, let sec = store.sections.first(where: { $0.pages.contains { $0.pageId == id } })
-                    else { return }
-                    store.show(pageID: id, sectionID: sec.sectionId)
-                })) {
-                ForEach(store.sections) { sec in
-                    Section(sec.name) {
-                        ForEach(sec.pages) { page in
-                            Text(page.title).lineLimit(1).tag(page.pageId)
+                List(selection: Binding<String?>(
+                    get: { store.selectedPageID },
+                    set: { id in
+                        guard let id, let sec = store.sections.first(where: { $0.pages.contains { $0.pageId == id } })
+                        else { return }
+                        store.show(pageID: id, sectionID: sec.sectionId)
+                    })) {
+                    ForEach(store.sections) { sec in
+                        Section(sec.name) {
+                            ForEach(sec.pages) { page in
+                                Text(page.title).lineLimit(1).tag(page.pageId)
+                            }
                         }
                     }
                 }
+                .listStyle(.inset)
             }
-            .listStyle(.inset)
         }
     }
 }
@@ -103,26 +106,28 @@ struct NotesPageView: View {
     @Environment(\.windowModel) private var model
 
     var body: some View {
-        let state = NotesPaneState.resolve(
-            store.state, notebooks: store.notebooks.count, sections: store.sections.count,
-            pages: store.pages.count, hasPage: store.page != nil, sectionSelected: store.selectedSectionID != nil,
-            forced: forced, offline: model?.connection == .offline)
-        switch state {
-        case .loading: LoadingPane("Loading Notes\u{2026}")
-        case .error(let title, let message):
-            ErrorPane(title: title, message: message) { store.retry() }
-        case .noNotebooks:
-            EmptyPane(NotesPaneState.noNotebooksTitle, systemImage: NativeAppID.onenote.symbol,
-                      message: NotesStore.noNotebooksBody(groupID: store.groupID))
-        case .noSections:
-            EmptyPane("No Sections", systemImage: NativeAppID.onenote.symbol,
-                      message: "This notebook has no sections yet.")
-        case .noPages:
-            EmptyPane("No Pages", systemImage: NativeAppID.onenote.symbol,
-                      message: "This section has no pages yet.")
-        case .noSelection: NoSelectionPane("No Page Selected")
-        case .page:
-            if let page = store.page { NotesPageBody(store: store, page: page) }
+        WithPerceptionTracking {
+            let state = NotesPaneState.resolve(
+                store.state, notebooks: store.notebooks.count, sections: store.sections.count,
+                pages: store.pages.count, hasPage: store.page != nil, sectionSelected: store.selectedSectionID != nil,
+                forced: forced, offline: model?.connection == .offline)
+            switch state {
+            case .loading: LoadingPane("Loading Notes\u{2026}")
+            case .error(let title, let message):
+                ErrorPane(title: title, message: message) { store.retry() }
+            case .noNotebooks:
+                EmptyPane(NotesPaneState.noNotebooksTitle, systemImage: NativeAppID.onenote.symbol,
+                          message: NotesStore.noNotebooksBody(groupID: store.groupID))
+            case .noSections:
+                EmptyPane("No Sections", systemImage: NativeAppID.onenote.symbol,
+                          message: "This notebook has no sections yet.")
+            case .noPages:
+                EmptyPane("No Pages", systemImage: NativeAppID.onenote.symbol,
+                          message: "This section has no pages yet.")
+            case .noSelection: NoSelectionPane("No Page Selected")
+            case .page:
+                if let page = store.page { NotesPageBody(store: store, page: page) }
+            }
         }
     }
 }
@@ -135,15 +140,17 @@ private struct NotesPageBody: View {
     @Environment(\.contentTextScale) private var scale
 
     var body: some View {
-        VStack(spacing: 0) {
-            // AppKit text view: OneNote pages are HTML with headings,
-            // lists, tables and to-do tags, which a SwiftUI Text flattens.
-            NotesPageTextView(title: page.title, html: page.html, scale: scale)
-                .accessibilityLabel(page.title)
-            Divider()
-            NotesAppendBar(draft: $draft, appending: store.appending, error: store.appendError) {
-                store.append(text: draft)
-                draft = ""
+        WithPerceptionTracking {
+            VStack(spacing: 0) {
+                // AppKit text view: OneNote pages are HTML with headings,
+                // lists, tables and to-do tags, which a SwiftUI Text flattens.
+                NotesPageTextView(title: page.title, html: page.html, scale: scale)
+                    .accessibilityLabel(page.title)
+                Divider()
+                NotesAppendBar(draft: $draft, appending: store.appending, error: store.appendError) {
+                    store.append(text: draft)
+                    draft = ""
+                }
             }
         }
     }
@@ -162,27 +169,29 @@ struct NotesAppendBar: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            if let error {
-                Label(error, systemImage: "exclamationmark.triangle")
-                    .font(AppFont.subheadline(scale))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-            }
-            HStack(alignment: .bottom, spacing: 8) {
-                TextField("Append to Page", text: $draft, axis: .vertical)
-                    .textFieldStyle(.roundedBorder)
-                    .font(AppFont.body(scale))
-                    .lineLimit(1 ... 4)
-                    .onSubmit { if Self.canAppend(draft, appending: appending) { submit() } }
-                if appending {
-                    ProgressView().controlSize(.small)
+        WithPerceptionTracking {
+            VStack(alignment: .leading, spacing: 6) {
+                if let error {
+                    Label(error, systemImage: "exclamationmark.triangle")
+                        .font(AppFont.subheadline(scale))
+                        .compatForeground(.secondary)
+                        .lineLimit(2)
                 }
-                Button("Append", action: submit)
-                    .disabled(!Self.canAppend(draft, appending: appending))
+                HStack(alignment: .bottom, spacing: 8) {
+                    TextField("Append to Page", text: $draft, axis: .vertical)
+                        .textFieldStyle(.roundedBorder)
+                        .font(AppFont.body(scale))
+                        .lineLimit(1 ... 4)
+                        .onSubmit { if Self.canAppend(draft, appending: appending) { submit() } }
+                    if appending {
+                        ProgressView().controlSize(.small)
+                    }
+                    Button("Append", action: submit)
+                        .disabled(!Self.canAppend(draft, appending: appending))
+                }
             }
+            .padding(10)
         }
-        .padding(10)
     }
 }
 

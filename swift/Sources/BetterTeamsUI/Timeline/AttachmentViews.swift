@@ -9,6 +9,7 @@ import OstMacCore
 import Quartz
 import SwiftUI
 import UniformTypeIdentifiers
+import Perception
 
 /// Image slot size when dimensions are unknown (R13).
 enum MediaSlot {
@@ -22,25 +23,27 @@ struct QuoteBlock: View {
     @Environment(\.colorSchemeContrast) private var contrast
 
     var body: some View {
-        let content = VStack(alignment: .leading, spacing: 1) {
-            Text(quote.sender).font(AppFont.caption(scale).weight(.semibold)).lineLimit(1)
-            Text(quote.preview).font(AppFont.subheadline(scale))
-                .foregroundStyle(contrast == .increased ? AnyShapeStyle(.primary) : AnyShapeStyle(Palette.quoteText))
-                .lineLimit(2)
-        }
-        .padding(.leading, 10)
-        .padding(.trailing, 8)
-        .padding(.vertical, 4)
-        .frame(maxWidth: 420, alignment: .leading)
-        .background(Palette.blockFill, in: RoundedRectangle(cornerRadius: 4, style: .continuous))
-        .overlay(alignment: .leading) { Rectangle().fill(Palette.mention).frame(width: 2) }
-        if let id = quote.jumpID {
-            Button { jump(id) } label: { content.contentShape(Rectangle()) }
-                .buttonStyle(.plain)
-                .help("Show Original Message")
-                .accessibilityLabel("Reply to \(quote.sender): \(quote.preview)")
-        } else {
-            content.accessibilityLabel("Reply to \(quote.sender): \(quote.preview)")
+        WithPerceptionTracking {
+            let content = VStack(alignment: .leading, spacing: 1) {
+                Text(quote.sender).font(AppFont.caption(scale).weight(.semibold)).lineLimit(1)
+                Text(quote.preview).font(AppFont.subheadline(scale))
+                    .compatForeground(contrast == .increased ? AnyShapeStyle(.primary) : AnyShapeStyle(Palette.quoteText))
+                    .lineLimit(2)
+            }
+            .padding(.leading, 10)
+            .padding(.trailing, 8)
+            .padding(.vertical, 4)
+            .frame(maxWidth: 420, alignment: .leading)
+            .background(Palette.blockFill, in: RoundedRectangle(cornerRadius: 4, style: .continuous))
+            .overlay(alignment: .leading) { Rectangle().fill(Palette.mention).frame(width: 2) }
+            if let id = quote.jumpID {
+                Button { jump(id) } label: { content.contentShape(Rectangle()) }
+                    .buttonStyle(.plain)
+                    .help("Show Original Message")
+                    .accessibilityLabel("Reply to \(quote.sender): \(quote.preview)")
+            } else {
+                content.accessibilityLabel("Reply to \(quote.sender): \(quote.preview)")
+            }
         }
     }
 }
@@ -50,18 +53,20 @@ struct CodeBlockView: View {
     @Environment(\.contentTextScale) private var scale
 
     var body: some View {
-        Text(text)
-            .font(AppFont.code(scale))
-            .textSelection(.enabled)
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 6)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Palette.blockFill, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(Palette.panelEdge, lineWidth: 1)
-            }
-            .accessibilityLabel("Code: \(String(text.characters))")
+        WithPerceptionTracking {
+            Text(text)
+                .font(AppFont.code(scale))
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Palette.blockFill, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(Palette.panelEdge, lineWidth: 1)
+                }
+                .accessibilityLabel("Code: \(String(text.characters))")
+        }
     }
 }
 
@@ -74,11 +79,13 @@ struct MessageImages: View {
     var save: ((RemoteImageModel, String, Bool) -> Void)?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            ForEach(images) { img in
-                let model = media.image(url: img.url, messageID: messageID)
-                ImageSlot(model: model, alt: img.alt, open: open,
-                          save: save.map { s in { choose in s(model, img.alt, choose) } })
+        WithPerceptionTracking {
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(images) { img in
+                    let model = media.image(url: img.url, messageID: messageID)
+                    ImageSlot(model: model, alt: img.alt, open: open,
+                              save: save.map { s in { choose in s(model, img.alt, choose) } })
+                }
             }
         }
     }
@@ -94,41 +101,43 @@ struct ImageSlot: View {
     var save: ((Bool) -> Void)?
 
     var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 8, style: .continuous).fill(.fill.quaternary)
-            switch model.phase {
-            case .loading:
-                ProgressView().controlSize(.small)
-            case .failed:
-                Label("Image Unavailable", systemImage: "photo")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            case .loaded:
-                if let clip = model.gif, clip.frames.count > 1 {
-                    GifBubblePlayer(clip: clip)
-                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                } else if let img = model.image {
-                    Image(nsImage: img)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        WithPerceptionTracking {
+            ZStack {
+                RoundedRectangle(cornerRadius: 8, style: .continuous).fill(.fill.quaternary)
+                switch model.phase {
+                case .loading:
+                    ProgressView().controlSize(.small)
+                case .failed:
+                    Label("Image Unavailable", systemImage: "photo")
+                        .font(.caption)
+                        .compatForeground(.secondary)
+                case .loaded:
+                    if let clip = model.gif, clip.frames.count > 1 {
+                        GifBubblePlayer(clip: clip)
+                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    } else if let img = model.image {
+                        Image(nsImage: img)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    }
                 }
             }
-        }
-        .frame(width: MediaSlot.size.width, height: MediaSlot.size.height)
-        .contentShape(Rectangle())
-        .onTapGesture { if model.image != nil { open(model) } }
-        .contextMenu {
-            if let save, model.image != nil {
-                Button("Save Image to \u{201C}Downloads\u{201D}") { save(false) }
-                Button("Save Image As\u{2026}") { save(true) }
+            .frame(width: MediaSlot.size.width, height: MediaSlot.size.height)
+            .contentShape(Rectangle())
+            .onTapGesture { if model.image != nil { open(model) } }
+            .contextMenu {
+                if let save, model.image != nil {
+                    Button("Save Image to \u{201C}Downloads\u{201D}") { save(false) }
+                    Button("Save Image As\u{2026}") { save(true) }
+                }
             }
+            .help(alt.isEmpty ? "Image" : alt)
+            .accessibilityElement()
+            .accessibilityLabel(alt.isEmpty ? "Image" : alt)
+            .accessibilityAddTraits(.isImage)
+            .accessibilityAction { if model.image != nil { open(model) } }
         }
-        .help(alt.isEmpty ? "Image" : alt)
-        .accessibilityElement()
-        .accessibilityLabel(alt.isEmpty ? "Image" : alt)
-        .accessibilityAddTraits(.isImage)
-        .accessibilityAction { if model.image != nil { open(model) } }
     }
 }
 
@@ -172,30 +181,32 @@ struct GifBubblePlayer: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 15.0, paused: !clock.playing)) { ctx in
-            let t = clock.playhead(now: ctx.date, total: clip.totalDuration)
-            Image(nsImage: clip.frames[GifClip.frameIndex(at: t, durations: clip.durations)])
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-        }
-        .overlay(alignment: .bottomLeading) {
-            Button { clock.toggle(now: Date(), total: clip.totalDuration) } label: {
-                Image(systemName: clock.playing ? "pause.fill" : "play.fill").frame(width: 22, height: 22)
+        WithPerceptionTracking {
+            TimelineView(.animation(minimumInterval: 1.0 / 15.0, paused: !clock.playing)) { ctx in
+                let t = clock.playhead(now: ctx.date, total: clip.totalDuration)
+                Image(nsImage: clip.frames[GifClip.frameIndex(at: t, durations: clip.durations)])
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
             }
-            .buttonStyle(.borderless)
-            .chromeBackground(.mediaPlayButton, in: Circle()) { Circle().fill(.regularMaterial) }
-            .padding(6)
-            .help(clock.playing ? "Pause GIF" : "Play GIF")
-            .accessibilityLabel(clock.playing ? "Pause GIF" : "Play GIF")
-        }
-        .onAppear {
-            guard !started else { return }
-            started = true
-            if GifPlayback.initiallyPlaying(animated: true, reduceMotion: reduceMotion) { clock.play(now: Date()) }
-        }
-        // Reduce Motion turning on pauses; turning off resumes autoplay.
-        .onChange(of: reduceMotion) { _, now in
-            if now { clock.pause(now: Date(), total: clip.totalDuration) } else { clock.play(now: Date()) }
+            .overlay(alignment: .bottomLeading) {
+                Button { clock.toggle(now: Date(), total: clip.totalDuration) } label: {
+                    Image(systemName: clock.playing ? "pause.fill" : "play.fill").frame(width: 22, height: 22)
+                }
+                .buttonStyle(.borderless)
+                .chromeBackground(.mediaPlayButton, in: Circle()) { Circle().fill(.regularMaterial) }
+                .padding(6)
+                .help(clock.playing ? "Pause GIF" : "Play GIF")
+                .accessibilityLabel(clock.playing ? "Pause GIF" : "Play GIF")
+            }
+            .onAppear {
+                guard !started else { return }
+                started = true
+                if GifPlayback.initiallyPlaying(animated: true, reduceMotion: reduceMotion) { clock.play(now: Date()) }
+            }
+            // Reduce Motion turning on pauses; turning off resumes autoplay.
+            .onChange(of: reduceMotion) { now in
+                if now { clock.pause(now: Date(), total: clip.totalDuration) } else { clock.play(now: Date()) }
+            }
         }
     }
 }
@@ -210,24 +221,26 @@ struct AdaptiveCardView: View {
     @Environment(\.contentTextScale) private var scale
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            ForEach(Indexed.wrap(card.body)) { e in element(e.value) }
-            if !card.actions.isEmpty {
-                HStack(spacing: 6) {
-                    ForEach(Indexed.wrap(card.actions)) { a in
-                        Button(a.value.title) { CardLinks.open(a.value.url) }
-                            .buttonStyle(.bordered)
-                            .controlSize(.small)
+        WithPerceptionTracking {
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(Indexed.wrap(card.body)) { e in element(e.value) }
+                if !card.actions.isEmpty {
+                    HStack(spacing: 6) {
+                        ForEach(Indexed.wrap(card.actions)) { a in
+                            Button(a.value.title) { CardLinks.open(a.value.url) }
+                                .buttonStyle(.bordered)
+                                .controlSize(.small)
+                        }
                     }
+                    .padding(.top, 2)
                 }
-                .padding(.top, 2)
             }
-        }
-        .padding(10)
-        .frame(maxWidth: 420, alignment: .leading)
-        .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(.separator, lineWidth: 1)
+            .padding(10)
+            .frame(maxWidth: 420, alignment: .leading)
+            .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(.separator, lineWidth: 1)
+            }
         }
     }
 
@@ -236,14 +249,25 @@ struct AdaptiveCardView: View {
         case .text(let t):
             return AnyView(Text(t.text)
                 .font(font(t))
-                .foregroundStyle(t.isSubtle ? AnyShapeStyle(.secondary) : AnyShapeStyle(.primary))
+                .compatForeground(t.isSubtle ? AnyShapeStyle(.secondary) : AnyShapeStyle(.primary))
                 .lineLimit(t.wrap ? nil : 1)
                 .fixedSize(horizontal: false, vertical: true))
         case .facts(let facts):
-            return AnyView(Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 2) {
+            if #available(macOS 13, *) {
+                return AnyView(Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 2) {
+                    ForEach(Indexed.wrap(facts)) { f in
+                        GridRow {
+                            Text(f.value.title).compatForeground(.secondary)
+                            Text(f.value.value)
+                        }
+                        .font(AppFont.subheadline(scale))
+                    }
+                })
+            }
+            return AnyView(VStack(alignment: .leading, spacing: 2) {
                 ForEach(Indexed.wrap(facts)) { f in
-                    GridRow {
-                        Text(f.value.title).foregroundStyle(.secondary)
+                    HStack(alignment: .firstTextBaseline, spacing: 12) {
+                        Text(f.value.title).compatForeground(.secondary)
                         Text(f.value.value)
                     }
                     .font(AppFont.subheadline(scale))
@@ -286,27 +310,29 @@ struct BotPostRows: View {
     @Environment(\.contentTextScale) private var scale
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            ForEach(Indexed.wrap(posts)) { p in
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Label(p.value.title, systemImage: p.value.url == nil ? "doc.text" : "link")
-                        .font(AppFont.bodyEmphasized(scale))
-                        .lineLimit(2)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    if let url = p.value.url {
-                        Button("Open") { CardLinks.open(url) }
-                            .buttonStyle(.bordered)
-                            .controlSize(.small)
-                            .help(url)
+        WithPerceptionTracking {
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(Indexed.wrap(posts)) { p in
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Label(p.value.title, systemImage: p.value.url == nil ? "doc.text" : "link")
+                            .font(AppFont.bodyEmphasized(scale))
+                            .lineLimit(2)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        if let url = p.value.url {
+                            Button("Open") { CardLinks.open(url) }
+                                .buttonStyle(.bordered)
+                                .controlSize(.small)
+                                .help(url)
+                        }
                     }
                 }
             }
-        }
-        .padding(10)
-        .frame(maxWidth: 420, alignment: .leading)
-        .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(.separator, lineWidth: 1)
+            .padding(10)
+            .frame(maxWidth: 420, alignment: .leading)
+            .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(.separator, lineWidth: 1)
+            }
         }
     }
 }
@@ -321,8 +347,10 @@ struct FileChips: View {
     @Environment(\.contentTextScale) private var scale
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            ForEach(docs) { d in chip(d) }
+        WithPerceptionTracking {
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(docs) { d in chip(d) }
+            }
         }
     }
 
@@ -338,7 +366,7 @@ struct FileChips: View {
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(d.name).font(AppFont.bodyEmphasized(scale)).lineLimit(1).truncationMode(.middle)
-                        Text(d.sizeLabel).font(AppFont.caption(scale)).foregroundStyle(.secondary).monospacedDigit()
+                        Text(d.sizeLabel).font(AppFont.caption(scale)).compatForeground(.secondary).monospacedDigit()
                     }
                     Spacer(minLength: 0)
                 }
@@ -389,40 +417,42 @@ struct LinkPreviewCard: View {
     @Environment(\.contentTextScale) private var scale
 
     var body: some View {
-        let url = URL(string: model.urlString)
-        let title: String = switch model.phase {
-        case .loaded(let p): p.title
-        case .loading, .collapsed: url?.host ?? model.urlString
-        }
-        let host: String = switch model.phase {
-        case .loaded(let p): p.host
-        case .loading: "Loading preview…"
-        case .collapsed: model.urlString
-        }
-        Button { CardLinks.open(model.urlString) } label: {
-            HStack(spacing: 10) {
-                Image(systemName: "link")
-                    .foregroundStyle(.secondary)
-                    .frame(width: 28, height: 28)
-                    .background(.fill.tertiary, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(title).font(AppFont.bodyEmphasized(scale)).lineLimit(1)
-                    Text(host).font(AppFont.caption(scale)).foregroundStyle(.secondary).lineLimit(1)
-                        .truncationMode(.middle)
+        WithPerceptionTracking {
+            let url = URL(string: model.urlString)
+            let title: String = switch model.phase {
+            case .loaded(let p): p.title
+            case .loading, .collapsed: url?.host ?? model.urlString
+            }
+            let host: String = switch model.phase {
+            case .loaded(let p): p.host
+            case .loading: "Loading preview…"
+            case .collapsed: model.urlString
+            }
+            Button { CardLinks.open(model.urlString) } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "link")
+                        .compatForeground(.secondary)
+                        .frame(width: 28, height: 28)
+                        .background(.fill.tertiary, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(title).font(AppFont.bodyEmphasized(scale)).lineLimit(1)
+                        Text(host).font(AppFont.caption(scale)).compatForeground(.secondary).lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                    Spacer(minLength: 0)
                 }
-                Spacer(minLength: 0)
+                .padding(8)
+                .frame(maxWidth: 360, alignment: .leading)
+                .background(.fill.quaternary, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Palette.panelEdge, lineWidth: 1)
+                }
+                .contentShape(Rectangle())
             }
-            .padding(8)
-            .frame(maxWidth: 360, alignment: .leading)
-            .background(.fill.quaternary, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Palette.panelEdge, lineWidth: 1)
-            }
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+            .help(model.urlString)
+            .accessibilityLabel("Link: \(title)")
         }
-        .buttonStyle(.plain)
-        .help(model.urlString)
-        .accessibilityLabel("Link: \(title)")
     }
 }
 
@@ -433,17 +463,19 @@ struct ReactionChips: View {
     @Environment(\.windowModel) private var model
 
     var body: some View {
-        HStack(spacing: 4) {
-            ForEach(reactions, id: \.emoji) { r in
-                let who = names(r)
-                Button { toggle(r.emoji) } label: {
-                    Text("\(r.emoji) \(r.count)").font(AppFont.caption(scale).monospacedDigit())
+        WithPerceptionTracking {
+            HStack(spacing: 4) {
+                ForEach(reactions, id: \.emoji) { r in
+                    let who = names(r)
+                    Button { toggle(r.emoji) } label: {
+                        Text("\(r.emoji) \(r.count)").font(AppFont.caption(scale).monospacedDigit())
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .help(who.isEmpty ? "React with \(r.emoji)" : "\(ListFormatter.localizedString(byJoining: who)) reacted with \(r.emoji)")
+                    .accessibilityLabel(who.isEmpty ? "\(r.emoji), \(r.count)"
+                                        : "\(r.emoji), \(r.count): \(ListFormatter.localizedString(byJoining: who))")
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .help(who.isEmpty ? "React with \(r.emoji)" : "\(ListFormatter.localizedString(byJoining: who)) reacted with \(r.emoji)")
-                .accessibilityLabel(who.isEmpty ? "\(r.emoji), \(r.count)"
-                                    : "\(r.emoji), \(r.count): \(ListFormatter.localizedString(byJoining: who))")
             }
         }
     }

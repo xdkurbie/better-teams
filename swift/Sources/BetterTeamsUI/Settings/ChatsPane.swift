@@ -8,9 +8,10 @@
 // otherwise. Demo binds to the demo stores and never reads the Keychain.
 import OstMacCore
 import SwiftUI
+import Perception
 
 struct ChatsPane: View {
-    @Bindable var settings: AppSettings
+    @Perception.Bindable var settings: AppSettings
     @ObservedObject var density: DensityStore
     @ObservedObject var translation: TranslationStore
     @ObservedObject var canned: CannedResponsesStore
@@ -41,127 +42,129 @@ struct ChatsPane: View {
     private var demo: Bool { model.options.demo }
 
     var body: some View {
-        Form {
-            Section("Messages") {
-                Toggle(isOn: $settings.returnSends) {
-                    InfoLabel(title: "Return sends the message", subject: "the Return key",
-                              text: settings.returnSends ? "Shift-Return starts a new line." : "Shift-Return sends; Return starts a new line.")
-                }
-                Picker("Density", selection: $density.mode) {
-                    ForEach(MessageDensity.allCases, id: \.rawValue) { Text($0.displayName).tag($0) }
-                }
-                Picker("Text size", selection: Binding(get: { model.textScale }, set: { model.setTextScale($0) })) {
-                    ForEach(TextScaleSteps.steps, id: \.description) { v in
-                        Text(v == 1.0 ? "Default" : "\(Int((v * 100).rounded()))%").tag(v)
+        WithPerceptionTracking {
+            Form {
+                Section("Messages") {
+                    Toggle(isOn: $settings.returnSends) {
+                        InfoLabel(title: "Return sends the message", subject: "the Return key",
+                                  text: settings.returnSends ? "Shift-Return starts a new line." : "Shift-Return sends; Return starts a new line.")
                     }
-                }
-                Picker("Translate to", selection: $translation.targetLanguageCode) {
-                    ForEach(languageCodes, id: \.description) { code in
-                        Text(Locale.current.localizedString(forIdentifier: code) ?? code).tag(code)
+                    Picker("Density", selection: $density.mode) {
+                        ForEach(MessageDensity.allCases, id: \.rawValue) { Text($0.displayName).tag($0) }
                     }
-                }
-            }
-            Section {
-                List(canned.templates, selection: $template) { t in
-                    Text(t.title).tag(t.id)
-                }
-                .frame(height: 96)
-                .onChange(of: template) { _, id in load(id) }
-                TextField("Name", text: $templateTitle)
-                TextField("Text", text: $templateBody, axis: .vertical)
-                    .lineLimit(2...5)
-                HStack {
-                    Button(template == nil ? "Add Template" : "Save") { saveTemplate() }
-                        .disabled(templateTitle.isEmpty || templateBody.isEmpty)
-                    Button("Delete") { deleteTemplate() }
-                        .disabled(template == nil)
-                    if template != nil {
-                        Button("New") { template = nil; templateTitle = ""; templateBody = "" }
+                    Picker("Text size", selection: Binding(get: { model.textScale }, set: { model.setTextScale($0) })) {
+                        ForEach(TextScaleSteps.steps, id: \.description) { v in
+                            Text(v == 1.0 ? "Default" : "\(Int((v * 100).rounded()))%").tag(v)
+                        }
                     }
-                }
-            } header: {
-                Text("Templates")
-            } footer: {
-                if let templateIssue {
-                    Text(templateIssue).font(.caption).foregroundStyle(.secondary)
-                }
-            }
-            Section("Scheduled Messages") {
-                if scheduled.items.isEmpty {
-                    Text("No scheduled messages.").foregroundStyle(.secondary)
-                } else {
-                    ForEach(scheduled.items) { item in
-                        LabeledContent {
-                            Button("Cancel") { scheduled.cancel(id: item.id) }
-                        } label: {
-                            Text(item.chatName)
-                            Text("\(item.fireAt.formatted(date: .abbreviated, time: .shortened)) · \(item.text)")
-                                .lineLimit(1)
+                    Picker("Translate to", selection: $translation.targetLanguageCode) {
+                        ForEach(languageCodes, id: \.description) { code in
+                            Text(Locale.current.localizedString(forIdentifier: code) ?? code).tag(code)
                         }
                     }
                 }
-            }
-            Section {
-                Toggle("Ghost mode", isOn: $ghost.master)
-                Toggle("Don\u{2019}t send read receipts", isOn: $ghost.suppressReceipts)
-                    .disabled(!ghost.master)
-                Toggle("Hold my presence and typing", isOn: $ghost.suppressPresence)
-                    .disabled(!ghost.master)
-            } header: {
-                Text("Privacy")
-            }
-            Section("Blocked People") {
-                if blocked.users.isEmpty {
-                    Text("No one is blocked.").foregroundStyle(.secondary)
-                } else {
-                    ForEach(blocked.sortedUsers) { u in
-                        LabeledContent(u.displayName) {
-                            Button("Unblock") { blocked.unblock(chatID: u.chatID) }
+                Section {
+                    List(canned.templates, selection: $template) { t in
+                        Text(t.title).tag(t.id)
+                    }
+                    .frame(height: 96)
+                    .onChange(of: template) { id in load(id) }
+                    TextField("Name", text: $templateTitle)
+                    TextField("Text", text: $templateBody, axis: .vertical)
+                        .lineLimit(2...5)
+                    HStack {
+                        Button(template == nil ? "Add Template" : "Save") { saveTemplate() }
+                            .disabled(templateTitle.isEmpty || templateBody.isEmpty)
+                        Button("Delete") { deleteTemplate() }
+                            .disabled(template == nil)
+                        if template != nil {
+                            Button("New") { template = nil; templateTitle = ""; templateBody = "" }
+                        }
+                    }
+                } header: {
+                    Text("Templates")
+                } footer: {
+                    if let templateIssue {
+                        Text(templateIssue).font(.caption).compatForeground(.secondary)
+                    }
+                }
+                Section("Scheduled Messages") {
+                    if scheduled.items.isEmpty {
+                        Text("No scheduled messages.").compatForeground(.secondary)
+                    } else {
+                        ForEach(scheduled.items) { item in
+                            LabeledContent {
+                                Button("Cancel") { scheduled.cancel(id: item.id) }
+                            } label: {
+                                Text(item.chatName)
+                                Text("\(item.fireAt.formatted(date: .abbreviated, time: .shortened)) · \(item.text)")
+                                    .lineLimit(1)
+                            }
                         }
                     }
                 }
-            }
-            Section {
-                Toggle("Quick composer", isOn: $settings.quickComposer)
-                LabeledContent("Shortcut") {
-                    HotKeyRecorder(combo: combo) { c in
-                        combo = c
-                        QuickComposerController.setCombo(c)
+                Section {
+                    Toggle("Ghost mode", isOn: $ghost.master)
+                    Toggle("Don\u{2019}t send read receipts", isOn: $ghost.suppressReceipts)
+                        .disabled(!ghost.master)
+                    Toggle("Hold my presence and typing", isOn: $ghost.suppressPresence)
+                        .disabled(!ghost.master)
+                } header: {
+                    Text("Privacy")
+                }
+                Section("Blocked People") {
+                    if blocked.users.isEmpty {
+                        Text("No one is blocked.").compatForeground(.secondary)
+                    } else {
+                        ForEach(blocked.sortedUsers) { u in
+                            LabeledContent(u.displayName) {
+                                Button("Unblock") { blocked.unblock(chatID: u.chatID) }
+                            }
+                        }
+                    }
+                }
+                Section {
+                    Toggle("Quick composer", isOn: $settings.quickComposer)
+                    LabeledContent("Shortcut") {
+                        HotKeyRecorder(combo: combo) { c in
+                            combo = c
+                            QuickComposerController.setCombo(c)
+                            settings.noteQuickComposerChange()
+                        }
+                        .disabled(!settings.quickComposer)
+                    }
+                    Button("Reset to Default (\(QuickComposeCombo.default.displayString))") {
+                        combo = .default
+                        QuickComposerController.resetCombo()
                         settings.noteQuickComposerChange()
                     }
-                    .disabled(!settings.quickComposer)
+                    .disabled(!settings.quickComposer || combo == .default)
+                } header: {
+                    InfoHeader(title: "Quick Composer", subject: "the quick composer",
+                               text: "A shortcut that opens a small window to message a recent chat from any app.")
                 }
-                Button("Reset to Default (\(QuickComposeCombo.default.displayString))") {
-                    combo = .default
-                    QuickComposerController.resetCombo()
-                    settings.noteQuickComposerChange()
-                }
-                .disabled(!settings.quickComposer || combo == .default)
-            } header: {
-                InfoHeader(title: "Quick Composer", subject: "the quick composer",
-                           text: "A shortcut that opens a small window to message a recent chat from any app.")
-            }
-            Section {
-                if demo {
-                    Text("The demo uses sample GIFs.").foregroundStyle(.secondary)
-                } else {
-                    SecureField("Klipy API key", text: $gifKey)
-                    Button("Save Key") {
-                        KlipyClient.saveKey(gifKey)
-                        gifKey = ""
-                        gifSaved = true
+                Section {
+                    if demo {
+                        Text("The demo uses sample GIFs.").compatForeground(.secondary)
+                    } else {
+                        SecureField("Klipy API key", text: $gifKey)
+                        Button("Save Key") {
+                            KlipyClient.saveKey(gifKey)
+                            gifKey = ""
+                            gifSaved = true
+                        }
+                        .disabled(gifKey.isEmpty)
                     }
-                    .disabled(gifKey.isEmpty)
+                } header: {
+                    InfoHeader(title: "GIFs", subject: "GIF search",
+                               text: "GIF search needs a Klipy key, kept in your Keychain.")
+                } footer: {
+                    if gifSaved { Text("Key saved.").font(.caption).compatForeground(.secondary) }
                 }
-            } header: {
-                InfoHeader(title: "GIFs", subject: "GIF search",
-                           text: "GIF search needs a Klipy key, kept in your Keychain.")
-            } footer: {
-                if gifSaved { Text("Key saved.").font(.caption).foregroundStyle(.secondary) }
             }
+            .compatFormStyleGrouped()
+            .frame(width: SettingsWindowController.paneWidth, height: 560)
         }
-        .formStyle(.grouped)
-        .frame(width: SettingsWindowController.paneWidth, height: 560)
     }
 
     private var languageCodes: [String] {

@@ -9,6 +9,7 @@ import XCTest
 @MainActor
 final class NoLoadSkeletonTests: XCTestCase {
     func testSkeletonRowsRender() throws {
+        guard #available(macOS 13, *) else { throw XCTSkip("ImageRenderer needs macOS 13") }
         let view = SkeletonRows()
             .frame(width: 340, height: 420, alignment: .top)
             .background(Color(nsColor: .windowBackgroundColor))

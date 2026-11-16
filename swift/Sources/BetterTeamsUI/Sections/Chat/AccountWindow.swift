@@ -11,6 +11,7 @@
 import AppKit
 import OstMacCore
 import SwiftUI
+import Perception
 
 @MainActor
 final class AccountWindowController: NSWindowController, NSWindowDelegate {
@@ -86,14 +87,16 @@ struct AccountWindowView: View {
     }
 
     var body: some View {
-        // R23: AppKit owns chrome — a plain adjustable split view here,
-        // never the scene-chrome split; the list pane uses `.inset`.
-        HSplitView {
-            sidebar
-                .frame(minWidth: 220, idealWidth: 280, maxWidth: 360)
-            detail
+        WithPerceptionTracking {
+            // R23: AppKit owns chrome — a plain adjustable split view here,
+            // never the scene-chrome split; the list pane uses `.inset`.
+            HSplitView {
+                sidebar
+                    .frame(minWidth: 220, idealWidth: 280, maxWidth: 360)
+                detail
+            }
+            .task { if chats.chats.isEmpty { await chats.load() } }
         }
-        .task { if chats.chats.isEmpty { await chats.load() } }
     }
 
     @ViewBuilder

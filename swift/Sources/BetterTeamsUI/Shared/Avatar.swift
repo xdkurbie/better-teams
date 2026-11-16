@@ -5,6 +5,7 @@
 // they stay on top of the photo.
 import OstMacCore
 import SwiftUI
+import Perception
 
 struct Avatar: View {
     let name: String
@@ -17,15 +18,17 @@ struct Avatar: View {
     @Environment(\.windowModel) private var model
 
     var body: some View {
-        if !isGroup, let photos = model?.app?.photos, !name.isEmpty {
-            let ref = person ?? ContactRef(name: name)
-            PhotoAvatar(ref: ref, slot: photos.slot(for: ref), photos: photos) { monogram }
-                .frame(width: diameter, height: diameter)
-                .accessibilityHidden(true)
-        } else {
-            monogram
-                .frame(width: diameter, height: diameter)
-                .accessibilityHidden(true)
+        WithPerceptionTracking {
+            if !isGroup, let photos = model?.app?.photos, !name.isEmpty {
+                let ref = person ?? ContactRef(name: name)
+                PhotoAvatar(ref: ref, slot: photos.slot(for: ref), photos: photos) { monogram }
+                    .frame(width: diameter, height: diameter)
+                    .accessibilityHidden(true)
+            } else {
+                monogram
+                    .frame(width: diameter, height: diameter)
+                    .accessibilityHidden(true)
+            }
         }
     }
 
@@ -35,11 +38,11 @@ struct Avatar: View {
             if isGroup {
                 Image(systemName: "person.2.fill")
                     .font(AppFont.monogram(diameter * 0.9))
-                    .foregroundStyle(Palette.avatarText)
+                    .compatForeground(Palette.avatarText)
             } else {
                 Text(Self.initials(name))
                     .font(AppFont.monogram(diameter))
-                    .foregroundStyle(Palette.avatarText)
+                    .compatForeground(Palette.avatarText)
             }
         }
     }
@@ -62,18 +65,20 @@ private struct PhotoAvatar<Fallback: View>: View {
     @ViewBuilder var fallback: () -> Fallback
 
     var body: some View {
-        ZStack {
-            fallback()
-            if let image = slot.image {
-                Image(nsImage: image)
-                    .resizable()
-                    .interpolation(.high)
-                    .aspectRatio(contentMode: .fill)
-                    .clipShape(Circle())
+        WithPerceptionTracking {
+            ZStack {
+                fallback()
+                if let image = slot.image {
+                    Image(nsImage: image)
+                        .resizable()
+                        .interpolation(.high)
+                        .aspectRatio(contentMode: .fill)
+                        .clipShape(Circle())
+                }
             }
+            .onAppear { photos.request(ref) }
+            .onChange(of: ref) { next in photos.request(next) }
+            .onDisappear { photos.cancel(ref) }
         }
-        .onAppear { photos.request(ref) }
-        .onChange(of: ref) { _, next in photos.request(next) }
-        .onDisappear { photos.cancel(ref) }
     }
 }

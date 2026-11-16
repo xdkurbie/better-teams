@@ -4,6 +4,7 @@
 // Group chats only; 1:1 chats never offer these.
 import OstMacCore
 import SwiftUI
+import Perception
 
 @MainActor
 enum ChatManageActions {
@@ -59,29 +60,31 @@ struct RenameChatSheet: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Rename Chat").font(.headline)
-            TextField("Group Name", text: $topic, prompt: Text("Group Name"))
-                .textFieldStyle(.roundedBorder)
-                .onSubmit(save)
-            if let failure {
-                Text(failure).font(.caption).foregroundStyle(Palette.failed)
+        WithPerceptionTracking {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Rename Chat").font(.headline)
+                TextField("Group Name", text: $topic, prompt: Text("Group Name"))
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit(save)
+                if let failure {
+                    Text(failure).font(.caption).compatForeground(Palette.failed)
+                }
+                HStack {
+                    Spacer()
+                    Button("Cancel", role: .cancel) { model?.dismissSheet() }
+                        .keyboardShortcut(.cancelAction)
+                    Button("Rename", action: save)
+                        .keyboardShortcut(.defaultAction)
+                        .disabled(saving)
+                }
             }
-            HStack {
-                Spacer()
-                Button("Cancel", role: .cancel) { model?.dismissSheet() }
-                    .keyboardShortcut(.cancelAction)
-                Button("Rename", action: save)
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(saving)
+            .padding(20)
+            .frame(width: 360)
+            .onChange(of: chats.chat(id: chatID)?.name) { name in
+                guard !seeded, let name, !name.isEmpty else { return }
+                seeded = true
+                if topic.isEmpty { topic = name }
             }
-        }
-        .padding(20)
-        .frame(width: 360)
-        .onChange(of: chats.chat(id: chatID)?.name) { _, name in
-            guard !seeded, let name, !name.isEmpty else { return }
-            seeded = true
-            if topic.isEmpty { topic = name }
         }
     }
 
@@ -139,51 +142,53 @@ struct AddPeopleSheet: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Add People").font(.headline)
-            SearchField(text: $query, placeholder: "Search People")
-                .frame(height: 24)
-            if !people.isEmpty {
-                PickedPeople(people: $people)
+        WithPerceptionTracking {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Add People").font(.headline)
+                SearchField(text: $query, placeholder: "Search People")
+                    .frame(height: 24)
+                if !people.isEmpty {
+                    PickedPeople(people: $people)
+                }
+                if let contacts {
+                    DirectoryResults(contacts: contacts, people: $people, members: members)
+                }
+                Text("Chat History")
+                    .font(.subheadline.weight(.semibold))
+                    .compatForeground(.secondary)
+                Picker("Chat History", selection: $mode) {
+                    Text("Don't include chat history").tag(AddPeopleHistoryMode.none)
+                    Text("Include all chat history").tag(AddPeopleHistoryMode.all)
+                    Text("Include history from the past number of days").tag(AddPeopleHistoryMode.days)
+                }
+                .pickerStyle(.radioGroup)
+                .labelsHidden()
+                // Directly under the option it sets, indented to its text.
+                Stepper("\(days) \(days == 1 ? "day" : "days")", value: $days, in: 1...365)
+                    .disabled(mode != .days)
+                    .accessibilityLabel("Days of history")
+                    .padding(.leading, 20)
+                if let failure {
+                    Text(failure).font(.caption).compatForeground(Palette.failed)
+                }
+                HStack {
+                    Spacer()
+                    Button("Cancel", role: .cancel) { model?.dismissSheet() }
+                        .keyboardShortcut(.cancelAction)
+                    Button("Add", action: add)
+                        .keyboardShortcut(.defaultAction)
+                        .disabled(adding || people.isEmpty)
+                }
             }
-            if let contacts {
-                DirectoryResults(contacts: contacts, people: $people, members: members)
+            .padding(20)
+            .frame(width: 420)
+            .task {
+                if !rosterHoldsChat { await chatMembers.load(chatID: chatID) }
             }
-            Text("Chat History")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.secondary)
-            Picker("Chat History", selection: $mode) {
-                Text("Don't include chat history").tag(AddPeopleHistoryMode.none)
-                Text("Include all chat history").tag(AddPeopleHistoryMode.all)
-                Text("Include history from the past number of days").tag(AddPeopleHistoryMode.days)
+            .onChange(of: query) { q in
+                guard let contacts else { return }
+                debounce.schedule { Task { await contacts.search(query: q) } }
             }
-            .pickerStyle(.radioGroup)
-            .labelsHidden()
-            // Directly under the option it sets, indented to its text.
-            Stepper("\(days) \(days == 1 ? "day" : "days")", value: $days, in: 1...365)
-                .disabled(mode != .days)
-                .accessibilityLabel("Days of history")
-                .padding(.leading, 20)
-            if let failure {
-                Text(failure).font(.caption).foregroundStyle(Palette.failed)
-            }
-            HStack {
-                Spacer()
-                Button("Cancel", role: .cancel) { model?.dismissSheet() }
-                    .keyboardShortcut(.cancelAction)
-                Button("Add", action: add)
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(adding || people.isEmpty)
-            }
-        }
-        .padding(20)
-        .frame(width: 420)
-        .task {
-            if !rosterHoldsChat { await chatMembers.load(chatID: chatID) }
-        }
-        .onChange(of: query) { _, q in
-            guard let contacts else { return }
-            debounce.schedule { Task { await contacts.search(query: q) } }
         }
     }
 

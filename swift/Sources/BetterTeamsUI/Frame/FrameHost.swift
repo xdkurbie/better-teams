@@ -19,6 +19,7 @@
 import AppKit
 import OstMacCore
 import WebKit
+import Perception
 
 /// Load state a frame shows (§7.3 "Load failure").
 public enum FrameLoadState: Equatable, Sendable {
@@ -31,29 +32,29 @@ public enum FrameLoadState: Equatable, Sendable {
 
 /// One keyed page: its web view (while resident) and observable load
 /// state. Navigation, UI and download delegate for its view.
-@Observable
+@Perceptible
 @MainActor
 public final class FramePage: NSObject {
-    @ObservationIgnored public let key: FrameKey
-    @ObservationIgnored public private(set) var url: URL
-    @ObservationIgnored public private(set) var title: String
-    @ObservationIgnored fileprivate(set) var web: WKWebView?
-    @ObservationIgnored fileprivate var lastUsed = Date.distantPast
-    @ObservationIgnored fileprivate var suspended = false
+    @PerceptionIgnored public let key: FrameKey
+    @PerceptionIgnored public private(set) var url: URL
+    @PerceptionIgnored public private(set) var title: String
+    @PerceptionIgnored fileprivate(set) var web: WKWebView?
+    @PerceptionIgnored fileprivate var lastUsed = Date.distantPast
+    @PerceptionIgnored fileprivate var suspended = false
     /// Saved at eviction; restores back/forward and scroll state.
-    @ObservationIgnored fileprivate var savedInteraction: Any?
-    @ObservationIgnored fileprivate var savedURL: URL?
-    @ObservationIgnored private var observations: [NSKeyValueObservation] = []
-    @ObservationIgnored fileprivate weak var host: FrameHost?
+    @PerceptionIgnored fileprivate var savedInteraction: Any?
+    @PerceptionIgnored fileprivate var savedURL: URL?
+    @PerceptionIgnored private var observations: [NSKeyValueObservation] = []
+    @PerceptionIgnored fileprivate weak var host: FrameHost?
     /// Running downloads → their Transfers entry (§7.3, Files ▸ Downloads).
-    @ObservationIgnored fileprivate var downloads: [ObjectIdentifier: (id: String?, dest: URL?, obs: NSKeyValueObservation?)] = [:]
+    @PerceptionIgnored fileprivate var downloads: [ObjectIdentifier: (id: String?, dest: URL?, obs: NSKeyValueObservation?)] = [:]
     /// A sign-in round trip left the allowlist (the tenant's federated
     /// sign-in and its hops): its pages stay in the frame until it lands
     /// back on an allowed host (APPSIGNIN).
-    @ObservationIgnored fileprivate var signingIn = false
+    @PerceptionIgnored fileprivate var signingIn = false
     /// The host gave up on this app page (reason in `state`) until the
     /// next load (APPNATIVE4).
-    @ObservationIgnored fileprivate var hostFailed = false
+    @PerceptionIgnored fileprivate var hostFailed = false
     /// Ends a load that never finishes (no endless loading pane): a load
     /// that has not committed in this long fails with Retry. Reset on each
     /// provisional navigation, so it bounds one hop, not a whole redirect
@@ -61,7 +62,7 @@ public final class FramePage: NSObject {
     /// `auth_pvr` hop) sometimes needs more than 30 s to answer, and a
     /// dead host still fails fast via a DNS/connection error, not this
     /// timer (APPNATIVE5, R7).
-    @ObservationIgnored fileprivate let loadWatch = Debounce(milliseconds: 45_000)
+    @PerceptionIgnored fileprivate let loadWatch = Debounce(milliseconds: 45_000)
 
     public fileprivate(set) var state: FrameLoadState = .idle
     /// True once the first page has committed (first paint).
@@ -81,9 +82,9 @@ public final class FramePage: NSObject {
     /// suspended, and coming back to the app puts the view back.
     public fileprivate(set) var pausedInBackground = false
     /// Where the paused view goes back to.
-    @ObservationIgnored fileprivate weak var pausedContainer: NSView?
+    @PerceptionIgnored fileprivate weak var pausedContainer: NSView?
     /// The view held keyboard focus when it was paused (given back on resume).
-    @ObservationIgnored fileprivate var pausedHadFocus = false
+    @PerceptionIgnored fileprivate var pausedHadFocus = false
 
     init(key: FrameKey, url: URL, title: String) {
         self.key = key

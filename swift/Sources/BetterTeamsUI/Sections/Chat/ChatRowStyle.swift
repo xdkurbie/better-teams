@@ -6,6 +6,7 @@
 // already holds bottom-trailing, the mute badge takes top-trailing so
 // each badge keeps one position and neither covers the other.
 import SwiftUI
+import Perception
 
 struct ChatRowStyle: Equatable {
     enum Corner: Equatable { case bottomTrailing, topTrailing }
@@ -41,14 +42,16 @@ struct MuteBadge: View {
     var size: CGFloat = 10
 
     var body: some View {
-        Image(systemName: "bell.slash.fill")
-            .resizable()
-            .scaledToFit()
-            .padding(size * 0.2)
-            .frame(width: size + 2, height: size + 2)
-            .foregroundStyle(.background)
-            .background(Circle().fill(.secondary))
-            .background(Circle().fill(.background).padding(-1.5))
-            .accessibilityHidden(true)
+        WithPerceptionTracking {
+            Image(systemName: "bell.slash.fill")
+                .resizable()
+                .scaledToFit()
+                .padding(size * 0.2)
+                .frame(width: size + 2, height: size + 2)
+                .compatForeground(.background)
+                .background(Circle().fill(.secondary))
+                .background(Circle().fill(.background).padding(-1.5))
+                .accessibilityHidden(true)
+        }
     }
 }

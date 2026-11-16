@@ -2,6 +2,7 @@
 // avatar, name, subtitle, trailing tab row (CHATTABS: built-ins per
 // chat kind + pinned tabs with a "More" menu overflow, `ChatTabBar`).
 import SwiftUI
+import Perception
 
 struct ConversationHeader: View {
     let name: String
@@ -23,29 +24,31 @@ struct ConversationHeader: View {
     static let nameMinWidth: CGFloat = 96
 
     var body: some View {
-        HStack(spacing: 10) {
-            Avatar(name: name, isGroup: isGroup, diameter: 32)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(name)
-                    .font(AppFont.title3(scale))
-                    .lineLimit(1)
-                if !subtitle.isEmpty {
-                    Text(subtitle)
-                        .font(AppFont.subheadline(scale))
-                        .foregroundStyle(.secondary)
+        WithPerceptionTracking {
+            HStack(spacing: 10) {
+                Avatar(name: name, isGroup: isGroup, diameter: 32)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(name)
+                        .font(AppFont.title3(scale))
                         .lineLimit(1)
+                    if !subtitle.isEmpty {
+                        Text(subtitle)
+                            .font(AppFont.subheadline(scale))
+                            .compatForeground(.secondary)
+                            .lineLimit(1)
+                    }
                 }
+                .frame(minWidth: Self.nameMinWidth, alignment: .leading)
+                Spacer(minLength: 12)
+                // The row claims width before the name, which truncates down
+                // to `nameMinWidth`; past that the row folds tabs into the "More" menu.
+                ChatTabBar(layout: layout, selection: $tab, opened: opened, open: open, close: close)
+                    .layoutPriority(1)
             }
-            .frame(minWidth: Self.nameMinWidth, alignment: .leading)
-            Spacer(minLength: 12)
-            // The row claims width before the name, which truncates down
-            // to `nameMinWidth`; past that the row folds tabs into the "More" menu.
-            ChatTabBar(layout: layout, selection: $tab, opened: opened, open: open, close: close)
-                .layoutPriority(1)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .frame(minHeight: Self.minHeight)
+            .accessibilityElement(children: .contain)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .frame(minHeight: Self.minHeight)
-        .accessibilityElement(children: .contain)
     }
 }

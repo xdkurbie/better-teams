@@ -8,7 +8,7 @@
 // `NotesTab`, `FrameContainer`).
 import OstMacCore
 import SwiftUI
-import Translation
+import Perception
 
 struct TeamsDetailPane: View {
     @ObservedObject var teams: TeamsViewModel
@@ -18,30 +18,32 @@ struct TeamsDetailPane: View {
     @Environment(\.windowModel) private var model
 
     var body: some View {
-        if let model, model.forced(.teams) == nil, let sel = TeamsSelection(model.nav.selection(in: .teams)),
-           let chID = sel.channelID, let (team, channel) = TeamsListPane.locate(chID, in: teams.teams),
-           team.teamId == sel.teamID
-        {
-            ChannelDetail(team: team, channel: channel, sel: sel, conv: conv,
-                          tabs: section.tabs(chID, model))
-        } else if let model, model.forced(.teams) == nil, let sel = TeamsSelection(model.nav.selection(in: .teams)),
-                  let chID = sel.channelID, teams.deletedChannelIDs.contains(chID) {
-            // TEAMSYNC: the open channel was deleted (here or elsewhere),
-            // or its team was left: say so instead of a blank pane.
-            EmptyPane("This channel was deleted", systemImage: "trash",
-                      message: "It's no longer available in Teams. Choose another channel.")
-        } else if let model, model.forced(.teams) != nil || teams.teams.isEmpty {
-            // Loading, error or no teams: the list pane carries the state;
-            // an empty detail never repeats it or asks for a selection
-            // that cannot be made yet (R18).
-            Color.clear
-        } else if let model, let sel = TeamsSelection(model.nav.selection(in: .teams)),
-                  let team = teams.teams.first(where: { $0.teamId == sel.teamID }) {
-            EmptyPane(team.name, systemImage: "person.3",
-                      message: team.channels.count == 1 ? "1 channel. Choose it to see its posts."
-                          : "\(team.channels.count) channels. Choose one to see its posts.")
-        } else {
-            NoSelectionPane("No Channel Selected")
+        WithPerceptionTracking {
+            if let model, model.forced(.teams) == nil, let sel = TeamsSelection(model.nav.selection(in: .teams)),
+               let chID = sel.channelID, let (team, channel) = TeamsListPane.locate(chID, in: teams.teams),
+               team.teamId == sel.teamID
+            {
+                ChannelDetail(team: team, channel: channel, sel: sel, conv: conv,
+                              tabs: section.tabs(chID, model))
+            } else if let model, model.forced(.teams) == nil, let sel = TeamsSelection(model.nav.selection(in: .teams)),
+                      let chID = sel.channelID, teams.deletedChannelIDs.contains(chID) {
+                // TEAMSYNC: the open channel was deleted (here or elsewhere),
+                // or its team was left: say so instead of a blank pane.
+                EmptyPane("This channel was deleted", systemImage: "trash",
+                          message: "It's no longer available in Teams. Choose another channel.")
+            } else if let model, model.forced(.teams) != nil || teams.teams.isEmpty {
+                // Loading, error or no teams: the list pane carries the state;
+                // an empty detail never repeats it or asks for a selection
+                // that cannot be made yet (R18).
+                Color.clear
+            } else if let model, let sel = TeamsSelection(model.nav.selection(in: .teams)),
+                      let team = teams.teams.first(where: { $0.teamId == sel.teamID }) {
+                EmptyPane(team.name, systemImage: "person.3",
+                          message: team.channels.count == 1 ? "1 channel. Choose it to see its posts."
+                              : "\(team.channels.count) channels. Choose one to see its posts.")
+            } else {
+                NoSelectionPane("No Channel Selected")
+            }
         }
     }
 }
@@ -55,20 +57,22 @@ struct ChannelDetail: View {
     @Environment(\.windowModel) private var model
 
     var body: some View {
-        if let model {
-            VStack(spacing: 0) {
-                ChannelHeader(team: team, channel: channel, layout: ChannelTabLayout(tabs),
-                              tab: Binding(get: { sel.tab }, set: { select(tab: $0, model) }))
-                Divider()
-                Group {
-                    switch sel.tab {
-                    case .posts: posts(model)
-                    case .files: FileTable(scope: .channel(team: team.teamId, channel: channel.channelId))
-                    case .notes: NotesTab(scope: .channel(team: team.teamId, channel: channel.channelId))
-                    case .web(let id): webTab(id, model)
+        WithPerceptionTracking {
+            if let model {
+                VStack(spacing: 0) {
+                    ChannelHeader(team: team, channel: channel, layout: ChannelTabLayout(tabs),
+                                  tab: Binding(get: { sel.tab }, set: { select(tab: $0, model) }))
+                    Divider()
+                    Group {
+                        switch sel.tab {
+                        case .posts: posts(model)
+                        case .files: FileTable(scope: .channel(team: team.teamId, channel: channel.channelId))
+                        case .notes: NotesTab(scope: .channel(team: team.teamId, channel: channel.channelId))
+                        case .web(let id): webTab(id, model)
+                        }
                     }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
     }
@@ -121,7 +125,7 @@ struct ChannelDetail: View {
                 if conv.jumpMissedID != nil {
                     HStack(spacing: 8) {
                         Label("Message no longer available", systemImage: "exclamationmark.bubble")
-                            .foregroundStyle(.secondary)
+                            .compatForeground(.secondary)
                         Spacer(minLength: 8)
                         Button("Dismiss") { conv.clearJumpMissed() }
                             .controlSize(.small)
@@ -144,15 +148,13 @@ struct ChannelDetail: View {
                          placeholder: "Start a post in #\(channel.name)", conv: conv,
                          composer: services.composer, attachments: services.attachments, services: services)
             }
-            .dropDestination(for: URL.self) { urls, _ in
+            .compatDropFiles { urls, _ in
                 let files = urls.filter(\.isFileURL)
                 guard !files.isEmpty else { return false }
                 services.attachments.stage(urls: files)
                 return true
             }
-            .translationTask(TranslationSession.Configuration(target: services.translation.sessionTarget)) { session in
-                services.translation.attached(session)
-            }
+            .compatTranslationTask(services.translation)
         }
     }
 }
@@ -171,37 +173,43 @@ struct ChannelHeader: View {
     @Environment(\.contentTextScale) private var scale
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 10) {
-                TeamTile(name: team.name, size: 32)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("\(team.name) › \(channel.name)")
-                        .font(AppFont.title3(scale))
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                    if let d = channel.description?.trimmingCharacters(in: .whitespacesAndNewlines), !d.isEmpty {
-                        Text(d)
-                            .font(AppFont.subheadline(scale))
-                            .foregroundStyle(.secondary)
+        WithPerceptionTracking {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 10) {
+                    TeamTile(name: team.name, size: 32)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("\(team.name) › \(channel.name)")
+                            .font(AppFont.title3(scale))
                             .lineLimit(1)
                             .truncationMode(.tail)
+                        if let d = channel.description?.trimmingCharacters(in: .whitespacesAndNewlines), !d.isEmpty {
+                            Text(d)
+                                .font(AppFont.subheadline(scale))
+                                .compatForeground(.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                        }
                     }
+                    Spacer(minLength: 0)
                 }
-                Spacer(minLength: 0)
+                .help("\(team.name) › \(channel.name)")
+                .accessibilityElement(children: .combine)
+                if #available(macOS 13, *) {
+                    ViewThatFits(in: .horizontal) {
+                        tabRow(ChannelTabLayout.maxSegments)
+                        tabRow(4)
+                        tabRow(3)
+                        tabRow(2)
+                        tabRow(1)
+                    }
+                } else {
+                    tabRow(2)
+                }
             }
-            .help("\(team.name) › \(channel.name)")
-            .accessibilityElement(children: .combine)
-            ViewThatFits(in: .horizontal) {
-                tabRow(ChannelTabLayout.maxSegments)
-                tabRow(4)
-                tabRow(3)
-                tabRow(2)
-                tabRow(1)
-            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func tabRow(_ segments: Int) -> some View {
@@ -242,28 +250,30 @@ struct ThreadSummaryRow: View {
     @Environment(\.contentTextScale) private var scale
 
     var body: some View {
-        let open = model.flatMap { TeamsSelection($0.nav.selection(in: .teams))?.threadID } == rootID
-        HStack(spacing: 8) {
-            Button(action: openThread) {
-                Label(title, systemImage: replies == 0 ? "arrowshape.turn.up.left" : "bubble.left.and.bubble.right")
-                    .font(open ? AppFont.bodyEmphasized(scale) : AppFont.body(scale))
+        WithPerceptionTracking {
+            let open = model.flatMap { TeamsSelection($0.nav.selection(in: .teams))?.threadID } == rootID
+            HStack(spacing: 8) {
+                Button(action: openThread) {
+                    Label(title, systemImage: replies == 0 ? "arrowshape.turn.up.left" : "bubble.left.and.bubble.right")
+                        .font(open ? AppFont.bodyEmphasized(scale) : AppFont.body(scale))
+                }
+                .buttonStyle(.borderless)
+                .compatForeground(.tint)
+                .help(replies == 0 ? "Reply in Thread" : "Open Thread")
+                if replies > 0, let lastReply {
+                    Text("· Last reply \(ChatListFormat.previewTime(lastReply, now: RelativeClock.shared.now))")
+                        .font(AppFont.caption(scale))
+                        .compatForeground(.secondary)
+                }
+                Spacer(minLength: 0)
             }
-            .buttonStyle(.borderless)
-            .foregroundStyle(.tint)
-            .help(replies == 0 ? "Reply in Thread" : "Open Thread")
-            if replies > 0, let lastReply {
-                Text("· Last reply \(ChatListFormat.previewTime(lastReply, now: RelativeClock.shared.now))")
-                    .font(AppFont.caption(scale))
-                    .foregroundStyle(.secondary)
-            }
-            Spacer(minLength: 0)
+            .padding(.leading, 54)
+            .padding(.trailing, 16)
+            .padding(.top, 4)
+            .padding(.bottom, 10)
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isButton)
         }
-        .padding(.leading, 54)
-        .padding(.trailing, 16)
-        .padding(.top, 4)
-        .padding(.bottom, 10)
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.isButton)
     }
 
     private var title: String {

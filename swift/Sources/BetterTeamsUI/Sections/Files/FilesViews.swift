@@ -4,6 +4,7 @@
 import AppKit
 import OstMacCore
 import SwiftUI
+import Perception
 
 // MARK: list (sources)
 
@@ -15,8 +16,10 @@ struct FilesSourceList: View {
     @State private var flipped: Set<String> = []
 
     var body: some View {
-        if let model {
-            list(model)
+        WithPerceptionTracking {
+            if let model {
+                list(model)
+            }
         }
     }
 
@@ -95,9 +98,11 @@ struct FilesDetailPane: View {
     @Environment(\.windowModel) private var model
 
     var body: some View {
-        if let model, let app = model.app {
-            content(model, app)
-                .task { section.applyEvidence(model) }
+        WithPerceptionTracking {
+            if let model, let app = model.app {
+                content(model, app)
+                    .task { section.applyEvidence(model) }
+            }
         }
     }
 
@@ -156,8 +161,10 @@ struct FileTableView: View {
     @State private var order = [KeyPathComparator(\FileItem.modifiedKey, order: .reverse)]
 
     var body: some View {
-        if let model {
-            table(model)
+        WithPerceptionTracking {
+            if let model {
+                table(model)
+            }
         }
     }
 
@@ -174,16 +181,16 @@ struct FileTableView: View {
             }
             .width(min: 180, ideal: 290)
             TableColumn("Modified", value: \.modifiedKey) { f in
-                Text(FilesFormat.date(f.modified)).foregroundStyle(.secondary).monospacedDigit().lineLimit(1)
+                Text(FilesFormat.date(f.modified)).compatForeground(.secondary).monospacedDigit().lineLimit(1)
             }
             // Fits "Sep 25, 2026 at 10:58 AM" without truncating.
             .width(min: 165, ideal: 170)
             TableColumn("Modified By", value: \.modifiedBy) { f in
-                Text(f.modifiedBy).foregroundStyle(.secondary).lineLimit(1)
+                Text(f.modifiedBy).compatForeground(.secondary).lineLimit(1)
             }
             .width(min: 80, ideal: 105)
             TableColumn("Size", value: \.size) { f in
-                Text(f.isFolder ? "--" : FilesFormat.size(f.size)).foregroundStyle(.secondary).monospacedDigit()
+                Text(f.isFolder ? "--" : FilesFormat.size(f.size)).compatForeground(.secondary).monospacedDigit()
             }
             .width(min: 52, ideal: 62)
             TableColumn("Location", value: \.location) { f in
@@ -193,8 +200,8 @@ struct FileTableView: View {
         }
         // Plain rows: alternating stripes also paint empty filler rows
         // below the last file.
-        .alternatingRowBackgrounds(.disabled)
-        .contextMenu(forSelectionType: String.self) { ids in
+        .compatAlternatingRowsDisabled()
+        .compatSelectionMenu(forSelectionType: String.self) { ids in
             // The clicked row, or the whole selection when it holds that
             // row: Delete / Move / Copy act on every item (Finder).
             let args = items.filter { ids.contains($0.id) }.map { argPrefix + $0.id }
@@ -208,12 +215,12 @@ struct FileTableView: View {
                 run(FilesCommands.open, id, m)
             }
         }
-        .onKeyPress(.space) {
-            guard let id = items.first(where: { selection.contains($0.id) })?.id else { return .ignored }
+        .compatOnSpace {
+            guard let id = items.first(where: { selection.contains($0.id) })?.id else { return false }
             run(FilesCommands.quickLook, id, m)
-            return .handled
+            return true
         }
-        .dropDestination(for: URL.self) { urls, _ in
+        .compatDropFiles { urls, _ in
             let paths = urls.filter(\.isFileURL).map(\.path)
             guard canUpload, !paths.isEmpty, let files = m.provider(.files) as? FilesSection else { return false }
             files.upload(paths: paths, m)
@@ -227,7 +234,7 @@ struct FileTableView: View {
         if linksLocation, let id = f.locationID {
             FileLocationLabel(name: f.location) { FilesSection.openSource(id, name: f.location, m) }
         } else {
-            Text(f.location).foregroundStyle(.secondary).lineLimit(1).truncationMode(.tail)
+            Text(f.location).compatForeground(.secondary).lineLimit(1).truncationMode(.tail)
         }
     }
 
@@ -281,17 +288,19 @@ struct FilesContextMenu: View {
     }
 
     var body: some View {
-        if let model {
-            let p = model.provider(.files)
-            let groups = FilesCommands.contextGroups.map { ids in
-                ids.compactMap(CommandCatalog.command).filter { p.validate($0.id, arg: arg, model).enabled }.map(Item.init)
-            }
-            .filter { !$0.isEmpty }
-            let numbered = zip(groups.indices, groups).map { MenuGroup(id: $0, items: $1) }
-            ForEach(numbered) { g in
-                if g.id > 0 { Divider() }
-                ForEach(g.items) { item in
-                    Button(item.cmd.title) { _ = p.perform(item.cmd.id, arg: arg, model) }
+        WithPerceptionTracking {
+            if let model {
+                let p = model.provider(.files)
+                let groups = FilesCommands.contextGroups.map { ids in
+                    ids.compactMap(CommandCatalog.command).filter { p.validate($0.id, arg: arg, model).enabled }.map(Item.init)
+                }
+                .filter { !$0.isEmpty }
+                let numbered = zip(groups.indices, groups).map { MenuGroup(id: $0, items: $1) }
+                ForEach(numbered) { g in
+                    if g.id > 0 { Divider() }
+                    ForEach(g.items) { item in
+                        Button(item.cmd.title) { _ = p.perform(item.cmd.id, arg: arg, model) }
+                    }
                 }
             }
         }
@@ -306,12 +315,14 @@ struct FolderCrumbs: View {
     let root: String
 
     var body: some View {
-        FolderPathBar(titles: [root] + crumbs.map(\.name)) { index in
-            if index == 0 { store.goToRoot() } else { store.goTo(depth: index) }
+        WithPerceptionTracking {
+            FolderPathBar(titles: [root] + crumbs.map(\.name)) { index in
+                if index == 0 { store.goToRoot() } else { store.goTo(depth: index) }
+            }
+            .frame(height: 24)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
         }
-        .frame(height: 24)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
     }
 
     struct Crumb: Identifiable {
@@ -335,14 +346,16 @@ struct FilesInspector: View {
     @Environment(\.windowModel) private var model
 
     var body: some View {
-        if let model {
-            let ids = FilesSection.selectedIDs(model)
-            if ids.count > 1 {
-                NoSelectionPane("\(ids.count) Files Selected")
-            } else if let it = ids.first.flatMap({ section.item($0, model) }) {
-                details(it, model)
-            } else {
-                NoSelectionPane("No File Selected")
+        WithPerceptionTracking {
+            if let model {
+                let ids = FilesSection.selectedIDs(model)
+                if ids.count > 1 {
+                    NoSelectionPane("\(ids.count) Files Selected")
+                } else if let it = ids.first.flatMap({ section.item($0, model) }) {
+                    details(it, model)
+                } else {
+                    NoSelectionPane("No File Selected")
+                }
             }
         }
     }
@@ -388,7 +401,7 @@ struct FilesInspector: View {
                 }
             }
         }
-        .formStyle(.grouped)
+        .compatFormStyleGrouped()
     }
 
     @ViewBuilder
@@ -400,7 +413,7 @@ struct FilesInspector: View {
                 Button("Try Again") { versions.refresh() }
             }
         } else if versions.versions.isEmpty {
-            Text("No earlier versions").foregroundStyle(.secondary)
+            Text("No earlier versions").compatForeground(.secondary)
         } else {
             ForEach(versions.versions) { v in
                 HStack(spacing: 8) {
@@ -409,7 +422,7 @@ struct FilesInspector: View {
                         Text([FilesFormat.date(iso: v.modified), v.modified_by ?? ""].filter { !$0.isEmpty }
                             .joined(separator: " \u{00B7} "))
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .compatForeground(.secondary)
                     }
                     Spacer(minLength: 4)
                     if v.id != versions.versions.first?.id {
@@ -479,17 +492,19 @@ struct FileLocationLabel: View {
     @State private var hovering = false
 
     var body: some View {
-        HStack(spacing: 4) {
-            Text(name).foregroundStyle(.secondary).lineLimit(1).truncationMode(.tail)
-            Button(action: reveal) {
-                Image(systemName: "arrow.forward.circle.fill")
+        WithPerceptionTracking {
+            HStack(spacing: 4) {
+                Text(name).compatForeground(.secondary).lineLimit(1).truncationMode(.tail)
+                Button(action: reveal) {
+                    Image(systemName: "arrow.forward.circle.fill")
+                }
+                .buttonStyle(.borderless)
+                .compatForeground(.secondary)
+                .opacity(alwaysShowsArrow || hovering ? 1 : 0)
+                .help("Show \(name)")
+                .accessibilityLabel("Show \(name)")
             }
-            .buttonStyle(.borderless)
-            .foregroundStyle(.secondary)
-            .opacity(alwaysShowsArrow || hovering ? 1 : 0)
-            .help("Show \(name)")
-            .accessibilityLabel("Show \(name)")
+            .onHover { hovering = $0 }
         }
-        .onHover { hovering = $0 }
     }
 }

@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/macOS-26%2B-111111?logo=apple&logoColor=white" alt="macOS 26 or later">
+  <img src="https://img.shields.io/badge/macOS-12%2B%20%28Intel%20build%29%20%C2%B7%2026%20full-111111?logo=apple&logoColor=white" alt="macOS 12 or later; full feature set on macOS 26">
   <img src="https://img.shields.io/badge/Swift-6.2-F05138?logo=swift&logoColor=white" alt="Swift 6.2">
   <img src="https://img.shields.io/badge/core-Rust-B7410E?logo=rust&logoColor=white" alt="Rust core">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT%20%2B%20Microsoft%20exclusion-2F6FEB" alt="License: MIT + Microsoft exclusion"></a>
@@ -325,9 +325,34 @@ Setup: [docs/mcp.md](docs/mcp.md).
 
 ### Requirements
 
-- macOS 26 or later
-- Xcode command line tools (`swift`, `xcodebuild`) and Rust (`cargo`)
-- Catch Up needs a Mac with Apple Intelligence turned on
+- macOS 12 or later. The full interface, including Liquid Glass and Apple Intelligence Catch Up, needs macOS 26. An Intel Mac on macOS 12.7 can run the prebuilt x86_64 app from the section below.
+- To compile it yourself: Xcode 26 command line tools (`swift`, `xcodebuild`, Swift 6.2, macOS 26 SDK) and Rust (`cargo`). The deployment target is macOS 12, so the Mac you build on can be newer than the Mac you run on.
+
+### macOS 12 on Intel
+
+GitHub Actions builds an x86_64 app on a macOS 26 runner (`macos-26-intel`) and publishes it on this fork:
+
+- Release: [v1.0.0-macos12-intel](https://github.com/xdkurbie/better-teams/releases/tag/v1.0.0-macos12-intel)
+- Assets: `BetterTeams-1.0.0-macos12-x86_64.zip` and `BetterTeams-1.0.0-macos12-x86_64.dmg`
+
+The build is ad-hoc signed. After downloading, right-click the app, choose Open, then Open again. Gatekeeper otherwise blocks it. Copying it to `/Applications` and running `xattr -dr com.apple.quarantine "/Applications/Better Teams.app"` does the same thing.
+
+What still works on macOS 12.7: sign-in, chats, messages, and standard notifications. What does not, because the system frameworks are newer:
+
+| Feature | Needs | On macOS 12 |
+| --- | --- | --- |
+| Apple Intelligence Catch Up | macOS 26, Foundation Models | Unavailable. The existing “not supported on this Mac” guidance is shown. Nothing is sent to a server. |
+| On-device message translation | macOS 15, Translation | The Translate action stays off. |
+| Liquid Glass, prominent red Leave button | macOS 26 | Plain materials and a normal bordered Leave button. |
+| System screen-sharing picker | macOS 14 | macOS 12.3–13 shares the main display with no window picker. Earlier than 12.3, sharing is disabled. |
+| Open at login | macOS 13, `SMAppService` | The toggle is disabled and says it needs macOS 13. |
+| List and table selection context menus | macOS 13 | Use the menu bar. The same commands are there. |
+| Calendar week grid positioned by time, and opening on working hours | macOS 13 for the grid, macOS 14 to scroll to working hours | Meetings are listed in the day column. The grid opens at the top of the day. |
+| Files: Space for Quick Look | macOS 14 | Use the File menu. |
+| Chat bubble hover bar placement | macOS 13 `Layout` | The bar stacks under the bubble instead of sitting in the empty lane beside it. |
+| Sender-avatar communication banners | A provisioning profile | This ad-hoc build does not include the communication-notification entitlement. Ordinary banners still post. |
+
+The app links FoundationModels, Translation, and ScreenCaptureKit weakly so a missing framework does not abort launch.
 
 ### Build and run
 

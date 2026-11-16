@@ -10,6 +10,7 @@
 import AppKit
 import OstMacCore
 import SwiftUI
+import Perception
 
 struct EventDetailsSheet: View {
     @ObservedObject var week: CalendarWeekStore
@@ -17,8 +18,10 @@ struct EventDetailsSheet: View {
     @Environment(\.windowModel) private var model
 
     var body: some View {
-        EventDetailsView(week: week, eventID: eventID, host: .sheet)
-            .frame(width: 940, height: 640)
+        WithPerceptionTracking {
+            EventDetailsView(week: week, eventID: eventID, host: .sheet)
+                .frame(width: 940, height: 640)
+        }
     }
 }
 
@@ -41,34 +44,36 @@ struct EventDetailsView: View {
     private var meeting: MeetingItem? { detail?.event ?? week.row(id: eventID) }
 
     var body: some View {
-        VStack(spacing: 0) {
-            if let meeting {
-                if host == .window {
-                    loaded(meeting)
-                        .toolbar {
-                            EventDetailsWindowToolbar(meeting: meeting, detail: detail, week: week,
-                                                      trackingShown: $trackingShown, close: close)
-                        }
+        WithPerceptionTracking {
+            VStack(spacing: 0) {
+                if let meeting {
+                    if host == .window {
+                        loaded(meeting)
+                            .toolbar {
+                                EventDetailsWindowToolbar(meeting: meeting, detail: detail, week: week,
+                                                          trackingShown: $trackingShown, close: close)
+                            }
+                    } else {
+                        loaded(meeting)
+                    }
+                } else if week.detailLoading.contains(eventID) {
+                    ProgressView().controlSize(.small).frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
-                    loaded(meeting)
+                    EmptyPane("Meeting Not Found", systemImage: "calendar")
+                    HStack {
+                        Spacer()
+                        Button("Close", action: close).keyboardShortcut(.cancelAction)
+                    }
+                    .padding(12)
                 }
-            } else if week.detailLoading.contains(eventID) {
-                ProgressView().controlSize(.small).frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                EmptyPane("Meeting Not Found", systemImage: "calendar")
-                HStack {
-                    Spacer()
-                    Button("Close", action: close).keyboardShortcut(.cancelAction)
-                }
-                .padding(12)
             }
+            .font(AppFont.body(scale))
+            .background(Color(nsColor: .windowBackgroundColor))
+            .onAppear { week.loadCategories() }
+            // Opened before the week landed (route, fast click): read the
+            // details once the row exists.
+            .task(id: meeting != nil) { if meeting != nil, detail == nil { week.loadDetail(id: eventID) } }
         }
-        .font(AppFont.body(scale))
-        .background(Color(nsColor: .windowBackgroundColor))
-        .onAppear { week.loadCategories() }
-        // Opened before the week landed (route, fast click): read the
-        // details once the row exists.
-        .task(id: meeting != nil) { if meeting != nil, detail == nil { week.loadDetail(id: eventID) } }
     }
 
     private func close() {
@@ -85,8 +90,8 @@ struct EventDetailsView: View {
             }
             if let error = week.personalError ?? week.removeError {
                 HStack(spacing: 6) {
-                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Palette.failed)
-                    Text(error).foregroundStyle(.secondary)
+                    Image(systemName: "exclamationmark.triangle.fill").compatForeground(Palette.failed)
+                    Text(error).compatForeground(.secondary)
                     Spacer()
                     Button("Dismiss") { week.clearPersonalError() }
                         .buttonStyle(.bordered)
@@ -140,7 +145,7 @@ struct EventDetailsView: View {
         return VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Image(systemName: type.symbol)
-                    .foregroundStyle(.tint)
+                    .compatForeground(.tint)
                     .frame(width: 26, height: 26)
                     .background(RoundedRectangle(cornerRadius: 5).fill(.tint.opacity(0.12)))
                     .help(type.title)
@@ -154,7 +159,7 @@ struct EventDetailsView: View {
                 let sensitivity = CalendarDetailsText.sensitivityLabel(m.info?.sensitivity)
                 Label(sensitivity ?? "Normal", systemImage: "lock.shield")
                     .font(AppFont.caption(scale))
-                    .foregroundStyle(.secondary)
+                    .compatForeground(.secondary)
                     .help("Sensitivity: \(sensitivity ?? "Normal")")
             }
             if !m.invitees.isEmpty || m.organizer != nil {
@@ -162,11 +167,11 @@ struct EventDetailsView: View {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(CalendarDetailsText.attendeeLine(m).map(CalendarDetailsText.unbrokenNames) ?? "No attendees")
-                                .foregroundStyle(m.invitees.isEmpty ? .secondary : .primary)
+                                .compatForeground(m.invitees.isEmpty ? .secondary : .primary)
                                 .lineLimit(2)
                                 .textSelection(.enabled)
                             if let roles = CalendarDetailsText.roleLine(m) {
-                                Text(roles).font(AppFont.caption(scale)).foregroundStyle(.secondary)
+                                Text(roles).font(AppFont.caption(scale)).compatForeground(.secondary)
                             }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -189,10 +194,10 @@ struct EventDetailsView: View {
                     }
                 }
                 if let other = CalendarFormat.organizerTime(m) {
-                    Text("Organizer\u{2019}s time: \(other)").foregroundStyle(.secondary)
+                    Text("Organizer\u{2019}s time: \(other)").compatForeground(.secondary)
                 }
                 if let rec = detail?.recurrence ?? m.info?.recurrence {
-                    Text(rec).foregroundStyle(.secondary)
+                    Text(rec).compatForeground(.secondary)
                 }
                 if m.isSeries, let model {
                     SeriesLinks(meeting: m, model: model)
@@ -209,11 +214,11 @@ struct EventDetailsView: View {
                             AddRoomPopover(meeting: m, week: week) { roomShown = false }
                         }
                 } else {
-                    Text("No location added").foregroundStyle(.secondary)
+                    Text("No location added").compatForeground(.secondary)
                 }
                 let rooms = (m.info?.rooms ?? []).filter { !(m.info?.location ?? "").contains($0.name) }
                 if !rooms.isEmpty {
-                    Text("Rooms: " + rooms.map(\.name).joined(separator: ", ")).foregroundStyle(.secondary)
+                    Text("Rooms: " + rooms.map(\.name).joined(separator: ", ")).compatForeground(.secondary)
                 }
                 if m.isOrganizer, m.info?.location != nil {
                     Button("Add a room") { roomShown = true }
@@ -231,7 +236,7 @@ struct EventDetailsView: View {
             }
             if let info = m.info, let line = CalendarDetailsText.statusLine(info) {
                 CalendarFactRow(symbol: "bell") {
-                    Text(line).foregroundStyle(.secondary)
+                    Text(line).compatForeground(.secondary)
                 }
             }
             if !m.categories.isEmpty {
@@ -250,7 +255,7 @@ struct EventDetailsView: View {
                 }
             } else if m.info?.hasAttachments == true, week.detailLoading.contains(eventID) {
                 CalendarFactRow(symbol: "paperclip") {
-                    Text("Attachments\u{2026}").foregroundStyle(.secondary)
+                    Text("Attachments\u{2026}").compatForeground(.secondary)
                 }
             }
             Divider()
@@ -302,8 +307,8 @@ struct EventDetailsView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
         } else if let error = week.detailErrors[eventID] {
             HStack(spacing: 6) {
-                Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Palette.failed)
-                Text(error).foregroundStyle(.secondary)
+                Image(systemName: "exclamationmark.triangle.fill").compatForeground(Palette.failed)
+                Text(error).compatForeground(.secondary)
                 Button("Try Again") { week.loadDetail(id: eventID, force: true) }
             }
         } else if let preview = m.info?.bodyPreview {
@@ -312,7 +317,7 @@ struct EventDetailsView: View {
         } else if week.detailLoading.contains(eventID) {
             DelayedDetailLoading()
         } else {
-            Text("No description").foregroundStyle(.secondary)
+            Text("No description").compatForeground(.secondary)
         }
     }
 }
@@ -323,13 +328,15 @@ private struct DelayedDetailLoading: View {
     @State private var delay = Debounce(milliseconds: LoadingPane.delayMilliseconds)
 
     var body: some View {
-        HStack(spacing: 6) {
-            ProgressView().controlSize(.small)
-            Text("Loading details\u{2026}").foregroundStyle(.secondary)
+        WithPerceptionTracking {
+            HStack(spacing: 6) {
+                ProgressView().controlSize(.small)
+                Text("Loading details\u{2026}").compatForeground(.secondary)
+            }
+            .opacity(shown ? 1 : 0)
+            .onAppear { delay.schedule { shown = true } }
+            .onDisappear { delay.cancel() }
         }
-        .opacity(shown ? 1 : 0)
-        .onAppear { delay.schedule { shown = true } }
-        .onDisappear { delay.cancel() }
     }
 }
 
@@ -338,9 +345,11 @@ struct EventTypeBadge: View {
     @Environment(\.contentTextScale) private var scale
 
     var body: some View {
-        Label(type.title, systemImage: type.symbol)
-            .font(AppFont.caption(scale))
-            .foregroundStyle(.tint)
+        WithPerceptionTracking {
+            Label(type.title, systemImage: type.symbol)
+                .font(AppFont.caption(scale))
+                .compatForeground(.tint)
+        }
     }
 }
 
@@ -353,37 +362,39 @@ private struct EventAttachmentRow: View {
     @Environment(\.contentTextScale) private var scale
 
     var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "doc").foregroundStyle(.secondary)
-            Text(file.name).lineLimit(1).truncationMode(.middle)
-            Text(ByteCountFormatter.string(fromByteCount: Int64(file.size), countStyle: .file))
-                .foregroundStyle(.secondary)
-            if week.downloading.contains(file.id) { ProgressView().controlSize(.small) }
-            Button("Open") {
-                Task {
-                    if let url = await week.downloadAttachment(eventID: eventID, file) {
-                        TeamsLinkRouter.open(url)
+        WithPerceptionTracking {
+            HStack(spacing: 8) {
+                Image(systemName: "doc").compatForeground(.secondary)
+                Text(file.name).lineLimit(1).truncationMode(.middle)
+                Text(ByteCountFormatter.string(fromByteCount: Int64(file.size), countStyle: .file))
+                    .compatForeground(.secondary)
+                if week.downloading.contains(file.id) { ProgressView().controlSize(.small) }
+                Button("Open") {
+                    Task {
+                        if let url = await week.downloadAttachment(eventID: eventID, file) {
+                            TeamsLinkRouter.open(url)
+                        }
                     }
                 }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                if let saved = week.savedAttachments[file.id] {
+                    Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([saved]) }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                } else {
+                    Button("Download") { Task { await week.downloadAttachment(eventID: eventID, file) } }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                }
+                if let error = week.attachmentErrors[file.id] {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .compatForeground(Palette.failed)
+                        .help(error)
+                }
             }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-            if let saved = week.savedAttachments[file.id] {
-                Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([saved]) }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-            } else {
-                Button("Download") { Task { await week.downloadAttachment(eventID: eventID, file) } }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-            }
-            if let error = week.attachmentErrors[file.id] {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundStyle(Palette.failed)
-                    .help(error)
-            }
+            .disabled(week.downloading.contains(file.id))
         }
-        .disabled(week.downloading.contains(file.id))
     }
 }
 
@@ -398,11 +409,13 @@ struct JoinLinkRow: View {
     }
 
     var body: some View {
-        LabeledContent("Join link") {
-            if let link = URL(string: url) {
-                Link(url, destination: link).lineLimit(1).truncationMode(.middle).help(url)
-            } else {
-                Text(url).lineLimit(1).truncationMode(.middle).textSelection(.enabled)
+        WithPerceptionTracking {
+            LabeledContent("Join link") {
+                if let link = URL(string: url) {
+                    Link(url, destination: link).lineLimit(1).truncationMode(.middle).help(url)
+                } else {
+                    Text(url).lineLimit(1).truncationMode(.middle).textSelection(.enabled)
+                }
             }
         }
     }

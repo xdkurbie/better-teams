@@ -6,6 +6,7 @@
 // people. The previous grid stays up while a new day/person loads.
 import OstMacCore
 import SwiftUI
+import Perception
 
 struct SchedulingAssistantSheet: View {
     @ObservedObject var week: CalendarWeekStore
@@ -87,10 +88,12 @@ struct SchedulingAssistantSheet: View {
     }
 
     var body: some View {
-        if let drafting {
-            DuplicateEventSheet(week: week, draft: drafting, title: "New Meeting")
-        } else {
-            assistant
+        WithPerceptionTracking {
+            if let drafting {
+                DuplicateEventSheet(week: week, draft: drafting, title: "New Meeting")
+            } else {
+                assistant
+            }
         }
     }
 
@@ -119,8 +122,8 @@ struct SchedulingAssistantSheet: View {
             suggestionList
             HStack {
                 if let error = week.freeBusyError ?? week.updateError {
-                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Palette.failed)
-                    Text(error).foregroundStyle(.secondary).lineLimit(2)
+                    Image(systemName: "exclamationmark.triangle.fill").compatForeground(Palette.failed)
+                    Text(error).compatForeground(.secondary).lineLimit(2)
                 }
                 Spacer()
                 Button("Close") { model?.dismissSheet() }
@@ -132,8 +135,8 @@ struct SchedulingAssistantSheet: View {
         .frame(width: 780, alignment: .top)
         .fixedSize(horizontal: false, vertical: true)
         .onAppear(perform: load)
-        .onChange(of: day) { _, _ in load() }
-        .onChange(of: people) { _, _ in load() }
+        .onChange(of: day) { _ in load() }
+        .onChange(of: people) { _ in load() }
     }
 
     private func add() {
@@ -164,7 +167,7 @@ struct SchedulingAssistantSheet: View {
                 ForEach(slots.filter(\.labeled)) { slot in
                     Text(slot.start.formatted(.dateTime.hour()))
                         .font(AppFont.caption(scale))
-                        .foregroundStyle(.secondary)
+                        .compatForeground(.secondary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
                         .frame(width: cellW * 2, alignment: .leading)
@@ -188,7 +191,7 @@ struct SchedulingAssistantSheet: View {
                             }
                             .frame(width: 190, alignment: .leading)
                             if row?.unavailable == true {
-                                Text("No free/busy information").foregroundStyle(.secondary)
+                                Text("No free/busy information").compatForeground(.secondary)
                                     .font(AppFont.caption(scale))
                             } else {
                                 ForEach(slots) { slot in
@@ -283,7 +286,7 @@ struct SchedulingAssistantSheet: View {
     private func legend(_ s: String, _ title: String) -> some View {
         HStack(spacing: 4) {
             cell(s).frame(width: 12, height: 10)
-            Text(title).foregroundStyle(.secondary)
+            Text(title).compatForeground(.secondary)
         }
     }
 
@@ -294,18 +297,18 @@ struct SchedulingAssistantSheet: View {
             Text("Suggested times").font(AppFont.subheadline(scale).weight(.semibold))
             let list = ranked
             if people.isEmpty {
-                Text("Add people to see their free/busy and times that suit everyone.").foregroundStyle(.secondary)
+                Text("Add people to see their free/busy and times that suit everyone.").compatForeground(.secondary)
             } else if list.isEmpty {
                 Text(week.freeBusy.isEmpty ? "Free/busy appears here once it loads."
                      : "No time inside working hours on this day.")
-                    .foregroundStyle(.secondary)
+                    .compatForeground(.secondary)
             } else {
                 ForEach(list, id: \.slot.start) { item in
                     let slot = item.slot
                     HStack(spacing: 10) {
                         Text("\(CalendarFormat.time(slot.start)) \u{2013} \(CalendarFormat.time(slot.end))")
                             .monospacedDigit()
-                        Text(conflictLabel(item)).foregroundStyle(.secondary).lineLimit(1)
+                        Text(conflictLabel(item)).compatForeground(.secondary).lineLimit(1)
                         Spacer()
                         if let meeting, meeting.isOrganizer, !meeting.isAllDay {
                             Button("Move Meeting Here") { move(meeting, to: slot) }
@@ -337,7 +340,7 @@ struct SchedulingAssistantSheet: View {
                 Text("\(CalendarFormat.time(b.start)) \u{2013} \(CalendarFormat.time(b.end))").monospacedDigit()
                 Text(busy.isEmpty ? "Everyone is free"
                      : "\(busy.count) busy: " + busy.map { displayName($0.email.lowercased()) }.joined(separator: ", "))
-                    .foregroundStyle(.secondary).lineLimit(1)
+                    .compatForeground(.secondary).lineLimit(1)
                 Spacer()
                 if let meeting, meeting.isOrganizer, !meeting.isAllDay {
                     Button("Move Meeting Here") { move(meeting, to: b) }.disabled(week.updating)
@@ -374,16 +377,18 @@ struct CalendarRowSheet<Content: View>: View {
     @Environment(\.windowModel) private var model
 
     var body: some View {
-        let row = eventID.flatMap(week.row(id:))
-        if row != nil || !needsRow && (eventID == nil || week.state != .loading) {
-            content(row)
-        } else {
-            VStack(spacing: 12) {
-                LoadingPane("Loading event\u{2026}", rows: false)
-                Button("Close") { model?.dismissSheet() }.keyboardShortcut(.cancelAction)
+        WithPerceptionTracking {
+            let row = eventID.flatMap(week.row(id:))
+            if row != nil || !needsRow && (eventID == nil || week.state != .loading) {
+                content(row)
+            } else {
+                VStack(spacing: 12) {
+                    LoadingPane("Loading event\u{2026}", rows: false)
+                    Button("Close") { model?.dismissSheet() }.keyboardShortcut(.cancelAction)
+                }
+                .padding(20)
+                .frame(width: 440, height: 200)
             }
-            .padding(20)
-            .frame(width: 440, height: 200)
         }
     }
 }

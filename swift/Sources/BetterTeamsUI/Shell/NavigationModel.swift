@@ -6,7 +6,7 @@
 // Navigator.swift). P1 declares every case, including all native apps,
 // so no later lane edits these enums.
 import Foundation
-import Observation
+import Perception
 
 /// Native (non-web) apps that pin like web apps (§6.7).
 public enum NativeAppID: String, CaseIterable, Codable, Sendable {
@@ -143,7 +143,7 @@ public struct NavigationState: Equatable, Codable, Sendable {
     public init() {}
 }
 
-@Observable
+@Perceptible
 @MainActor
 public final class NavigationModel {
     public private(set) var section: SectionID = .chat

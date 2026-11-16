@@ -11,6 +11,7 @@
 import AppKit
 import OstMacCore
 import SwiftUI
+import Perception
 
 extension FilesSection {
     /// The store behind a row: the Files index (Recent / My Files /
@@ -223,25 +224,27 @@ struct RenameFileSheet: View {
     private var trimmed: String { text.trimmingCharacters(in: .whitespacesAndNewlines) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Rename \u{201C}\(name)\u{201D}").font(.headline).lineLimit(1).truncationMode(.middle)
-            Form {
-                TextField("Name", text: $text)
-            }
-            HStack(spacing: 8) {
-                Spacer(minLength: 0)
-                Button("Cancel", role: .cancel) { model?.dismissSheet() }
-                    .keyboardShortcut(.cancelAction)
-                Button("Rename") {
-                    commit(trimmed)
-                    model?.dismissSheet()
+        WithPerceptionTracking {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Rename \u{201C}\(name)\u{201D}").font(.headline).lineLimit(1).truncationMode(.middle)
+                Form {
+                    TextField("Name", text: $text)
                 }
-                .keyboardShortcut(.defaultAction)
-                .disabled(trimmed.isEmpty || trimmed == name)
+                HStack(spacing: 8) {
+                    Spacer(minLength: 0)
+                    Button("Cancel", role: .cancel) { model?.dismissSheet() }
+                        .keyboardShortcut(.cancelAction)
+                    Button("Rename") {
+                        commit(trimmed)
+                        model?.dismissSheet()
+                    }
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(trimmed.isEmpty || trimmed == name)
+                }
             }
+            .padding(20)
+            .frame(width: 400)
         }
-        .padding(20)
-        .frame(width: 400)
     }
 }
 
@@ -255,25 +258,27 @@ struct FileNewFolderSheet: View {
     private var trimmed: String { text.trimmingCharacters(in: .whitespacesAndNewlines) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("New Folder").font(.headline).lineLimit(1).truncationMode(.middle)
-            Form {
-                TextField("Name", text: $text)
-            }
-            HStack(spacing: 8) {
-                Spacer(minLength: 0)
-                Button("Cancel", role: .cancel) { model?.dismissSheet() }
-                    .keyboardShortcut(.cancelAction)
-                Button("Create") {
-                    commit(trimmed)
-                    model?.dismissSheet()
+        WithPerceptionTracking {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("New Folder").font(.headline).lineLimit(1).truncationMode(.middle)
+                Form {
+                    TextField("Name", text: $text)
                 }
-                .keyboardShortcut(.defaultAction)
-                .disabled(trimmed.isEmpty)
+                HStack(spacing: 8) {
+                    Spacer(minLength: 0)
+                    Button("Cancel", role: .cancel) { model?.dismissSheet() }
+                        .keyboardShortcut(.cancelAction)
+                    Button("Create") {
+                        commit(trimmed)
+                        model?.dismissSheet()
+                    }
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(trimmed.isEmpty)
+                }
             }
+            .padding(20)
+            .frame(width: 400)
         }
-        .padding(20)
-        .frame(width: 400)
     }
 }
 
@@ -294,57 +299,59 @@ struct FileDestinationSheet: View {
     private var target: SharedFolderCrumb { picker.folders.first { $0.itemID == picked } ?? picker.current }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("\(action) \(title) To").font(.headline).lineLimit(1).truncationMode(.middle)
-            HStack(spacing: 6) {
-                Button {
-                    go(to: picker.path.count - 2)
-                } label: {
-                    Image(systemName: "chevron.left")
+        WithPerceptionTracking {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("\(action) \(title) To").font(.headline).lineLimit(1).truncationMode(.middle)
+                HStack(spacing: 6) {
+                    Button {
+                        go(to: picker.path.count - 2)
+                    } label: {
+                        Image(systemName: "chevron.left")
+                    }
+                    .disabled(picker.path.count < 2)
+                    .help("Back")
+                    .accessibilityLabel("Back")
+                    Picker("Folder", selection: pathSelection) {
+                        ForEach(Indexed.wrap(picker.path)) { p in
+                            Label(p.value.name, systemImage: p.id == 0 ? "externaldrive" : "folder").tag(p.id)
+                        }
+                    }
+                    .labelsHidden()
+                    .fixedSize()
+                    Spacer(minLength: 0)
                 }
-                .disabled(picker.path.count < 2)
-                .help("Back")
-                .accessibilityLabel("Back")
-                Picker("Folder", selection: pathSelection) {
-                    ForEach(Indexed.wrap(picker.path)) { p in
-                        Label(p.value.name, systemImage: p.id == 0 ? "externaldrive" : "folder").tag(p.id)
+                List(picker.folders, id: \.itemID, selection: $picked) { f in
+                    HStack(spacing: 6) {
+                        Label(f.name, systemImage: "folder").lineLimit(1)
+                        Spacer(minLength: 0)
+                        Image(systemName: "chevron.right").compatForeground(.tertiary).accessibilityHidden(true)
                     }
                 }
-                .labelsHidden()
-                .fixedSize()
-                Spacer(minLength: 0)
-            }
-            List(picker.folders, id: \.itemID, selection: $picked) { f in
-                HStack(spacing: 6) {
-                    Label(f.name, systemImage: "folder").lineLimit(1)
+                .compatSelectionMenu(forSelectionType: String.self) { _ in
+                    EmptyView()
+                } primaryAction: { ids in
+                    guard let id = ids.first, let f = picker.folders.first(where: { $0.itemID == id }) else { return }
+                    picked = nil
+                    picker.enter(f)
+                }
+                .compatBorderedList()
+                .frame(height: 200)
+                .overlay { placeholder }
+                HStack(spacing: 8) {
+                    Text("To: \(target.name)").compatForeground(.secondary).lineLimit(1).truncationMode(.middle)
                     Spacer(minLength: 0)
-                    Image(systemName: "chevron.right").foregroundStyle(.tertiary).accessibilityHidden(true)
+                    Button("Cancel", role: .cancel) { model?.dismissSheet() }
+                        .keyboardShortcut(.cancelAction)
+                    Button(action) {
+                        commit(target)
+                        model?.dismissSheet()
+                    }
+                    .keyboardShortcut(.defaultAction)
                 }
             }
-            .contextMenu(forSelectionType: String.self) { _ in
-                EmptyView()
-            } primaryAction: { ids in
-                guard let id = ids.first, let f = picker.folders.first(where: { $0.itemID == id }) else { return }
-                picked = nil
-                picker.enter(f)
-            }
-            .listStyle(.bordered)
-            .frame(height: 200)
-            .overlay { placeholder }
-            HStack(spacing: 8) {
-                Text("To: \(target.name)").foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
-                Spacer(minLength: 0)
-                Button("Cancel", role: .cancel) { model?.dismissSheet() }
-                    .keyboardShortcut(.cancelAction)
-                Button(action) {
-                    commit(target)
-                    model?.dismissSheet()
-                }
-                .keyboardShortcut(.defaultAction)
-            }
+            .padding(20)
+            .frame(width: 420)
         }
-        .padding(20)
-        .frame(width: 420)
     }
 
     private var pathSelection: Binding<Int> {
@@ -362,9 +369,9 @@ struct FileDestinationSheet: View {
         case .loading:
             ProgressView().controlSize(.small)
         case .empty:
-            Text("No Folders").foregroundStyle(.secondary)
+            Text("No Folders").compatForeground(.secondary)
         case .error(let message):
-            Text(message).foregroundStyle(.secondary).multilineTextAlignment(.center).padding()
+            Text(message).compatForeground(.secondary).multilineTextAlignment(.center).padding()
         case .loaded:
             EmptyView()
         }

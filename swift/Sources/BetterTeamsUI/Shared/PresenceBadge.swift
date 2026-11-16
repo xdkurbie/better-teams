@@ -2,6 +2,7 @@
 // accessibility "more than color alone").
 import OstMacCore
 import SwiftUI
+import Perception
 
 enum PresenceGlyph {
     static func symbol(_ s: PresenceStatus) -> String {
@@ -29,11 +30,13 @@ struct PresenceBadge: View {
     var size: CGFloat = 11
 
     var body: some View {
-        Image(systemName: PresenceGlyph.symbol(status))
-            .resizable()
-            .frame(width: size, height: size)
-            .foregroundStyle(PresenceGlyph.color(status))
-            .background(Circle().fill(.background).padding(-1.5))
-            .accessibilityLabel(status.title)
+        WithPerceptionTracking {
+            Image(systemName: PresenceGlyph.symbol(status))
+                .resizable()
+                .frame(width: size, height: size)
+                .compatForeground(PresenceGlyph.color(status))
+                .background(Circle().fill(.background).padding(-1.5))
+                .accessibilityLabel(status.title)
+        }
     }
 }

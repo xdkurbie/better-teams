@@ -4,8 +4,14 @@ set -eu
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 "$ROOT/scripts/build-rust.sh"
 cd "$ROOT/swift"
-swift build -c release --product OstMac
-swift build -c release --product ostmac-mcp
+ARCH_ARGS=""
+if [ -n "${SWIFT_ARCH:-}" ]; then
+    ARCH_ARGS="--arch ${SWIFT_ARCH}"
+fi
+# shellcheck disable=SC2086
+swift build -c release --product OstMac $ARCH_ARGS
+# shellcheck disable=SC2086
+swift build -c release --product ostmac-mcp $ARCH_ARGS
 APP="$ROOT/swift/.build/release/Better Teams.app"
 # Assemble and sign in a per-invocation staging dir, then move the finished
 # bundle into $APP: a concurrent build can no longer delete or overwrite this

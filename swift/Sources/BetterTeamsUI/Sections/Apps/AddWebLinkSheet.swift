@@ -2,6 +2,7 @@
 // URL, name and symbol; Cancel + Add, trailing. The new link is selected
 // in the library.
 import SwiftUI
+import Perception
 
 struct AddWebLinkSheet: View {
     let library: AppsLibrary
@@ -19,39 +20,41 @@ struct AddWebLinkSheet: View {
     ]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Add Web Link").font(.headline)
-            Form {
-                TextField("URL", text: $url, prompt: prompt("https://contoso.sharepoint.com/…"))
-                TextField("Name", text: $name, prompt: prompt("Optional"))
-                Picker("Symbol", selection: $symbol) {
-                    ForEach(Self.symbols, id: \.symbol) { s in
-                        Label(s.title, systemImage: s.symbol).tag(s.symbol)
+        WithPerceptionTracking {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Add Web Link").font(.headline)
+                Form {
+                    TextField("URL", text: $url, prompt: prompt("https://contoso.sharepoint.com/…"))
+                    TextField("Name", text: $name, prompt: prompt("Optional"))
+                    Picker("Symbol", selection: $symbol) {
+                        ForEach(Self.symbols, id: \.symbol) { s in
+                            Label(s.title, systemImage: s.symbol).tag(s.symbol)
+                        }
                     }
                 }
-            }
-            // A real Spacer: the error label is optional, and an empty
-            // view emits no flexible space (the buttons sat leading).
-            HStack(spacing: 8) {
-                if invalid {
-                    Label("Enter a web address.", systemImage: "exclamationmark.triangle.fill")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                // A real Spacer: the error label is optional, and an empty
+                // view emits no flexible space (the buttons sat leading).
+                HStack(spacing: 8) {
+                    if invalid {
+                        Label("Enter a web address.", systemImage: "exclamationmark.triangle.fill")
+                            .font(.caption)
+                            .compatForeground(.secondary)
+                    }
+                    Spacer(minLength: 0)
+                    Button("Cancel", role: .cancel) { model?.dismissSheet() }
+                        .keyboardShortcut(.cancelAction)
+                    Button("Add", action: add)
+                        .keyboardShortcut(.defaultAction)
+                        .disabled(url.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
-                Spacer(minLength: 0)
-                Button("Cancel", role: .cancel) { model?.dismissSheet() }
-                    .keyboardShortcut(.cancelAction)
-                Button("Add", action: add)
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(url.trimmingCharacters(in: .whitespaces).isEmpty)
             }
+            .padding(20)
+            .frame(width: 440)
         }
-        .padding(20)
-        .frame(width: 440)
     }
 
     private func prompt(_ s: String) -> Text {
-        Text(s).foregroundStyle(Color(nsColor: .placeholderTextColor))
+        Text(s).compatForeground(Color(nsColor: .placeholderTextColor))
     }
 
     private func add() {

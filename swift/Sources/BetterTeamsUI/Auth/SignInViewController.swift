@@ -9,6 +9,7 @@ import AppKit
 import Combine
 import OstMacCore
 import SwiftUI
+import Perception
 
 /// Evidence-forced sign-in presentation (demo only).
 public enum SignInPresentation: Equatable, Sendable {
@@ -296,30 +297,32 @@ struct SignInView: View {
     static let headerTop: CGFloat = contentBottom - 64 * 100 / 1024
 
     var body: some View {
-        VStack(spacing: 16) {
-            SignInHeader(title: code == nil ? "Sign In to Better Teams" : "Enter This Code")
-            if let code {
-                DeviceCodeView(code: code, auth: auth, isEvidence: evidence != nil) {
-                    if asSheet { close() }
+        WithPerceptionTracking {
+            VStack(spacing: 16) {
+                SignInHeader(title: code == nil ? "Sign In to Better Teams" : "Enter This Code")
+                if let code {
+                    DeviceCodeView(code: code, auth: auth, isEvidence: evidence != nil) {
+                        if asSheet { close() }
+                    }
+                } else {
+                    start
                 }
-            } else {
-                start
+                if asSheet, code == nil {
+                    Button("Cancel", role: .cancel, action: close).keyboardShortcut(.cancelAction)
+                }
             }
-            if asSheet, code == nil {
-                Button("Cancel", role: .cancel, action: close).keyboardShortcut(.cancelAction)
-            }
+            .padding(.horizontal, 40)
+            .padding(.top, Self.headerTop)
+            .padding(.bottom, Self.contentBottom)
+            .frame(minWidth: SignInViewController.contentWidth, maxWidth: .infinity,
+                   maxHeight: .infinity, alignment: .top)
         }
-        .padding(.horizontal, 40)
-        .padding(.top, Self.headerTop)
-        .padding(.bottom, Self.contentBottom)
-        .frame(minWidth: SignInViewController.contentWidth, maxWidth: .infinity,
-               maxHeight: .infinity, alignment: .top)
     }
 
     private var start: some View {
         VStack(spacing: 16) {
             Text("Use your work or school Microsoft account.")
-                .foregroundStyle(.secondary)
+                .compatForeground(.secondary)
             VStack(spacing: 10) {
                 Button {
                     // Evidence: enabled look, no-op action.
@@ -343,7 +346,7 @@ struct SignInView: View {
             if busy { ProgressView().controlSize(.small) }
             if let errorText {
                 Label(errorText, systemImage: "exclamationmark.triangle")
-                    .foregroundStyle(.secondary)
+                    .compatForeground(.secondary)
             }
         }
     }

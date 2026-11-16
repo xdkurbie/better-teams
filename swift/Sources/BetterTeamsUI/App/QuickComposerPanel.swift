@@ -9,6 +9,7 @@ import AppKit
 import Combine
 import OstMacCore
 import SwiftUI
+import Perception
 
 extension Notification.Name {
     /// File ▸ New Quick Message… asks the controller to open the panel.
@@ -106,30 +107,32 @@ struct QuickComposerView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            Form {
-                Picker("To:", selection: $to) {
-                    ForEach(targets) { Text($0.name).tag($0.id) }
+        WithPerceptionTracking {
+            VStack(spacing: 0) {
+                Form {
+                    Picker("To:", selection: $to) {
+                        ForEach(targets) { Text($0.name).tag($0.id) }
+                    }
+                    TextField("Message:", text: $text, axis: .vertical)
+                        .lineLimit(1...4)
                 }
-                TextField("Message:", text: $text, axis: .vertical)
-                    .lineLimit(1...4)
-            }
-            .formStyle(.columns)
-            .padding(16)
-            HStack {
-                Spacer()
-                Button("Cancel", role: .cancel) { cancel() }
-                    .keyboardShortcut(.cancelAction)
-                Button("Send") {
-                    let name = targets.first { $0.id == to }?.name ?? ""
-                    send(to, name, text)
+                .compatFormStyleColumns()
+                .padding(16)
+                HStack {
+                    Spacer()
+                    Button("Cancel", role: .cancel) { cancel() }
+                        .keyboardShortcut(.cancelAction)
+                    Button("Send") {
+                        let name = targets.first { $0.id == to }?.name ?? ""
+                        send(to, name, text)
+                    }
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(to.isEmpty || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
-                .keyboardShortcut(.defaultAction)
-                .disabled(to.isEmpty || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .padding([.horizontal, .bottom], 16)
             }
-            .padding([.horizontal, .bottom], 16)
+            .frame(width: 420)
         }
-        .frame(width: 420)
     }
 }
 

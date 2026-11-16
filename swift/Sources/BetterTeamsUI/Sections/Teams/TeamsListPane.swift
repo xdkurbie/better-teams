@@ -6,6 +6,7 @@
 // never color alone). Selection binds through Navigator (R3, R21).
 import OstMacCore
 import SwiftUI
+import Perception
 
 struct TeamsListPane: View {
     @ObservedObject var teams: TeamsViewModel
@@ -17,8 +18,10 @@ struct TeamsListPane: View {
     @Environment(\.windowModel) private var model
 
     var body: some View {
-        if let model {
-            content(model)
+        WithPerceptionTracking {
+            if let model {
+                content(model)
+            }
         }
     }
 
@@ -45,7 +48,7 @@ struct TeamsListPane: View {
             list(m)
                 .refreshStatus(teams.state == .loading, failure: Self.failure(teams.state),
                                label: "Updating Teams", retry: { teams.refresh() })
-                .safeAreaInset(edge: .bottom, spacing: 0) { actionError }
+                .compatSafeAreaInset(edge: .bottom, spacing: 0) { actionError }
         }
     }
 
@@ -55,8 +58,8 @@ struct TeamsListPane: View {
     private var actionError: some View {
         if let text = teams.actionError {
             HStack(spacing: 6) {
-                Image(systemName: "exclamationmark.circle").foregroundStyle(.secondary)
-                Text("Couldn't complete that: \(text)").font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                Image(systemName: "exclamationmark.circle").compatForeground(.secondary)
+                Text("Couldn't complete that: \(text)").font(.caption).compatForeground(.secondary).lineLimit(2)
                 Spacer(minLength: 4)
                 Button {
                     teams.clearActionError()
@@ -152,7 +155,7 @@ struct TeamsListPane: View {
                 Section("Hidden Teams") {
                     ForEach(hiddenTeams) { team in
                         TeamRow(name: team.name, unread: false)
-                            .foregroundStyle(.secondary)
+                            .compatForeground(.secondary)
                             .tag("team:\(team.teamId)")
                             .accessibilityAction(named: "Mark Team as Read") {
                                 run(TeamsCommands.markTeamRead, team.teamId, m)
@@ -168,7 +171,7 @@ struct TeamsListPane: View {
             }
         }
         .listStyle(.inset)
-        .contextMenu(forSelectionType: String.self) { tags in
+        .compatSelectionMenu(forSelectionType: String.self) { tags in
             if let tag = tags.first {
                 if tag.hasPrefix("chan:") {
                     channelMenu(String(tag.dropFirst(5)), m)
@@ -341,15 +344,17 @@ struct TeamTile: View {
     var size: CGFloat = 22
 
     var body: some View {
-        RoundedRectangle(cornerRadius: size * 0.24, style: .continuous)
-            .fill(Palette.avatarFill(for: name))
-            .overlay {
-                Text(Avatar.initials(name))
-                    .font(AppFont.monogram(size))
-                    .foregroundStyle(Palette.avatarText)
-            }
-            .frame(width: size, height: size)
-            .accessibilityHidden(true)
+        WithPerceptionTracking {
+            RoundedRectangle(cornerRadius: size * 0.24, style: .continuous)
+                .fill(Palette.avatarFill(for: name))
+                .overlay {
+                    Text(Avatar.initials(name))
+                        .font(AppFont.monogram(size))
+                        .compatForeground(Palette.avatarText)
+                }
+                .frame(width: size, height: size)
+                .accessibilityHidden(true)
+        }
     }
 }
 
@@ -359,16 +364,18 @@ struct TeamRow: View {
     @Environment(\.contentTextScale) private var scale
 
     var body: some View {
-        HStack(spacing: 8) {
-            TeamTile(name: name)
-            Text(name)
-                .font(unread ? AppFont.headline(scale) : AppFont.bodyEmphasized(scale))
-                .lineLimit(1)
-                .truncationMode(.tail)
+        WithPerceptionTracking {
+            HStack(spacing: 8) {
+                TeamTile(name: name)
+                Text(name)
+                    .font(unread ? AppFont.headline(scale) : AppFont.bodyEmphasized(scale))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+            .help(name)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(unread ? "\(name), unread" : name)
         }
-        .help(name)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(unread ? "\(name), unread" : name)
     }
 }
 
@@ -382,40 +389,42 @@ struct ChannelRow: View {
     @Environment(\.contentTextScale) private var scale
 
     var body: some View {
-        HStack(spacing: 6) {
-            // Reserved slot: toggling unread never shifts the name (R13).
-            Circle()
-                .fill(.tint)
-                .frame(width: 7, height: 7)
-                .opacity(unread ? 1 : 0)
-                .accessibilityHidden(true)
-            Image(systemName: "number")
-                .foregroundStyle(.secondary)
-                .frame(width: 16)
-            VStack(alignment: .leading, spacing: 0) {
-                Text(name)
-                    .font(unread ? AppFont.headline(scale) : AppFont.body(scale))
-                    .foregroundStyle(hidden ? .secondary : .primary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                if let teamName {
-                    Text(teamName)
-                        .font(AppFont.caption(scale))
-                        .foregroundStyle(.secondary)
+        WithPerceptionTracking {
+            HStack(spacing: 6) {
+                // Reserved slot: toggling unread never shifts the name (R13).
+                Circle()
+                    .fill(.tint)
+                    .frame(width: 7, height: 7)
+                    .opacity(unread ? 1 : 0)
+                    .accessibilityHidden(true)
+                Image(systemName: "number")
+                    .compatForeground(.secondary)
+                    .frame(width: 16)
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(name)
+                        .font(unread ? AppFont.headline(scale) : AppFont.body(scale))
+                        .compatForeground(hidden ? .secondary : .primary)
                         .lineLimit(1)
+                        .truncationMode(.tail)
+                    if let teamName {
+                        Text(teamName)
+                            .font(AppFont.caption(scale))
+                            .compatForeground(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+                if muted || hidden {
+                    Image(systemName: hidden ? "eye.slash" : "bell.slash")
+                        .font(AppFont.caption(scale))
+                        .compatForeground(.secondary)
                 }
             }
-            if muted || hidden {
-                Image(systemName: hidden ? "eye.slash" : "bell.slash")
-                    .font(AppFont.caption(scale))
-                    .foregroundStyle(.secondary)
-            }
+            .badge(mentioned ? Text("@") : nil)
+            .badgeProminence(.increased)
+            .help(teamName.map { "\(name) — \($0)" } ?? name)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(label)
         }
-        .badge(mentioned ? Text("@") : nil)
-        .badgeProminence(.increased)
-        .help(teamName.map { "\(name) — \($0)" } ?? name)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(label)
     }
 
     private var label: String {
@@ -437,18 +446,20 @@ struct HiddenChannelsRow: View {
     @Environment(\.contentTextScale) private var scale
 
     var body: some View {
-        Button(action: toggle) {
-            HStack(spacing: 6) {
-                Color.clear.frame(width: 7, height: 7) // channel rows' unread slot
-                // The row stands for hidden channels, shown or not.
-                Image(systemName: "eye.slash")
-                    .frame(width: 16)
-                Text(reveal ? "Hide Hidden Channels" : (count == 1 ? "1 hidden channel" : "\(count) hidden channels"))
-                    .font(AppFont.subheadline(scale))
+        WithPerceptionTracking {
+            Button(action: toggle) {
+                HStack(spacing: 6) {
+                    Color.clear.frame(width: 7, height: 7) // channel rows' unread slot
+                    // The row stands for hidden channels, shown or not.
+                    Image(systemName: "eye.slash")
+                        .frame(width: 16)
+                    Text(reveal ? "Hide Hidden Channels" : (count == 1 ? "1 hidden channel" : "\(count) hidden channels"))
+                        .font(AppFont.subheadline(scale))
+                }
+                .compatForeground(.secondary)
             }
-            .foregroundStyle(.secondary)
+            .buttonStyle(.plain)
+            .selectionDisabled()
         }
-        .buttonStyle(.plain)
-        .selectionDisabled()
     }
 }

@@ -6,6 +6,7 @@
 // here wherever the call is hosted (the call window forwards menu
 // commands to the main window).
 import SwiftUI
+import Perception
 
 @MainActor
 final class CallSection: SectionProvider, InspectorCapable {
@@ -89,11 +90,13 @@ private struct CallDetailPane: View {
     @Environment(\.windowModel) private var model
 
     var body: some View {
-        if let s = model?.call, !s.ended, s.presentation == .mainWindow {
-            CallStageSlot(stage: s.stage)
-        } else {
-            CallStageSlot(stage: nil)
-                .overlay { EmptyPane("No Call", systemImage: "phone") }
+        WithPerceptionTracking {
+            if let s = model?.call, !s.ended, s.presentation == .mainWindow {
+                CallStageSlot(stage: s.stage)
+            } else {
+                CallStageSlot(stage: nil)
+                    .overlay { EmptyPane("No Call", systemImage: "phone") }
+            }
         }
     }
 }
@@ -102,10 +105,12 @@ private struct CallInspectorPane: View {
     @Environment(\.windowModel) private var model
 
     var body: some View {
-        if let s = model?.call, !s.ended {
-            CallInspector(session: s)
-        } else {
-            EmptyPane("No Call", systemImage: "phone")
+        WithPerceptionTracking {
+            if let s = model?.call, !s.ended {
+                CallInspector(session: s)
+            } else {
+                EmptyPane("No Call", systemImage: "phone")
+            }
         }
     }
 }

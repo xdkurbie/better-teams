@@ -8,6 +8,7 @@
 // once: the list and folder filter resolve them while rendering.
 import OstMacCore
 import SwiftUI
+import Perception
 
 struct ManageFoldersSheet: View {
     @ObservedObject var folders: FolderStore
@@ -35,31 +36,33 @@ struct ManageFoldersSheet: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Manage Folders").font(.headline)
-            Picker("Section", selection: $tab) {
-                ForEach(Tab.allCases, id: \.rawValue) { Text($0.rawValue).tag($0) }
+        WithPerceptionTracking {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Manage Folders").font(.headline)
+                Picker("Section", selection: $tab) {
+                    ForEach(Tab.allCases, id: \.rawValue) { Text($0.rawValue).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                if tab == .folders { foldersTab } else { rulesTab }
+                HStack {
+                    Spacer()
+                    Button("Cancel", role: .cancel) { model?.dismissSheet() }
+                        .keyboardShortcut(.cancelAction)
+                    Button("Save") { save() }
+                        .keyboardShortcut(.defaultAction)
+                        .disabled(!Self.isValid(rows.map(\.name)))
+                }
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            if tab == .folders { foldersTab } else { rulesTab }
-            HStack {
-                Spacer()
-                Button("Cancel", role: .cancel) { model?.dismissSheet() }
-                    .keyboardShortcut(.cancelAction)
-                Button("Save") { save() }
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(!Self.isValid(rows.map(\.name)))
-            }
+            .padding(20)
+            .frame(width: 420)
         }
-        .padding(20)
-        .frame(width: 420)
     }
 
     @ViewBuilder
     private var foldersTab: some View {
         Text("Folders appear in the Filter menu.")
-            .foregroundStyle(.secondary)
+            .compatForeground(.secondary)
         VStack(alignment: .leading, spacing: 0) {
             List(selection: $picked) {
                 ForEach($rows) { $row in
@@ -68,7 +71,7 @@ struct ManageFoldersSheet: View {
                         .tag(row.id)
                 }
             }
-            .listStyle(.bordered(alternatesRowBackgrounds: false))
+            .compatBorderedList(alternates: false)
             .frame(height: 180)
             .overlay {
                 if rows.isEmpty {
@@ -103,7 +106,7 @@ struct ManageFoldersSheet: View {
     private var rulesTab: some View {
         InfoLabel(title: "Rules", subject: "folder rules",
                   text: "A chat goes to the folder of the first rule that matches it. Moving a chat by hand always wins.")
-            .foregroundStyle(.secondary)
+            .compatForeground(.secondary)
         VStack(alignment: .leading, spacing: 0) {
             List(selection: $pickedRule) {
                 ForEach($ruleDrafts) { $rule in
@@ -112,14 +115,14 @@ struct ManageFoldersSheet: View {
                         VStack(alignment: .leading, spacing: 0) {
                             Text(Self.summary(rule))
                             Text("Folder: \(folderName(rule.folderID))")
-                                .font(.caption).foregroundStyle(.secondary)
+                                .font(.caption).compatForeground(.secondary)
                         }
                     }
                     .tag(rule.id)
                 }
                 .onMove { ruleDrafts.move(fromOffsets: $0, toOffset: $1) }
             }
-            .listStyle(.bordered(alternatesRowBackgrounds: false))
+            .compatBorderedList(alternates: false)
             .frame(height: 130)
             .overlay {
                 if ruleDrafts.isEmpty {
@@ -166,11 +169,11 @@ struct ManageFoldersSheet: View {
             }
             if !rule.wrappedValue.hasMatchers {
                 Text("Set at least one condition; a rule without one matches nothing.")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.caption).compatForeground(.secondary)
             }
         }
-        .formStyle(.grouped)
-        .scrollDisabled(true)
+        .compatFormStyleGrouped()
+        .compatScrollDisabled()
     }
 
     private func folderName(_ id: String) -> String {

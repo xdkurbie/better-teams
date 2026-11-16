@@ -6,6 +6,7 @@
 import AppKit
 import OstMacCore
 import SwiftUI
+import Perception
 
 public enum FileScope: Hashable, Sendable {
     case conversation(ConversationRef)
@@ -20,22 +21,24 @@ public struct FileTable: View {
     public init(scope: FileScope) { self.scope = scope }
 
     public var body: some View {
-        if let model, let app = model.app {
-            switch scope {
-            case .conversation(let ref):
-                ConversationFiles(store: app.shared, chatID: ref,
-                                  name: model.graph.chats.chats.first { $0.id == ref }?.name ?? "")
-            case .channel(_, let channel):
-                ConversationFiles(store: app.shared, chatID: channel,
-                                  name: FilesSection.channelName(channel, app.teams.teams))
-            case .source:
-                if let files = model.provider(.files) as? FilesSection {
-                    FilesDetailPane(unified: app.unifiedFiles, library: files.library, transfers: app.transfers,
-                                    teams: app.teams, section: files)
+        WithPerceptionTracking {
+            if let model, let app = model.app {
+                switch scope {
+                case .conversation(let ref):
+                    ConversationFiles(store: app.shared, chatID: ref,
+                                      name: model.graph.chats.chats.first { $0.id == ref }?.name ?? "")
+                case .channel(_, let channel):
+                    ConversationFiles(store: app.shared, chatID: channel,
+                                      name: FilesSection.channelName(channel, app.teams.teams))
+                case .source:
+                    if let files = model.provider(.files) as? FilesSection {
+                        FilesDetailPane(unified: app.unifiedFiles, library: files.library, transfers: app.transfers,
+                                        teams: app.teams, section: files)
+                    }
                 }
+            } else {
+                EmptyPane("No Files", systemImage: "folder", message: "No files have been shared yet.")
             }
-        } else {
-            EmptyPane("No Files", systemImage: "folder", message: "No files have been shared yet.")
         }
     }
 }
@@ -50,25 +53,27 @@ private struct ConversationFiles: View {
     @Environment(\.windowModel) private var model
 
     var body: some View {
-        let current = store.chatID == chatID
-        let items = current
-            ? store.files.map {
-                FileItem.remote(UnifiedFileRow(file: $0, source: .chat, sourceName: name, sourceID: chatID))
-            }
-            : []
-        let state = current
-            ? FilesPaneState.resolve(store.state, count: items.count, forced: nil, forcedOffline: false,
-                                     offline: model?.connection == .offline)
-            : .loading
-        VStack(spacing: 0) {
-            if current, !store.crumbs.isEmpty {
-                FolderCrumbs(store: store, root: name.isEmpty ? "Files" : name)
-                Divider()
-            }
-            FileTableView(items: state == .files ? items : [], selection: $selection, state: state,
-                          emptyMessage: "No files have been shared yet.", canUpload: false,
-                          argPrefix: FilesSection.conversationPrefix, linksLocation: false) {
-                if model?.options.demo != true { store.refresh() }
+        WithPerceptionTracking {
+            let current = store.chatID == chatID
+            let items = current
+                ? store.files.map {
+                    FileItem.remote(UnifiedFileRow(file: $0, source: .chat, sourceName: name, sourceID: chatID))
+                }
+                : []
+            let state = current
+                ? FilesPaneState.resolve(store.state, count: items.count, forced: nil, forcedOffline: false,
+                                         offline: model?.connection == .offline)
+                : .loading
+            VStack(spacing: 0) {
+                if current, !store.crumbs.isEmpty {
+                    FolderCrumbs(store: store, root: name.isEmpty ? "Files" : name)
+                    Divider()
+                }
+                FileTableView(items: state == .files ? items : [], selection: $selection, state: state,
+                              emptyMessage: "No files have been shared yet.", canUpload: false,
+                              argPrefix: FilesSection.conversationPrefix, linksLocation: false) {
+                    if model?.options.demo != true { store.refresh() }
+                }
             }
         }
     }

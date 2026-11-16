@@ -14,6 +14,7 @@ import AppKit
 import AVFoundation
 import OstMacCore
 import SwiftUI
+import Perception
 
 @MainActor
 public final class CallStageViewController: NSViewController {
@@ -97,10 +98,12 @@ private struct CallStageRoot: View {
     let stage: CallStageViewController
 
     var body: some View {
-        if let session = stage.session, let app = session.model?.app {
-            CallStageView(session: session, call: app.call, meetings: app.meetings, roster: app.meeting)
-        } else {
-            EmptyPane("No Call", systemImage: "phone")
+        WithPerceptionTracking {
+            if let session = stage.session, let app = session.model?.app {
+                CallStageView(session: session, call: app.call, meetings: app.meetings, roster: app.meeting)
+            } else {
+                EmptyPane("No Call", systemImage: "phone")
+            }
         }
     }
 }
@@ -114,19 +117,21 @@ struct CallStageView: View {
     @Environment(\.contentTextScale) private var scale
 
     var body: some View {
-        Group {
-            if session.isMeeting, !session.joined {
-                PreJoinView(session: session, status: status, canJoin: meetings.pendingJoin != nil)
-            } else if let video = session.meetingVideo {
-                MeetingVideoStage(session: session, video: video, status: status)
-            } else if session.video {
-                videoStage
-            } else {
-                stageGrid
+        WithPerceptionTracking {
+            Group {
+                if session.isMeeting, !session.joined {
+                    PreJoinView(session: session, status: status, canJoin: meetings.pendingJoin != nil)
+                } else if let video = session.meetingVideo {
+                    MeetingVideoStage(session: session, video: video, status: status)
+                } else if session.video {
+                    videoStage
+                } else {
+                    stageGrid
+                }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color(nsColor: .windowBackgroundColor))
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(nsColor: .windowBackgroundColor))
     }
 
     private var tiles: [CallTile] {
@@ -142,14 +147,22 @@ struct CallStageView: View {
             if !session.connected {
                 Text(status)
                     .font(AppFont.body(scale))
-                    .foregroundStyle(.secondary)
+                    .compatForeground(.secondary)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 480)
                     .accessibilityAddTraits(.updatesFrequently)
             }
-            TileGridLayout(spacing: 8) {
-                ForEach(tiles) { t in
-                    CallTileView(tile: t, camera: session.camera)
+            if #available(macOS 13, *) {
+                TileGridLayout(spacing: 8) {
+                    ForEach(tiles) { t in
+                        CallTileView(tile: t, camera: session.camera)
+                    }
+                }
+            } else {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), spacing: 8)], spacing: 8) {
+                    ForEach(tiles) { t in
+                        CallTileView(tile: t, camera: session.camera)
+                    }
                 }
             }
         }
@@ -209,14 +222,16 @@ struct CallTileView: View {
     @Environment(\.contentTextScale) private var scale
 
     var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 10, style: .continuous).fill(.fill.tertiary)
-            content
+        WithPerceptionTracking {
+            ZStack {
+                RoundedRectangle(cornerRadius: 10, style: .continuous).fill(.fill.tertiary)
+                content
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay(alignment: .bottomLeading) { nameChip.padding(8) }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(accessibility)
         }
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .overlay(alignment: .bottomLeading) { nameChip.padding(8) }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(accessibility)
     }
 
     @ViewBuilder
@@ -232,10 +247,10 @@ struct CallTileView: View {
             VStack(spacing: 8) {
                 Image(systemName: "rectangle.on.rectangle")
                     .font(.largeTitle)
-                    .foregroundStyle(.secondary)
+                    .compatForeground(.secondary)
                 Text("You\u{2019}re sharing your screen")
                     .font(AppFont.body(scale))
-                    .foregroundStyle(.secondary)
+                    .compatForeground(.secondary)
             }
         default:
             Avatar(name: tile.name, diameter: 72)
@@ -251,7 +266,7 @@ struct CallTileView: View {
     private var nameChip: some View {
         HStack(spacing: 4) {
             if tile.muted {
-                Image(systemName: "mic.slash.fill").foregroundStyle(.secondary)
+                Image(systemName: "mic.slash.fill").compatForeground(.secondary)
             }
             Text(tile.kind == .selfView ? "You" : tile.name)
                 .lineLimit(1)
@@ -287,21 +302,23 @@ struct RemoteVideoTile: View {
     let status: String?
 
     var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 10, style: .continuous).fill(.black)
-            if let model {
-                LiveRemoteVideo(model: model, name: name, status: status)
-            } else if demo {
-                DemoRemoteVideo(animated: animated)
-            } else {
-                RemoteVideoWaiting(name: name, status: status ?? "Waiting for video…")
+        WithPerceptionTracking {
+            ZStack {
+                RoundedRectangle(cornerRadius: 10, style: .continuous).fill(.black)
+                if let model {
+                    LiveRemoteVideo(model: model, name: name, status: status)
+                } else if demo {
+                    DemoRemoteVideo(animated: animated)
+                } else {
+                    RemoteVideoWaiting(name: name, status: status ?? "Waiting for video…")
+                }
             }
+            // Waiting → first frame crossfades (never a blank flash).
+            .animation(VideoFade.animation, value: model == nil && demo)
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("\(name), video")
         }
-        // Waiting → first frame crossfades (never a blank flash).
-        .animation(VideoFade.animation, value: model == nil && demo)
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(name), video")
     }
 }
 
@@ -318,18 +335,20 @@ private struct LiveRemoteVideo: View {
     let status: String?
 
     var body: some View {
-        // The last decoded frame stays up through stalls and camera-off
-        // (the peer's black frames are content); the model never clears it.
-        ZStack {
-            if let img = model.remoteImage {
-                Image(decorative: img, scale: 1)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-            } else {
-                RemoteVideoWaiting(name: name, status: status ?? "Waiting for video…")
+        WithPerceptionTracking {
+            // The last decoded frame stays up through stalls and camera-off
+            // (the peer's black frames are content); the model never clears it.
+            ZStack {
+                if let img = model.remoteImage {
+                    Image(decorative: img, scale: 1)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                } else {
+                    RemoteVideoWaiting(name: name, status: status ?? "Waiting for video…")
+                }
             }
+            .animation(VideoFade.animation, value: model.remoteImage == nil)
         }
-        .animation(VideoFade.animation, value: model.remoteImage == nil)
     }
 }
 
@@ -339,14 +358,16 @@ private struct RemoteVideoWaiting: View {
     @Environment(\.contentTextScale) private var scale
 
     var body: some View {
-        VStack(spacing: 12) {
-            Avatar(name: name, diameter: 96)
-            if let status {
-                Text(status)
-                    .font(AppFont.body(scale))
-                    .foregroundStyle(.white.opacity(0.8))
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: 480)
+        WithPerceptionTracking {
+            VStack(spacing: 12) {
+                Avatar(name: name, diameter: 96)
+                if let status {
+                    Text(status)
+                        .font(AppFont.body(scale))
+                        .compatForeground(.white.opacity(0.8))
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: 480)
+                }
             }
         }
     }
@@ -362,12 +383,14 @@ struct DemoRemoteVideo: View {
     var seed = 0
 
     var body: some View {
-        if animated {
-            TimelineView(.periodic(from: .now, by: 1.0 / 12)) { ctx in
-                DemoCameraScene(seed: seed, time: ctx.date.timeIntervalSinceReferenceDate)
+        WithPerceptionTracking {
+            if animated {
+                TimelineView(.periodic(from: .now, by: 1.0 / 12)) { ctx in
+                    DemoCameraScene(seed: seed, time: ctx.date.timeIntervalSinceReferenceDate)
+                }
+            } else {
+                DemoCameraScene(seed: seed, time: 0)
             }
-        } else {
-            DemoCameraScene(seed: seed, time: 0)
         }
     }
 }
@@ -382,41 +405,43 @@ private struct DemoCameraScene: View {
     ]
 
     var body: some View {
-        Canvas { ctx, size in
-            let w = size.width, h = size.height
-            guard w > 0, h > 0 else { return }
-            let room = Self.rooms[abs(seed) % Self.rooms.count]
-            let left = seed % 2 == 0
-            ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(.black))
-            ctx.fill(Path(CGRect(origin: .zero, size: size)),
-                     with: .linearGradient(Gradient(colors: [room.wall.opacity(0.62), room.floor.opacity(0.42)]),
-                                           startPoint: .zero, endPoint: CGPoint(x: w, y: h)))
-            // Out-of-focus background: window light and a shelf.
-            var back = ctx
-            back.addFilter(.blur(radius: max(3, w / 55)))
-            let window = CGRect(x: left ? w * 0.05 : w * 0.67, y: h * 0.08, width: w * 0.28, height: h * 0.5)
-            back.fill(Path(roundedRect: window, cornerRadius: w * 0.012), with: .color(.white.opacity(0.3)))
-            let shelf = CGRect(x: left ? w * 0.7 : w * 0.06, y: h * 0.34, width: w * 0.22, height: h * 0.045)
-            back.fill(Path(roundedRect: shelf, cornerRadius: 2), with: .color(.black.opacity(0.3)))
-            back.fill(Path(ellipseIn: CGRect(x: left ? w * 0.72 : w * 0.08, y: h * 0.22, width: w * 0.06,
-                                             height: h * 0.12)), with: .color(room.top.opacity(0.55)))
-            // The person, backlit, with a slight sway.
-            let sway = sin(time * 0.8 + Double(seed)) * w * 0.006
-            let bob = sin(time * 1.3 + Double(seed) * 0.7) * h * 0.004
-            let cx = w * 0.5 + sway
-            let torso = CGRect(x: cx - h * 0.4, y: h * 0.66 + bob, width: h * 0.8, height: h * 0.6)
-            ctx.fill(Path(ellipseIn: torso),
-                     with: .linearGradient(Gradient(colors: [room.top.opacity(0.85), .black.opacity(0.85)]),
-                                           startPoint: CGPoint(x: cx, y: torso.minY),
-                                           endPoint: CGPoint(x: cx, y: h)))
-            let neck = CGRect(x: cx - h * 0.055, y: h * 0.52 + bob, width: h * 0.11, height: h * 0.18)
-            ctx.fill(Path(roundedRect: neck, cornerRadius: h * 0.03), with: .color(.black.opacity(0.6)))
-            let head = CGRect(x: cx - h * 0.125, y: h * 0.25 + bob, width: h * 0.25, height: h * 0.31)
-            ctx.fill(Path(ellipseIn: head),
-                     with: .radialGradient(Gradient(colors: [.brown.opacity(0.75), .black.opacity(0.8)]),
-                                           center: CGPoint(x: head.midX + (left ? -1 : 1) * h * 0.04,
-                                                           y: head.midY - h * 0.03),
-                                           startRadius: 0, endRadius: h * 0.2))
+        WithPerceptionTracking {
+            Canvas { ctx, size in
+                let w = size.width, h = size.height
+                guard w > 0, h > 0 else { return }
+                let room = Self.rooms[abs(seed) % Self.rooms.count]
+                let left = seed % 2 == 0
+                ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(.black))
+                ctx.fill(Path(CGRect(origin: .zero, size: size)),
+                         with: .linearGradient(Gradient(colors: [room.wall.opacity(0.62), room.floor.opacity(0.42)]),
+                                               startPoint: .zero, endPoint: CGPoint(x: w, y: h)))
+                // Out-of-focus background: window light and a shelf.
+                var back = ctx
+                back.addFilter(.blur(radius: max(3, w / 55)))
+                let window = CGRect(x: left ? w * 0.05 : w * 0.67, y: h * 0.08, width: w * 0.28, height: h * 0.5)
+                back.fill(Path(roundedRect: window, cornerRadius: w * 0.012), with: .color(.white.opacity(0.3)))
+                let shelf = CGRect(x: left ? w * 0.7 : w * 0.06, y: h * 0.34, width: w * 0.22, height: h * 0.045)
+                back.fill(Path(roundedRect: shelf, cornerRadius: 2), with: .color(.black.opacity(0.3)))
+                back.fill(Path(ellipseIn: CGRect(x: left ? w * 0.72 : w * 0.08, y: h * 0.22, width: w * 0.06,
+                                                 height: h * 0.12)), with: .color(room.top.opacity(0.55)))
+                // The person, backlit, with a slight sway.
+                let sway = sin(time * 0.8 + Double(seed)) * w * 0.006
+                let bob = sin(time * 1.3 + Double(seed) * 0.7) * h * 0.004
+                let cx = w * 0.5 + sway
+                let torso = CGRect(x: cx - h * 0.4, y: h * 0.66 + bob, width: h * 0.8, height: h * 0.6)
+                ctx.fill(Path(ellipseIn: torso),
+                         with: .linearGradient(Gradient(colors: [room.top.opacity(0.85), .black.opacity(0.85)]),
+                                               startPoint: CGPoint(x: cx, y: torso.minY),
+                                               endPoint: CGPoint(x: cx, y: h)))
+                let neck = CGRect(x: cx - h * 0.055, y: h * 0.52 + bob, width: h * 0.11, height: h * 0.18)
+                ctx.fill(Path(roundedRect: neck, cornerRadius: h * 0.03), with: .color(.black.opacity(0.6)))
+                let head = CGRect(x: cx - h * 0.125, y: h * 0.25 + bob, width: h * 0.25, height: h * 0.31)
+                ctx.fill(Path(ellipseIn: head),
+                         with: .radialGradient(Gradient(colors: [.brown.opacity(0.75), .black.opacity(0.8)]),
+                                               center: CGPoint(x: head.midX + (left ? -1 : 1) * h * 0.04,
+                                                               y: head.midY - h * 0.03),
+                                               startRadius: 0, endRadius: h * 0.2))
+            }
         }
     }
 }
@@ -424,7 +449,9 @@ private struct DemoCameraScene: View {
 /// Demo self view: a synthetic camera scene (demo never opens the camera).
 struct PlaceholderFeed: View {
     var body: some View {
-        DemoRemoteVideo(animated: false, seed: 3)
+        WithPerceptionTracking {
+            DemoRemoteVideo(animated: false, seed: 3)
+        }
     }
 }
 

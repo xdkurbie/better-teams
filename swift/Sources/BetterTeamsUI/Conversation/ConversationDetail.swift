@@ -6,7 +6,7 @@
 // `NotesTab`), whose bodies those lanes replace.
 import OstMacCore
 import SwiftUI
-import Translation
+import Perception
 
 struct ConversationDetail: View {
     let ref: ConversationRef
@@ -14,42 +14,44 @@ struct ConversationDetail: View {
     @ObservedObject var chats: ChatListViewModel
     @Environment(\.windowModel) private var model
     var body: some View {
-        if let model {
-            let row = chats.chat(id: ref)
-            let name = row?.name ?? (conv.chatID == ref ? conv.headerTitle : DemoFixture.name(for: ref, demo: model.options.demo) ?? "Conversation")
-            let isGroup = row?.is_group ?? false
-            // Pinned tabs ride the app-owned store, loaded from the
-            // selection funnel (R24) — the view only reads.
-            let pinned = model.app?.chatTabs.tabs(for: ref) ?? []
-            let layout = ChatTabLayout(kind: ChatKind.of(chatID: ref, isGroup: isGroup), tabs: pinned)
-            let selected = layout.resolve(builtin: model.nav.tab(for: ref), pinned: model.nav.detailAppTab[ref])
-            VStack(spacing: 0) {
-                RosterBound(chatID: ref, roster: model.app?.chatRoster) { count in
-                    ConversationHeader(
-                        name: name, isGroup: isGroup,
-                        subtitle: isGroup ? Self.subtitle(isGroup: true, messages: conv.chatID == ref ? conv.messages : [],
-                                                          rosterCount: count)
-                            : PresenceLine(presence: model.app?.presence, chatID: ref).text,
-                        layout: layout,
-                        tab: Binding(get: { selected }, set: { key in
-                            switch key {
-                            case .builtin(let t): model.navigator?.setDetailTab(t, for: ref)
-                            case .pinned(let id): model.navigator?.setDetailAppTab(id, for: ref)
-                            }
-                        }),
-                        opened: model.nav.detailOpenedTab[ref].map(ChatTabKey.pinned),
-                        open: { key in
-                            if case .pinned(let id) = key { model.navigator?.openDetailAppTab(id, for: ref) }
-                        },
-                        close: { model.navigator?.closeOpenedTab(for: ref) })
+        WithPerceptionTracking {
+            if let model {
+                let row = chats.chat(id: ref)
+                let name = row?.name ?? (conv.chatID == ref ? conv.headerTitle : DemoFixture.name(for: ref, demo: model.options.demo) ?? "Conversation")
+                let isGroup = row?.is_group ?? false
+                // Pinned tabs ride the app-owned store, loaded from the
+                // selection funnel (R24) — the view only reads.
+                let pinned = model.app?.chatTabs.tabs(for: ref) ?? []
+                let layout = ChatTabLayout(kind: ChatKind.of(chatID: ref, isGroup: isGroup), tabs: pinned)
+                let selected = layout.resolve(builtin: model.nav.tab(for: ref), pinned: model.nav.detailAppTab[ref])
+                VStack(spacing: 0) {
+                    RosterBound(chatID: ref, roster: model.app?.chatRoster) { count in
+                        ConversationHeader(
+                            name: name, isGroup: isGroup,
+                            subtitle: isGroup ? Self.subtitle(isGroup: true, messages: conv.chatID == ref ? conv.messages : [],
+                                                              rosterCount: count)
+                                : PresenceLine(presence: model.app?.presence, chatID: ref).text,
+                            layout: layout,
+                            tab: Binding(get: { selected }, set: { key in
+                                switch key {
+                                case .builtin(let t): model.navigator?.setDetailTab(t, for: ref)
+                                case .pinned(let id): model.navigator?.setDetailAppTab(id, for: ref)
+                                }
+                            }),
+                            opened: model.nav.detailOpenedTab[ref].map(ChatTabKey.pinned),
+                            open: { key in
+                                if case .pinned(let id) = key { model.navigator?.openDetailAppTab(id, for: ref) }
+                            },
+                            close: { model.navigator?.closeOpenedTab(for: ref) })
+                    }
+                    Divider()
+                    // The tab body fills the pane, so the header stays pinned
+                    // to the top whatever the tab shows.
+                    ChatTabBody(selected: selected, chatID: ref, name: name, pinned: pinned, app: model.app) {
+                        chatTab(name: name, services: ConversationServices.of(model))
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
-                Divider()
-                // The tab body fills the pane, so the header stays pinned
-                // to the top whatever the tab shows.
-                ChatTabBody(selected: selected, chatID: ref, name: name, pinned: pinned, app: model.app) {
-                    chatTab(name: name, services: ConversationServices.of(model))
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
     }
@@ -81,7 +83,7 @@ struct ConversationDetail: View {
                 if conv.jumpMissedID != nil {
                     HStack(spacing: 8) {
                         Label("Message no longer available", systemImage: "exclamationmark.bubble")
-                            .foregroundStyle(.secondary)
+                            .compatForeground(.secondary)
                         Spacer(minLength: 8)
                         Button("Dismiss") { conv.clearJumpMissed() }
                             .controlSize(.small)
@@ -110,7 +112,7 @@ struct ConversationDetail: View {
                          composer: services.composer, attachments: services.attachments, services: services)
             }
             // Files dropped onto the conversation attach to the draft.
-            .dropDestination(for: URL.self) { urls, _ in
+            .compatDropFiles { urls, _ in
                 let files = urls.filter(\.isFileURL)
                 guard !files.isEmpty else { return false }
                 services.attachments.stage(urls: files)
@@ -118,9 +120,7 @@ struct ConversationDetail: View {
             }
             // The Translate action needs a live session (TranslationStore
             // fails fast with `.sessionNotAttached` otherwise).
-            .translationTask(TranslationSession.Configuration(target: services.translation.sessionTarget)) { session in
-                services.translation.attached(session)
-            }
+            .compatTranslationTask(services.translation)
         }
     }
 }
@@ -150,10 +150,12 @@ struct RosterBound<Content: View>: View {
     @ViewBuilder let content: (Int?) -> Content
 
     var body: some View {
-        if let roster {
-            Observed(chatID: chatID, roster: roster, content: content)
-        } else {
-            content(nil)
+        WithPerceptionTracking {
+            if let roster {
+                Observed(chatID: chatID, roster: roster, content: content)
+            } else {
+                content(nil)
+            }
         }
     }
 
@@ -163,7 +165,9 @@ struct RosterBound<Content: View>: View {
         let content: (Int?) -> Content
 
         var body: some View {
-            content(roster.chatID == chatID ? roster.peopleCount : nil)
+            WithPerceptionTracking {
+                content(roster.chatID == chatID ? roster.peopleCount : nil)
+            }
         }
     }
 }
@@ -180,22 +184,24 @@ struct ChatTabBody<Chat: View>: View {
     @ViewBuilder let chat: () -> Chat
 
     var body: some View {
-        switch selected {
-        case .builtin(.chat): chat()
-        case .builtin(.files): FileTable(scope: .conversation(chatID))
-        case .builtin(.notes): NotesTab(scope: .conversation(chatID))
-        case .builtin(.recap):
-            if let app {
-                ChatRecapTab(chatID: chatID, chatName: name, store: app.meetingRecaps,
-                             recordings: app.recordings,
-                             transcripts: app.transcripts)
-            } else {
-                ChatTabPlaceholder(title: "Recap", symbol: ChatTabLayout.symbol(.recap),
-                                   message: "Meeting recordings, transcripts and notes show here once the meeting has them.")
-            }
-        case .pinned(let id):
-            if let t = pinned.first(where: { $0.id == id }) {
-                ChatPinnedTabPane(tab: t, chatID: chatID)
+        WithPerceptionTracking {
+            switch selected {
+            case .builtin(.chat): chat()
+            case .builtin(.files): FileTable(scope: .conversation(chatID))
+            case .builtin(.notes): NotesTab(scope: .conversation(chatID))
+            case .builtin(.recap):
+                if let app {
+                    ChatRecapTab(chatID: chatID, chatName: name, store: app.meetingRecaps,
+                                 recordings: app.recordings,
+                                 transcripts: app.transcripts)
+                } else {
+                    ChatTabPlaceholder(title: "Recap", symbol: ChatTabLayout.symbol(.recap),
+                                       message: "Meeting recordings, transcripts and notes show here once the meeting has them.")
+                }
+            case .pinned(let id):
+                if let t = pinned.first(where: { $0.id == id }) {
+                    ChatPinnedTabPane(tab: t, chatID: chatID)
+                }
             }
         }
     }

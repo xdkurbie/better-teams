@@ -4,6 +4,7 @@
 // continuous corners, semantic fills only. Keyboard focus shows the
 // hover fill, never a ring (§10).
 import SwiftUI
+import Perception
 
 /// Evidence-only forced visual state (the control gallery).
 public enum RailButtonForced: String, CaseIterable, Sendable {
@@ -50,14 +51,16 @@ private struct RailButtonBody: View {
     /// runs force `.key`; SwiftUI still resolves the tint unemphasized),
     /// so the selected tab read dimmer than the unselected ones.
     var body: some View {
-        configuration.label
-            .foregroundStyle(.primary)
-            .environment(\.railSelected, isSelected)
-            .environment(\.railKey, isKey)
-            .frame(width: RailModel.itemWidth, height: height)
-            .background(background, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .onHover { hovering = $0 }
+        WithPerceptionTracking {
+            configuration.label
+                .compatForeground(.primary)
+                .environment(\.railSelected, isSelected)
+                .environment(\.railKey, isKey)
+                .frame(width: RailModel.itemWidth, height: height)
+                .background(background, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .onHover { hovering = $0 }
+        }
     }
 
     private var background: AnyShapeStyle {
@@ -97,17 +100,19 @@ struct RailButtonLabel: View {
     @Environment(\.railKey) private var key
 
     var body: some View {
-        VStack(spacing: 3) {
-            AppIconImage(url: icon, size: 22) { symbolImage }
-                .frame(height: 24)
-                .overlay(alignment: .topTrailing) {
-                    if let badge { RailBadge(count: badge).offset(x: 10, y: -5) }
-                }
-            Text(title)
-                .font(.subheadline)
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .padding(.horizontal, 2)
+        WithPerceptionTracking {
+            VStack(spacing: 3) {
+                AppIconImage(url: icon, size: 22) { symbolImage }
+                    .frame(height: 24)
+                    .overlay(alignment: .topTrailing) {
+                        if let badge { RailBadge(count: badge).offset(x: 10, y: -5) }
+                    }
+                Text(title)
+                    .font(.subheadline)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .padding(.horizontal, 2)
+            }
         }
     }
 
@@ -115,7 +120,7 @@ struct RailButtonLabel: View {
         Image(systemName: symbol)
             .symbolVariant(selected ? .fill : .none)
             .font(.title2)
-            .foregroundStyle(symbolStyle)
+            .compatForeground(symbolStyle)
     }
 
     /// Unselected (and selected in an inactive window): `.primary`, the
@@ -134,18 +139,20 @@ struct RailBadge: View {
     let count: Int
 
     var body: some View {
-        if count <= 0 {
-            Circle().fill(Palette.badge).frame(width: 9, height: 9)
-                .accessibilityHidden(true)
-        } else {
-            Text(count > 99 ? "99+" : "\(count)")
-                .font(.caption2.monospacedDigit().weight(.semibold))
-                .foregroundStyle(Palette.badgeText)
-                .padding(.horizontal, 4)
-                .frame(minWidth: 16, minHeight: 16)
-                .background(Capsule().fill(Palette.badge))
-                .fixedSize()
-                .accessibilityHidden(true)
+        WithPerceptionTracking {
+            if count <= 0 {
+                Circle().fill(Palette.badge).frame(width: 9, height: 9)
+                    .accessibilityHidden(true)
+            } else {
+                Text(count > 99 ? "99+" : "\(count)")
+                    .font(.caption2.monospacedDigit().weight(.semibold))
+                    .compatForeground(Palette.badgeText)
+                    .padding(.horizontal, 4)
+                    .frame(minWidth: 16, minHeight: 16)
+                    .background(Capsule().fill(Palette.badge))
+                    .fixedSize()
+                    .accessibilityHidden(true)
+            }
         }
     }
 }

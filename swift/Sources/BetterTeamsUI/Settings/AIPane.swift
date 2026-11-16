@@ -8,6 +8,7 @@
 import AppKit
 import OstMacCore
 import SwiftUI
+import Perception
 
 struct AIPane: View {
     @ObservedObject var catchUp: CatchUpStore
@@ -35,51 +36,53 @@ struct AIPane: View {
     }
 
     var body: some View {
-        Form {
-            Section {
-                Picker(selection: $catchUp.mode) {
-                    ForEach(CatchUpMode.allCases) { Text($0.title).tag($0) }
-                } label: {
-                    InfoLabel(title: "Catch Up", subject: "Catch Up", text: Self.footer(catchUp.mode))
-                }
-                .pickerStyle(.radioGroup)
-            }
-            if catchUp.mode != .off {
+        WithPerceptionTracking {
+            Form {
                 Section {
-                    LabeledContent("Status", value: Self.status(availability))
-                    // One trailing button row, as in System Settings.
-                    if availability != .available {
-                        HStack {
-                            Spacer()
-                            if availability == .disabled || availability == .downloading {
-                                Button("Open System Settings\u{2026}") { TeamsLinkRouter.open(Self.systemSettingsURL) }
+                    Picker(selection: $catchUp.mode) {
+                        ForEach(CatchUpMode.allCases) { Text($0.title).tag($0) }
+                    } label: {
+                        InfoLabel(title: "Catch Up", subject: "Catch Up", text: Self.footer(catchUp.mode))
+                    }
+                    .pickerStyle(.radioGroup)
+                }
+                if catchUp.mode != .off {
+                    Section {
+                        LabeledContent("Status", value: Self.status(availability))
+                        // One trailing button row, as in System Settings.
+                        if availability != .available {
+                            HStack {
+                                Spacer()
+                                if availability == .disabled || availability == .downloading {
+                                    Button("Open System Settings\u{2026}") { TeamsLinkRouter.open(Self.systemSettingsURL) }
+                                }
+                                Button("Check Again") { availability = Self.currentAvailability() }
                             }
-                            Button("Check Again") { availability = Self.currentAvailability() }
                         }
                     }
-                }
-                // CATCHTABS: "Not important" dismissals, stored on this Mac.
-                Section {
-                    LabeledContent("Items marked Not Important") {
-                        HStack(spacing: 8) {
-                            Text("\(feedback.count)").monospacedDigit().foregroundStyle(.secondary)
-                            Button("Reset") { feedback.reset() }
-                                .disabled(feedback.count == 0)
+                    // CATCHTABS: "Not important" dismissals, stored on this Mac.
+                    Section {
+                        LabeledContent("Items marked Not Important") {
+                            HStack(spacing: 8) {
+                                Text("\(feedback.count)").monospacedDigit().compatForeground(.secondary)
+                                Button("Reset") { feedback.reset() }
+                                    .disabled(feedback.count == 0)
+                            }
                         }
+                    } header: {
+                        InfoHeader(title: "Not Important", subject: "Not Important items",
+                                   text: "Catch Up hides items you mark Not Important and shows fewer like them. Reset brings them back.")
                     }
-                } header: {
-                    InfoHeader(title: "Not Important", subject: "Not Important items",
-                               text: "Catch Up hides items you mark Not Important and shows fewer like them. Reset brings them back.")
+                }
+                if catchUp.deprecatedProvidersEnabled {
+                    deprecatedProviderSection
                 }
             }
-            if catchUp.deprecatedProvidersEnabled {
-                deprecatedProviderSection
-            }
+            .compatFormStyleGrouped()
+            .compatScrollDisabled()
+            .frame(width: SettingsWindowController.paneWidth)
+            .fixedSize(horizontal: false, vertical: true)
         }
-        .formStyle(.grouped)
-        .scrollDisabled(true)
-        .frame(width: SettingsWindowController.paneWidth)
-        .fixedSize(horizontal: false, vertical: true)
     }
 
     /// What the chosen setting does, in plain words.

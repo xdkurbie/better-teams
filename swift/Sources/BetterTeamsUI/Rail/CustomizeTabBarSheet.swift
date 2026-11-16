@@ -4,6 +4,7 @@
 // Edits a draft: Done applies it, Cancel discards it (§9.5: Cancel + a
 // default action, never a lone Done).
 import SwiftUI
+import Perception
 
 struct CustomizeTabBarSheet: View {
     let library: AppsLibrary
@@ -12,32 +13,34 @@ struct CustomizeTabBarSheet: View {
     @State private var draft: [RailEntry]?
 
     var body: some View {
-        if let m = model {
-            let pins = draft ?? m.rail.pinned
-            VStack(alignment: .leading, spacing: 12) {
-                InfoLabel(title: "Customize Tab Bar", subject: "customizing the tab bar",
-                          text: "Drag to reorder pinned apps. The first three open with ⌘7, ⌘8 and ⌘9.")
-                    .font(.headline)
-                list(pins)
-                HStack(spacing: 8) {
-                    Button("Add from Library…") {
-                        apply(pins, m)
-                        m.dismissSheet()
-                        m.navigator?.select(section: .apps)
+        WithPerceptionTracking {
+            if let m = model {
+                let pins = draft ?? m.rail.pinned
+                VStack(alignment: .leading, spacing: 12) {
+                    InfoLabel(title: "Customize Tab Bar", subject: "customizing the tab bar",
+                              text: "Drag to reorder pinned apps. The first three open with ⌘7, ⌘8 and ⌘9.")
+                        .font(.headline)
+                    list(pins)
+                    HStack(spacing: 8) {
+                        Button("Add from Library…") {
+                            apply(pins, m)
+                            m.dismissSheet()
+                            m.navigator?.select(section: .apps)
+                        }
+                        Spacer()
+                        Button("Cancel", role: .cancel) { m.dismissSheet() }
+                            .keyboardShortcut(.cancelAction)
+                        Button("Done") {
+                            apply(pins, m)
+                            m.dismissSheet()
+                        }
+                        .keyboardShortcut(.defaultAction)
                     }
-                    Spacer()
-                    Button("Cancel", role: .cancel) { m.dismissSheet() }
-                        .keyboardShortcut(.cancelAction)
-                    Button("Done") {
-                        apply(pins, m)
-                        m.dismissSheet()
-                    }
-                    .keyboardShortcut(.defaultAction)
                 }
+                .padding(20)
+                .frame(width: 400)
+                .onAppear { if draft == nil { draft = m.rail.pinned } }
             }
-            .padding(20)
-            .frame(width: 400)
-            .onAppear { if draft == nil { draft = m.rail.pinned } }
         }
     }
 
@@ -58,7 +61,7 @@ struct CustomizeTabBarSheet: View {
                 ForEach(pins, id: \.key) { e in
                     HStack(spacing: 8) {
                         Image(systemName: e.symbol)
-                            .foregroundStyle(.tint)
+                            .compatForeground(.tint)
                             .frame(width: 20)
                             .accessibilityHidden(true)
                         Text(library.item(for: e)?.title ?? e.title).lineLimit(1)
@@ -73,7 +76,7 @@ struct CustomizeTabBarSheet: View {
                     draft = d
                 }
             }
-            .listStyle(.bordered)
+            .compatBorderedList()
             .frame(height: 220)
         }
     }

@@ -5,6 +5,7 @@
 // team notebook, chats the user's own OneNote.
 import OstMacCore
 import SwiftUI
+import Perception
 
 public enum NotesScope: Hashable, Sendable {
     case conversation(ConversationRef)
@@ -18,16 +19,18 @@ public struct NotesTab: View {
     public init(scope: NotesScope) { self.scope = scope }
 
     public var body: some View {
-        if let model, let app = model.app {
-            HStack(spacing: 0) {
-                NotesPageList(store: app.notes)
-                    .frame(width: NotesPageList.width)
-                Divider()
-                NotesPageView(store: app.notes, forced: nil)
+        WithPerceptionTracking {
+            if let model, let app = model.app {
+                HStack(spacing: 0) {
+                    NotesPageList(store: app.notes)
+                        .frame(width: NotesPageList.width)
+                    Divider()
+                    NotesPageView(store: app.notes, forced: nil)
+                }
+            } else {
+                EmptyPane(NotesPaneState.noNotebooksTitle, systemImage: NativeAppID.onenote.symbol,
+                          message: NotesStore.noNotebooksBody(groupID: nil))
             }
-        } else {
-            EmptyPane(NotesPaneState.noNotebooksTitle, systemImage: NativeAppID.onenote.symbol,
-                      message: NotesStore.noNotebooksBody(groupID: nil))
         }
     }
 }

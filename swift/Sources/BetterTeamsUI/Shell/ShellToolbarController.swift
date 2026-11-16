@@ -247,9 +247,9 @@ final class ShellToolbarController: NSObject, NSToolbarDelegate, NSSearchFieldDe
         t.isBordered = true
         t.isNavigational = Self.navigational.contains(cmd.id)
         if cmd.id == CallCommands.leave {
-            // Leave: the one primary action, trailing, red (§8).
-            t.style = .prominent
-            t.backgroundTintColor = .systemRed
+            // Leave: the one primary action, trailing, red (§8). macOS 26
+            // draws the prominent tint; older systems keep the bordered item.
+            Chrome.applyProminent(t)
         }
         Chrome.apply(.toolbarItems, glass: Chrome.usesGlass, to: [t])
         t.action = #selector(ShellWindowController.performCommand(_:))

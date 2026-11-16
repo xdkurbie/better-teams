@@ -4,7 +4,7 @@
 // inspector = Info | Catch Up | Pinned. Loads start in
 // `selectionDidChange` (R24), never in a view.
 import Combine
-import Observation
+import Perception
 import OstMacCore
 import SwiftUI
 
@@ -98,19 +98,19 @@ struct ChatFilterRules {
     }
 }
 
-@Observable
+@Perceptible
 @MainActor
 final class ChatSectionState {
     /// Set through `select`/`toggle`/`clear` (they drive the pager).
     private(set) var filter: ChatFilter = .all
     /// Bounded look through older pages for more matches (never the
     /// whole history); always ends in `.finished`.
-    @ObservationIgnored let pager: ChatFilterPager
+    @PerceptionIgnored let pager: ChatFilterPager
     /// Full-list rows on screen (row appear/disappear), for the scroll
     /// position the list returns to when a filter clears.
-    @ObservationIgnored var visibleIDs: Set<String> = []
+    @PerceptionIgnored var visibleIDs: Set<String> = []
     /// Top full-list row when the filter was entered.
-    @ObservationIgnored private(set) var returnAnchor: String?
+    @PerceptionIgnored private(set) var returnAnchor: String?
 
     init(pager: ChatFilterPager? = nil) {
         self.pager = pager ?? ChatFilterPager()
@@ -478,10 +478,12 @@ struct ChatDetailPane: View {
     @Environment(\.windowModel) private var model
 
     var body: some View {
-        if let model, let id = model.nav.selection(in: .chat)?.id, model.forced(.chat) == nil {
-            ConversationDetail(ref: id, conv: conv, chats: chats)
-        } else {
-            NoSelectionPane("No Chat Selected")
+        WithPerceptionTracking {
+            if let model, let id = model.nav.selection(in: .chat)?.id, model.forced(.chat) == nil {
+                ConversationDetail(ref: id, conv: conv, chats: chats)
+            } else {
+                NoSelectionPane("No Chat Selected")
+            }
         }
     }
 }
@@ -492,6 +494,8 @@ struct ChatInspectorPane: View {
     @Environment(\.windowModel) private var model
 
     var body: some View {
-        ConversationInspector(ref: model?.nav.selection(in: .chat)?.id, chats: chats, unread: unread)
+        WithPerceptionTracking {
+            ConversationInspector(ref: model?.nav.selection(in: .chat)?.id, chats: chats, unread: unread)
+        }
     }
 }

@@ -12,6 +12,7 @@
 import AppKit
 import OstMacCore
 import SwiftUI
+import Perception
 
 public enum HostingRole: Sendable {
     case pane, sheet, popover, settings, cell
@@ -28,8 +29,17 @@ public struct HostedRoot<Content: View>: View {
     let model: WindowModel?
 
     public var body: some View {
+        WithPerceptionTracking {
+            if #available(macOS 14, *) {
+                configured.focusEffectDisabled()
+            } else {
+                configured
+            }
+        }
+    }
+
+    private var configured: some View {
         content
-            .focusEffectDisabled()
             .environment(\.windowModel, model)
             .environment(\.contentTextScale, model?.textScale ?? 1.0)
             .environment(\.messageDensity, model?.messageDensity ?? .comfortable)
@@ -45,8 +55,18 @@ public struct HostedRoot<Content: View>: View {
     }
 }
 
+/// Which window chrome a hosted controller may bridge. Kept as our own
+/// option set so the call site does not name a macOS 14-only AppKit type.
+public struct HostingBridge: OptionSet, Sendable {
+    public let rawValue: Int
+    public init(rawValue: Int) { self.rawValue = rawValue }
+    /// SwiftUI toolbar items become the window's NSToolbar.
+    public static let toolbars = HostingBridge(rawValue: 1)
+}
+
 @MainActor
 public enum Hosting {
+    @available(macOS 13, *)
     static func sizing(_ role: HostingRole) -> NSHostingSizingOptions {
         switch role {
         case .pane, .row: []
@@ -62,12 +82,11 @@ public enum Hosting {
     /// `bridging`: `[]` everywhere except a window whose SwiftUI content
     /// owns the window's toolbar (`[.toolbars]`, the event details window).
     public static func controller<V: View>(_ v: V, role: HostingRole, model: WindowModel?,
-                                           bridging: NSHostingSceneBridgingOptions = [])
+                                           bridging: HostingBridge = [])
         -> NSHostingController<HostedRoot<V>>
     {
         let c = NSHostingController(rootView: root(v, model: model))
-        c.sceneBridgingOptions = bridging
-        c.sizingOptions = sizing(role)
+        apply(c, role: role, bridging: bridging)
         return c
     }
 
@@ -75,9 +94,55 @@ public enum Hosting {
         -> NSHostingView<HostedRoot<V>>
     {
         let h = NSHostingView(rootView: root(v, model: model))
-        h.sceneBridgingOptions = []
-        h.sizingOptions = sizing(role)
+        apply(h, role: role, bridging: [])
         return h
+    }
+
+    /// PNG/TIFF snapshot of a SwiftUI view. `ImageRenderer` is macOS 13+;
+    /// macOS 12 draws through a hosting view (this file is the only place
+    /// that constructs one).
+    public static func rasterize<V: View>(_ view: V, size: CGSize, scale: CGFloat = 2) -> NSImage? {
+        if #available(macOS 13, *) {
+            let renderer = ImageRenderer(content: view)
+            renderer.scale = scale
+            renderer.proposedSize = ProposedViewSize(width: size.width, height: size.height)
+            if let image = renderer.nsImage { return image }
+        }
+        let host = NSHostingView(rootView: view)
+        let pixels = NSSize(width: size.width * scale, height: size.height * scale)
+        host.frame = NSRect(origin: .zero, size: pixels)
+        host.layoutSubtreeIfNeeded()
+        guard let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds) else { return nil }
+        host.cacheDisplay(in: host.bounds, to: rep)
+        let image = NSImage(size: size)
+        image.addRepresentation(rep)
+        return image
+    }
+
+    private static func apply<V: View>(
+        _ controller: NSHostingController<HostedRoot<V>>,
+        role: HostingRole,
+        bridging: HostingBridge
+    ) {
+        if #available(macOS 13, *) {
+            controller.sizingOptions = sizing(role)
+        }
+        if #available(macOS 14, *) {
+            controller.sceneBridgingOptions = bridging.contains(.toolbars) ? [.toolbars] : []
+        }
+    }
+
+    private static func apply<V: View>(
+        _ view: NSHostingView<HostedRoot<V>>,
+        role: HostingRole,
+        bridging _: HostingBridge
+    ) {
+        if #available(macOS 13, *) {
+            view.sizingOptions = sizing(role)
+        }
+        if #available(macOS 14, *) {
+            view.sceneBridgingOptions = []
+        }
     }
 }
 

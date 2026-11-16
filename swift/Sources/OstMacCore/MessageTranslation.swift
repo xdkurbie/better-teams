@@ -58,19 +58,28 @@ public enum MessageTranslation {
 
     /// Default target = the system's preferred language (fallback en).
     public static func defaultTargetCode() -> String {
-        Locale.preferredLanguages.first
-            .flatMap { Locale.Language(identifier: $0).languageCode?.identifier }
-            ?? "en"
+        guard let first = Locale.preferredLanguages.first else { return "en" }
+        let base = baseLanguage(of: first)
+        return base.isEmpty ? "en" : base
+    }
+
+    /// Base language of a BCP-47 tag (`en-US` → `en`). Uses
+    /// `Locale.Language` on macOS 13+ and a tag split on macOS 12.
+    public static func baseLanguage(of code: String) -> String {
+        if #available(macOS 13, *) {
+            if let id = Locale.Language(identifier: code).languageCode?.identifier, !id.isEmpty {
+                return id.lowercased()
+            }
+        }
+        let token = code.split(whereSeparator: { $0 == "-" || $0 == "_" }).first.map(String.init) ?? code
+        return token.lowercased()
     }
 
     /// Same-language check on the base language (en-US == en). Either
     /// side unparseable or empty → false (translate, never no-op blind).
     public static func sameLanguage(_ a: String, _ b: String) -> Bool {
-        guard !a.isEmpty, !b.isEmpty,
-              let la = Locale.Language(identifier: a).languageCode?.identifier,
-              let lb = Locale.Language(identifier: b).languageCode?.identifier
-        else { return false }
-        return la.lowercased() == lb.lowercased()
+        guard !a.isEmpty, !b.isEmpty else { return false }
+        return baseLanguage(of: a) == baseLanguage(of: b)
     }
 
     /// Localized display name for a target code (fallback: the code).

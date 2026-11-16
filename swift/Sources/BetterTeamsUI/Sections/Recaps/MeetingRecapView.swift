@@ -10,6 +10,7 @@
 import AVKit
 import OstMacCore
 import SwiftUI
+import Perception
 
 enum MeetingRecapTab: String, CaseIterable, Identifiable {
     case transcript = "Transcript"
@@ -41,23 +42,25 @@ struct MeetingRecapView: View {
     @Environment(\.windowModel) private var model
 
     var body: some View {
-        VStack(spacing: 0) {
-            player
-            bar
-            Divider()
-            Group {
-                switch tab {
-                case .transcript: transcriptPart
-                case .notes: notesPart
-                case .recap: recapPart
+        WithPerceptionTracking {
+            VStack(spacing: 0) {
+                player
+                bar
+                Divider()
+                Group {
+                    switch tab {
+                    case .transcript: transcriptPart
+                    case .notes: notesPart
+                    case .recap: recapPart
+                    }
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-        .task { recap.load() }
-        .onChange(of: identity) { _, _ in
-            tab = MeetingRecapTab.evidenceInitial ?? .transcript
-            query = ""
+            .task { recap.load() }
+            .onChange(of: identity) { _ in
+                tab = MeetingRecapTab.evidenceInitial ?? .transcript
+                query = ""
+            }
         }
     }
 
@@ -91,7 +94,7 @@ struct MeetingRecapView: View {
             // No recording: one quiet line, the transcript keeps the room.
             Label(reason, systemImage: "video.slash")
                 .font(.callout)
-                .foregroundStyle(.secondary)
+                .compatForeground(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
@@ -171,7 +174,7 @@ struct MeetingRecapView: View {
                 if !q.isEmpty {
                     Text(rows.count == 1 ? "1 line" : "\(rows.count) lines")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .compatForeground(.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 12)
                         .padding(.bottom, 4)
@@ -190,7 +193,7 @@ struct MeetingRecapView: View {
                     .listStyle(.inset)
                     // Follow the line under the playhead (moves only while
                     // playing or on a seek).
-                    .onChange(of: current) { _, id in
+                    .onChange(of: current) { id in
                         guard let id, q.isEmpty else { return }
                         withAnimation(.easeInOut(duration: 0.2)) { proxy.scrollTo(id) }
                     }

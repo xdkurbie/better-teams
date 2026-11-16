@@ -126,8 +126,7 @@ public final class CallWindowController: NSWindowController, NSWindowDelegate, N
         case CallCommands.leave:
             item.label = "Leave"
             item.toolTip = "Leave Call (⇧⌘H)"
-            item.style = .prominent
-            item.backgroundTintColor = .systemRed
+            Chrome.applyProminent(item)
             item.action = #selector(leaveCall(_:))
         case CallCommands.mute:
             item.action = #selector(toggleMute(_:))

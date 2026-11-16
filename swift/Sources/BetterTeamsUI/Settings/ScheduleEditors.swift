@@ -4,14 +4,17 @@
 // `QuietHoursWindow`: minutes-since-midnight + Calendar weekdays 1...7).
 import OstMacCore
 import SwiftUI
+import Perception
 
 /// Start/end time-of-day pickers for one window.
 struct WindowTimeFields: View {
     @Binding var window: QuietHoursWindow
 
     var body: some View {
-        DatePicker("From", selection: time(\.startMinutes), displayedComponents: .hourAndMinute)
-        DatePicker("To", selection: time(\.endMinutes), displayedComponents: .hourAndMinute)
+        WithPerceptionTracking {
+            DatePicker("From", selection: time(\.startMinutes), displayedComponents: .hourAndMinute)
+            DatePicker("To", selection: time(\.endMinutes), displayedComponents: .hourAndMinute)
+        }
     }
 
     private func time(_ key: WritableKeyPath<QuietHoursWindow, Int>) -> Binding<Date> {
@@ -27,17 +30,19 @@ struct WeekdayPicker: View {
     private let calendar = Calendar.current
 
     var body: some View {
-        LabeledContent("Days") {
-            HStack(spacing: 4) {
-                ForEach(0..<order.count) { k in
-                    let day = order[k]
-                    Toggle(isOn: binding(day)) {
-                        Text(calendar.veryShortWeekdaySymbols[day - 1])
-                            .frame(minWidth: 14)
+        WithPerceptionTracking {
+            LabeledContent("Days") {
+                HStack(spacing: 4) {
+                    ForEach(0..<order.count) { k in
+                        let day = order[k]
+                        Toggle(isOn: binding(day)) {
+                            Text(calendar.veryShortWeekdaySymbols[day - 1])
+                                .frame(minWidth: 14)
+                        }
+                        .toggleStyle(.button)
+                        .controlSize(.small)
+                        .accessibilityLabel(calendar.weekdaySymbols[day - 1])
                     }
-                    .toggleStyle(.button)
-                    .controlSize(.small)
-                    .accessibilityLabel(calendar.weekdaySymbols[day - 1])
                 }
             }
         }

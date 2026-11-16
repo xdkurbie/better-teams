@@ -3,31 +3,34 @@
 // (`QuietHoursStore`). Native Form controls only.
 import OstMacCore
 import SwiftUI
+import Perception
 
 struct DoNotDisturbSection: View {
     @ObservedObject var quiet: QuietHoursStore
 
     var body: some View {
-        Section {
-            Toggle("Do Not Disturb", isOn: Binding(
-                get: { quiet.dndActive() },
-                set: { on in
-                    if on { quiet.enableDND(quiet.pendingDNDOption) } else { quiet.disableDND() }
-                }))
-            Picker("Turn off", selection: Binding(
-                get: { quiet.pendingDNDOption },
-                set: { option in
-                    // Re-applied while on, so the new expiry takes effect at once.
-                    if quiet.dndActive() { quiet.enableDND(option) } else { quiet.pendingDNDOption = option }
-                })) {
-                ForEach(DNDDuration.allCases, id: \.rawValue) { Text($0.label).tag($0) }
-            }
-        } header: {
-            InfoHeader(title: "Do Not Disturb", subject: "Do Not Disturb",
-                       text: "Silences banners until it turns off by itself or you switch it off.")
-        } footer: {
-            if quiet.dndActive() {
-                Text("Banners are silenced \(quiet.dndStatus()).").font(.caption).foregroundStyle(.secondary)
+        WithPerceptionTracking {
+            Section {
+                Toggle("Do Not Disturb", isOn: Binding(
+                    get: { quiet.dndActive() },
+                    set: { on in
+                        if on { quiet.enableDND(quiet.pendingDNDOption) } else { quiet.disableDND() }
+                    }))
+                Picker("Turn off", selection: Binding(
+                    get: { quiet.pendingDNDOption },
+                    set: { option in
+                        // Re-applied while on, so the new expiry takes effect at once.
+                        if quiet.dndActive() { quiet.enableDND(option) } else { quiet.pendingDNDOption = option }
+                    })) {
+                    ForEach(DNDDuration.allCases, id: \.rawValue) { Text($0.label).tag($0) }
+                }
+            } header: {
+                InfoHeader(title: "Do Not Disturb", subject: "Do Not Disturb",
+                           text: "Silences banners until it turns off by itself or you switch it off.")
+            } footer: {
+                if quiet.dndActive() {
+                    Text("Banners are silenced \(quiet.dndStatus()).").font(.caption).compatForeground(.secondary)
+                }
             }
         }
     }
@@ -39,20 +42,22 @@ struct QuietHoursSection: View {
     @State private var atLimit = false
 
     var body: some View {
-        Section {
-            // R4: index identity, built by the helper above so the
-            // ForEach itself carries no banned identity form.
-            ForEach(indexedWindows(quiet.windows), id: \.offset) { i, _ in
-                WindowEditor(window: binding(i), title: quiet.windows.count > 1 ? "Window \(i + 1)" : "Quiet hours",
-                             remove: i == 0 ? nil : { quiet.removeWindow(at: i) })
-            }
-            Button("Add Window") { atLimit = !quiet.addWindow() }
-            Toggle("Stay quiet while a Focus is on", isOn: $focus.syncEnabled)
-        } header: {
-            Text("Quiet Hours")
-        } footer: {
-            if atLimit {
-                Text("Up to \(QuietHoursStore.maxWindows) windows.").font(.caption).foregroundStyle(.secondary)
+        WithPerceptionTracking {
+            Section {
+                // R4: index identity, built by the helper above so the
+                // ForEach itself carries no banned identity form.
+                ForEach(indexedWindows(quiet.windows), id: \.offset) { i, _ in
+                    WindowEditor(window: binding(i), title: quiet.windows.count > 1 ? "Window \(i + 1)" : "Quiet hours",
+                                 remove: i == 0 ? nil : { quiet.removeWindow(at: i) })
+                }
+                Button("Add Window") { atLimit = !quiet.addWindow() }
+                Toggle("Stay quiet while a Focus is on", isOn: $focus.syncEnabled)
+            } header: {
+                Text("Quiet Hours")
+            } footer: {
+                if atLimit {
+                    Text("Up to \(QuietHoursStore.maxWindows) windows.").font(.caption).compatForeground(.secondary)
+                }
             }
         }
     }
@@ -76,13 +81,15 @@ struct WindowEditor: View {
     var remove: (() -> Void)?
 
     var body: some View {
-        Toggle(title, isOn: $window.enabled)
-        if window.enabled {
-            WindowTimeFields(window: $window)
-            WeekdayPicker(days: $window.days)
-        }
-        if let remove {
-            Button("Remove", role: .destructive, action: remove)
+        WithPerceptionTracking {
+            Toggle(title, isOn: $window.enabled)
+            if window.enabled {
+                WindowTimeFields(window: $window)
+                WeekdayPicker(days: $window.days)
+            }
+            if let remove {
+                Button("Remove", role: .destructive, action: remove)
+            }
         }
     }
 }

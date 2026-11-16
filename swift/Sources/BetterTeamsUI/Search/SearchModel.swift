@@ -7,7 +7,7 @@
 // (`MessageSearchStore`, `FilePeopleSearchStore`); views observe them
 // directly (R3, R28).
 import Foundation
-import Observation
+import Perception
 import OstMacCore
 
 /// One selectable search result (list tag and detail key).
@@ -71,7 +71,7 @@ public struct SearchSectionPlan: Equatable, Sendable {
     }
 }
 
-@Observable
+@Perceptible
 @MainActor
 public final class SearchModel {
     public private(set) var query = ""
@@ -87,11 +87,11 @@ public final class SearchModel {
     /// the server hits in that conversation.
     private(set) var findHits: [SearchHit] = []
     /// Evidence: result to select once rows arrive (`search?…&result=`).
-    @ObservationIgnored private var pendingResult: Int?
+    @PerceptionIgnored private var pendingResult: Int?
     /// Evidence: key to press once rows arrive (`then=open` = Return on
     /// the selected/top result; `then=esc` = Esc).
-    @ObservationIgnored private var pendingAction: String?
-    @ObservationIgnored weak var window: WindowModel?
+    @PerceptionIgnored private var pendingAction: String?
+    @PerceptionIgnored weak var window: WindowModel?
 
     public init() {}
 

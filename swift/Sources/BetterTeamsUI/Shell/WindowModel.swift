@@ -3,7 +3,7 @@
 // reached through `graph`; nothing here mirrors a store field (R3).
 import Combine
 import Foundation
-import Observation
+import Perception
 import OstMacCore
 
 /// Connection state shown by the trailing toolbar item (§5.7).
@@ -11,15 +11,15 @@ public enum ConnectionState: Sendable, Equatable {
     case online, offline, expired
 }
 
-@Observable
+@Perceptible
 @MainActor
 public final class WindowModel {
-    @ObservationIgnored public let graph: any AccountGraph
+    @PerceptionIgnored public let graph: any AccountGraph
     /// Persistence namespace ("demo" in demo mode, so demo state never
     /// reaches a live account's keys).
-    @ObservationIgnored public let accountKey: String
-    @ObservationIgnored public let options: LaunchOptions
-    @ObservationIgnored public let frameHost: FrameHost
+    @PerceptionIgnored public let accountKey: String
+    @PerceptionIgnored public let options: LaunchOptions
+    @PerceptionIgnored public let frameHost: FrameHost
     public let nav = NavigationModel()
     public let rail: RailModel
     public let search = SearchModel()
@@ -32,16 +32,16 @@ public final class WindowModel {
     /// Message density (Settings ▸ Chats): mirrors `app.density` so views
     /// that read it through `HostedRoot` re-render when it flips.
     public internal(set) var messageDensity: MessageDensity = .comfortable
-    @ObservationIgnored private var densityWatch: AnyCancellable?
+    @PerceptionIgnored private var densityWatch: AnyCancellable?
     /// Evidence-forced pane states (demo only, §11.3 `state=`).
     public internal(set) var forcedState: [SectionID: ForcedPaneState] = [:]
     /// Inspector segment requested by a route (`inspector=<segment>`).
     public internal(set) var inspectorSegment: String?
     public internal(set) var connection: ConnectionState = .online
 
-    @ObservationIgnored private var providers: [SectionID: SectionProvider] = [:]
-    @ObservationIgnored weak var presenter: SheetPresenter?
-    @ObservationIgnored public weak var navigator: Navigator?
+    @PerceptionIgnored private var providers: [SectionID: SectionProvider] = [:]
+    @PerceptionIgnored weak var presenter: SheetPresenter?
+    @PerceptionIgnored public weak var navigator: Navigator?
 
     public init(graph: any AccountGraph, accountKey: String, options: LaunchOptions) {
         self.graph = graph

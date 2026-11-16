@@ -15,6 +15,7 @@
 import AppKit
 import OstMacCore
 import SwiftUI
+import Perception
 
 /// Hover timing (Teams web runs on Fluent UI v9: 250 ms show/hide are
 /// Fluent's popup defaults, 150/100 ms its fast/faster motion tokens).
@@ -60,14 +61,14 @@ final class DebounceHoverScheduler: HoverScheduler {
 /// message's hover onto another. `evidence` is the demo capture pin
 /// (`hover=<messageID>` on an evidence route).
 @MainActor
-@Observable
+@Perceptible
 final class MessageHover {
     /// The message whose bar is up (after the dwell).
     var shownID: String?
     var focusedID: String?
     /// The message under the pointer right now (drives `shownID`).
-    @ObservationIgnored private(set) var pointerID: String?
-    @ObservationIgnored private let scheduler: HoverScheduler
+    @PerceptionIgnored private(set) var pointerID: String?
+    @PerceptionIgnored private let scheduler: HoverScheduler
 
     init(scheduler: HoverScheduler? = nil) {
         self.scheduler = scheduler ?? DebounceHoverScheduler()
@@ -260,13 +261,16 @@ struct LanePlan: Equatable {
 
 /// Header (optional) over the bubble, plus the toolbar slot placed by
 /// `LanePlan`. Subviews: [header?, card, toolbar?].
-struct BubbleLane: Layout {
+struct BubbleLane {
     let ownTrailing: Bool
     let hasHeader: Bool
     let toolbar: CGSize?
     let slack: CGFloat
     let topPadding: CGFloat
+}
 
+@available(macOS 13, *)
+extension BubbleLane: Layout {
     private func plan(_ proposal: ProposedViewSize, _ subviews: Subviews) -> LanePlan {
         let width = proposal.width.flatMap { $0.isFinite ? $0 : nil }
         let p = ProposedViewSize(width: width, height: nil)
@@ -308,24 +312,26 @@ struct HoverToolbarSlot: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        let id = row.message.id
-        let shown = HoverToolbarRules.isShown(id: id, hovered: actions.hover.shownID,
-                                              focused: actions.hover.focusedID,
-                                              pinned: MessageHover.evidence.shownID)
-        let anim = fade(in: shown)
-        ZStack(alignment: row.ownTrailing ? .topTrailing : .topLeading) {
-            if shown || NSApp.isFullKeyboardAccessEnabled {
-                MessageHoverToolbar(row: row, actions: actions, focus: $focus)
-                    .fixedSize()
-                    .opacity(shown ? 1 : 0)
-                    .allowsHitTesting(shown)
-                    .transition(.opacity)
+        WithPerceptionTracking {
+            let id = row.message.id
+            let shown = HoverToolbarRules.isShown(id: id, hovered: actions.hover.shownID,
+                                                  focused: actions.hover.focusedID,
+                                                  pinned: MessageHover.evidence.shownID)
+            let anim = fade(in: shown)
+            ZStack(alignment: row.ownTrailing ? .topTrailing : .topLeading) {
+                if shown || NSApp.isFullKeyboardAccessEnabled {
+                    MessageHoverToolbar(row: row, actions: actions, focus: $focus)
+                        .fixedSize()
+                        .opacity(shown ? 1 : 0)
+                        .allowsHitTesting(shown)
+                        .transition(.opacity)
+                }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity,
+                   alignment: row.ownTrailing ? .topTrailing : .topLeading)
+            .animation(anim, value: shown)
+            .onChange(of: focus) { f in actions.hover.focus(f != nil, id: id) }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity,
-               alignment: row.ownTrailing ? .topTrailing : .topLeading)
-        .animation(anim, value: shown)
-        .onChange(of: focus) { _, f in actions.hover.focus(f != nil, id: id) }
     }
 
     /// Subtle fade (none with Reduce Motion).
@@ -343,59 +349,61 @@ struct MessageHoverToolbar: View {
     @Environment(\.colorSchemeContrast) private var contrast
 
     var body: some View {
-        let m = row.message
-        let item = HoverToolbarRules.itemSize(scale: scale)
-        HStack(spacing: 0) {
-            ForEach(Indexed.wrap(HoverToolbarRules.quickReactions)) { r in
-                Button { actions.toggleReaction(m, r.value.emoji) } label: {
-                    Text(r.value.emoji).font(AppFont.body(scale))
+        WithPerceptionTracking {
+            let m = row.message
+            let item = HoverToolbarRules.itemSize(scale: scale)
+            HStack(spacing: 0) {
+                ForEach(Indexed.wrap(HoverToolbarRules.quickReactions)) { r in
+                    Button { actions.toggleReaction(m, r.value.emoji) } label: {
+                        Text(r.value.emoji).font(AppFont.body(scale))
+                            .frame(width: item.width, height: item.height).contentShape(Rectangle())
+                    }
+                    .help(r.value.name)
+                    .accessibilityLabel(r.value.name)
+                    .focused(focus, equals: .item(r.id))
+                }
+                Button { actions.moreReactions(m) } label: {
+                    Image(systemName: "face.smiling")
                         .frame(width: item.width, height: item.height).contentShape(Rectangle())
                 }
-                .help(r.value.name)
-                .accessibilityLabel(r.value.name)
-                .focused(focus, equals: .item(r.id))
-            }
-            Button { actions.moreReactions(m) } label: {
-                Image(systemName: "face.smiling")
-                    .frame(width: item.width, height: item.height).contentShape(Rectangle())
-            }
-            .help("More reactions")
-            .focused(focus, equals: .item(6))
-            Divider().frame(width: 1, height: item.height - 4).padding(.horizontal, 2)
-            Button { actions.reply(m) } label: {
-                Image(systemName: "arrowshape.turn.up.left")
-                    .frame(width: item.width, height: item.height).contentShape(Rectangle())
-            }
-            .help("Reply")
-            .focused(focus, equals: .item(7))
-            Menu {
-                MessageContextMenu(row: row, actions: actions)
-            } label: {
-                Image(systemName: "ellipsis")
-            }
-            .menuStyle(.button)
-            .menuIndicator(.hidden)
-            .buttonStyle(.borderless)
-            .fixedSize()
-            .frame(width: item.width, height: item.height)
-            .help("More options")
-            .focused(focus, equals: .item(8))
-        }
-        .buttonStyle(.borderless)
-        .controlSize(.small)
-        .font(AppFont.body(scale))
-        .padding(.horizontal, 6)
-        .padding(.vertical, 3)
-        .chromeBackground(.messageHoverBar, in: RoundedRectangle(cornerRadius: 6, style: .continuous)) {
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(.background)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .strokeBorder(contrast == .increased ? AnyShapeStyle(.primary) : AnyShapeStyle(.separator))
+                .help("More reactions")
+                .focused(focus, equals: .item(6))
+                Divider().frame(width: 1, height: item.height - 4).padding(.horizontal, 2)
+                Button { actions.reply(m) } label: {
+                    Image(systemName: "arrowshape.turn.up.left")
+                        .frame(width: item.width, height: item.height).contentShape(Rectangle())
                 }
-                .shadow(color: .black.opacity(0.12), radius: 3, y: 1)
+                .help("Reply")
+                .focused(focus, equals: .item(7))
+                Menu {
+                    MessageContextMenu(row: row, actions: actions)
+                } label: {
+                    Image(systemName: "ellipsis")
+                }
+                .menuStyle(.button)
+                .menuIndicator(.hidden)
+                .buttonStyle(.borderless)
+                .fixedSize()
+                .frame(width: item.width, height: item.height)
+                .help("More options")
+                .focused(focus, equals: .item(8))
+            }
+            .buttonStyle(.borderless)
+            .controlSize(.small)
+            .font(AppFont.body(scale))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .chromeBackground(.messageHoverBar, in: RoundedRectangle(cornerRadius: 6, style: .continuous)) {
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(.background)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .strokeBorder(contrast == .increased ? AnyShapeStyle(.primary) : AnyShapeStyle(.separator))
+                    }
+                    .shadow(color: .black.opacity(0.12), radius: 3, y: 1)
+            }
+            // VoiceOver reaches the same items as named row actions.
+            .accessibilityHidden(true)
         }
-        // VoiceOver reaches the same items as named row actions.
-        .accessibilityHidden(true)
     }
 }

@@ -88,10 +88,8 @@ final class MessageTranslationTests: XCTestCase {
     // MARK: - Default target (accept 4)
 
     func testDefaultTargetIsSystemLanguage() {
-        let sys = Locale.preferredLanguages.first
-            .flatMap { Locale.Language(identifier: $0).languageCode?.identifier }
-            ?? "en"
-        XCTAssertEqual(MessageTranslation.defaultTargetCode(), sys)
+        let sys = MessageTranslation.baseLanguage(of: Locale.preferredLanguages.first ?? "en")
+        XCTAssertEqual(MessageTranslation.defaultTargetCode(), sys.isEmpty ? "en" : sys)
     }
 
     func testFreshStoreTargetsSystemLanguage() {

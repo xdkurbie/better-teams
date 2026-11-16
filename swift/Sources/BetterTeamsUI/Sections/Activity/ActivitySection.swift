@@ -8,11 +8,11 @@
 // counts those that arrived since its last dwell dismissal
 // (`badgeCount`). Loads and jumps start in `selectionDidChange` (R24).
 import Combine
-import Observation
+import Perception
 import OstMacCore
 import SwiftUI
 
-@Observable
+@Perceptible
 @MainActor
 final class ActivitySectionState {
     var filter: ActivityFilter = .all
@@ -211,10 +211,12 @@ struct ActivityListPane: View {
     @Environment(\.windowModel) private var model
 
     var body: some View {
-        if let model {
-            // Opening Activity re-reads the Teams feed in the background
-            // (live only; rows merge in place, nothing clears).
-            content(model).task { await activity.refresh() }
+        WithPerceptionTracking {
+            if let model {
+                // Opening Activity re-reads the Teams feed in the background
+                // (live only; rows merge in place, nothing clears).
+                content(model).task { await activity.refresh() }
+            }
         }
     }
 
@@ -243,7 +245,7 @@ struct ActivityListPane: View {
                 HStack(spacing: 8) {
                     Label(m.connection == .offline ? "You\u{2019}re offline" : "Couldn\u{2019}t refresh",
                           systemImage: m.connection == .offline ? "wifi.slash" : "exclamationmark.triangle")
-                        .foregroundStyle(.secondary)
+                        .compatForeground(.secondary)
                         .lineLimit(1)
                     Spacer(minLength: 0)
                     Button("Try Again") { ActivitySection.retry(m) }
@@ -293,7 +295,7 @@ struct ActivityListPane: View {
             }
         }
         .listStyle(.inset)
-        .contextMenu(forSelectionType: String.self) { ids in
+        .compatSelectionMenu(forSelectionType: String.self) { ids in
             if let id = ids.first {
                 Button("Open") { m.navigator?.select(SectionSelection(id: id), in: .activity) }
                 if let item = activity.item(id: id) {
@@ -323,28 +325,30 @@ struct ActivityDetailPane: View {
     @Environment(\.windowModel) private var model
 
     var body: some View {
-        if let model, let id = model.nav.selection(in: .activity)?.id, showsFeed(model) {
-            if let item = activity.item(id: id) {
-                if item.kind == .missedCall {
-                    missedCall(item, model)
-                } else if item.chatID.isEmpty {
-                    // A feed notification with no source conversation
-                    // (app / system items): the item itself.
-                    let when = ActivityRow.time(Date(timeIntervalSince1970: TimeInterval(item.at)),
-                                                now: RelativeClock.shared.now)
-                    PersonCard(name: item.actor.isEmpty ? item.kind.label : item.actor,
-                               detail: "\(item.kind.label) \u{00B7} \(when)", detailSymbol: item.kind.systemImage,
-                               note: item.snippet.isEmpty ? nil : item.snippet) { EmptyView() }
+        WithPerceptionTracking {
+            if let model, let id = model.nav.selection(in: .activity)?.id, showsFeed(model) {
+                if let item = activity.item(id: id) {
+                    if item.kind == .missedCall {
+                        missedCall(item, model)
+                    } else if item.chatID.isEmpty {
+                        // A feed notification with no source conversation
+                        // (app / system items): the item itself.
+                        let when = ActivityRow.time(Date(timeIntervalSince1970: TimeInterval(item.at)),
+                                                    now: RelativeClock.shared.now)
+                        PersonCard(name: item.actor.isEmpty ? item.kind.label : item.actor,
+                                   detail: "\(item.kind.label) \u{00B7} \(when)", detailSymbol: item.kind.systemImage,
+                                   note: item.snippet.isEmpty ? nil : item.snippet) { EmptyView() }
+                    } else {
+                        ConversationDetail(ref: item.chatID, conv: conv, chats: chats)
+                    }
+                } else if let s = saved.saves.first(where: { ActivityRowModel.savedPrefix + $0.id == id }) {
+                    ConversationDetail(ref: s.chatID, conv: conv, chats: chats)
                 } else {
-                    ConversationDetail(ref: item.chatID, conv: conv, chats: chats)
+                    NoSelectionPane("No Item Selected")
                 }
-            } else if let s = saved.saves.first(where: { ActivityRowModel.savedPrefix + $0.id == id }) {
-                ConversationDetail(ref: s.chatID, conv: conv, chats: chats)
             } else {
                 NoSelectionPane("No Item Selected")
             }
-        } else {
-            NoSelectionPane("No Item Selected")
         }
     }
 
@@ -387,7 +391,9 @@ struct ActivityInspectorPane: View {
     @Environment(\.windowModel) private var model
 
     var body: some View {
-        ConversationInspector(ref: ref, chats: chats, unread: unread)
+        WithPerceptionTracking {
+            ConversationInspector(ref: ref, chats: chats, unread: unread)
+        }
     }
 
     private var ref: String? {

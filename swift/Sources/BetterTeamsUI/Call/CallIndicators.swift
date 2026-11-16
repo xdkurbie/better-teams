@@ -7,6 +7,7 @@
 import AppKit
 import OstMacCore
 import SwiftUI
+import Perception
 
 /// Toolbar item views for call commands (the shell asks once, when
 /// NSToolbar creates the item; nil = a standard item).
@@ -123,18 +124,20 @@ struct CallRailItem: View {
     let height: CGFloat
 
     var body: some View {
-        let selected = current == .call
-        Button {
-            navigator.select(section: .call)
-        } label: {
-            RailButtonLabel(title: session.indicatorText, symbol: session.video ? "video.fill" : "phone.connection.fill",
-                            badge: nil)
-                .monospacedDigit()
+        WithPerceptionTracking {
+            let selected = current == .call
+            Button {
+                navigator.select(section: .call)
+            } label: {
+                RailButtonLabel(title: session.indicatorText, symbol: session.video ? "video.fill" : "phone.connection.fill",
+                                badge: nil)
+                    .monospacedDigit()
+            }
+            .buttonStyle(RailButtonStyle(selected: selected, height: height))
+            .help("Current Call")
+            .accessibilityLabel(CallDuration.accessibility(session.connected ? session.elapsed : nil))
+            .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
         }
-        .buttonStyle(RailButtonStyle(selected: selected, height: height))
-        .help("Current Call")
-        .accessibilityLabel(CallDuration.accessibility(session.connected ? session.elapsed : nil))
-        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
     }
 }
 
@@ -144,9 +147,11 @@ struct CallDurationText: View {
     var scale: Double = 1
 
     var body: some View {
-        Text(session.connected ? "\(session.title) · \(session.indicatorText)" : session.title)
-            .font(AppFont.subheadline(scale))
-            .foregroundStyle(.secondary)
-            .monospacedDigit()
+        WithPerceptionTracking {
+            Text(session.connected ? "\(session.title) · \(session.indicatorText)" : session.title)
+                .font(AppFont.subheadline(scale))
+                .compatForeground(.secondary)
+                .monospacedDigit()
+        }
     }
 }

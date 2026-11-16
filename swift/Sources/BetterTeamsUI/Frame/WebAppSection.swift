@@ -8,6 +8,7 @@ import AppKit
 import OstMacCore
 import SwiftUI
 import WebKit
+import Perception
 
 @MainActor
 final class WebAppSection: SectionProvider {
@@ -151,13 +152,15 @@ private struct WebAppDetail: View {
     @Environment(\.windowModel) private var model
 
     var body: some View {
-        if let m = model {
-            if let app = m.frameHost.library.app(appID) {
-                content(app, m)
-            } else {
-                EmptyPane("App Unavailable", systemImage: "questionmark.square.dashed",
-                          message: "This app is no longer in your library.") {
-                    Button("Show Apps") { m.navigator?.select(section: .apps) }
+        WithPerceptionTracking {
+            if let m = model {
+                if let app = m.frameHost.library.app(appID) {
+                    content(app, m)
+                } else {
+                    EmptyPane("App Unavailable", systemImage: "questionmark.square.dashed",
+                              message: "This app is no longer in your library.") {
+                        Button("Show Apps") { m.navigator?.select(section: .apps) }
+                    }
                 }
             }
         }
