@@ -44,7 +44,7 @@ struct ChatsPane: View {
     var body: some View {
         WithPerceptionTracking {
             Form {
-                Section("Messages") {
+                Section(header: Text("Messages")) {
                     Toggle(isOn: $settings.returnSends) {
                         InfoLabel(title: "Return sends the message", subject: "the Return key",
                                   text: settings.returnSends ? "Shift-Return starts a new line." : "Shift-Return sends; Return starts a new line.")
@@ -70,8 +70,8 @@ struct ChatsPane: View {
                     .frame(height: 96)
                     .onChange(of: template) { id in load(id) }
                     TextField("Name", text: $templateTitle)
-                    TextField("Text", text: $templateBody, axis: .vertical)
-                        .lineLimit(2...5)
+                    TextField("Text", text: $templateBody)
+                        .lineLimit(5)
                     HStack {
                         Button(template == nil ? "Add Template" : "Save") { saveTemplate() }
                             .disabled(templateTitle.isEmpty || templateBody.isEmpty)
@@ -88,7 +88,7 @@ struct ChatsPane: View {
                         Text(templateIssue).font(.caption).compatForeground(.secondary)
                     }
                 }
-                Section("Scheduled Messages") {
+                Section(header: Text("Scheduled Messages")) {
                     if scheduled.items.isEmpty {
                         Text("No scheduled messages.").compatForeground(.secondary)
                     } else {
@@ -112,7 +112,7 @@ struct ChatsPane: View {
                 } header: {
                     Text("Privacy")
                 }
-                Section("Blocked People") {
+                Section(header: Text("Blocked People")) {
                     if blocked.users.isEmpty {
                         Text("No one is blocked.").compatForeground(.secondary)
                     } else {

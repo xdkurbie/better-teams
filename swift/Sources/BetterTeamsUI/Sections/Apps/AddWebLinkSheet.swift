@@ -54,7 +54,7 @@ struct AddWebLinkSheet: View {
     }
 
     private func prompt(_ s: String) -> Text {
-        Text(s).compatForeground(Color(nsColor: .placeholderTextColor))
+        Text(s).foregroundColor(Color(nsColor: .placeholderTextColor))
     }
 
     private func add() {

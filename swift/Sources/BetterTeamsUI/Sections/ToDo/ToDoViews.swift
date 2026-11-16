@@ -242,7 +242,7 @@ struct ToDoTaskRow: View {
                 Text(task.title)
                     .font(AppFont.body(scale))
                     .compatForeground(task.completed ? .secondary : .primary)
-                    .strikethrough(task.completed)
+                    .strikethrough(task.completed, color: .secondary)
                     .lineLimit(1)
                     .truncationMode(.tail)
                     .frame(maxWidth: .infinity, alignment: .leading)

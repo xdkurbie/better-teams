@@ -28,7 +28,7 @@ struct AccountsPane: View {
     var body: some View {
         WithPerceptionTracking {
             Form {
-                Section("Accounts") {
+                Section(header: Text("Accounts")) {
                     if accounts.accounts.isEmpty {
                         Text(demo ? "The demo doesn\u{2019}t store accounts." : "No accounts.")
                             .compatForeground(.secondary)

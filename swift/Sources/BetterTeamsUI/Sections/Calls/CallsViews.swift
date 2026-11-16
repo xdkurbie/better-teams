@@ -74,7 +74,7 @@ struct CallsListPane: View {
                 }
             }
             if !dial.isEmpty {
-                Section("Speed Dial") {
+                Section(header: Text("Speed Dial")) {
                     ForEach(dial) { c in
                         HStack(spacing: 8) {
                             Avatar(name: c.displayName, person: ContactRef(c))
@@ -95,7 +95,7 @@ struct CallsListPane: View {
                     .onMove { contacts.movePins(fromOffsets: $0, toOffset: $1) }
                 }
             }
-            Section("Recent") {
+            Section(header: Text("Recent")) {
                 ForEach(rows) { r in
                     CallsRow(row: r, now: now).tag(r.id)
                         .modifier(CallsRowAccessibility(id: r.id, m: m))
@@ -156,22 +156,20 @@ private struct CallsRowAccessibility: ViewModifier {
                 content
             } else if let p = CallsSection.person(id, m) {
                 let idle = m.call.map(\.ended) ?? true
-                content.accessibilityActions {
-                    if !p.thread.isEmpty, idle {
-                        Button("Call Back") { CallsSection.call(p, m) }
+                content
+                    .accessibilityAction(named: "Call Back") {
+                        if !p.thread.isEmpty, idle { CallsSection.call(p, m) }
                     }
-                    if CallsSection.chatID(p, m) != nil {
-                        Button("Message") { CallsSection.message(p, m) }
+                    .accessibilityAction(named: "Message") {
+                        if CallsSection.chatID(p, m) != nil { CallsSection.message(p, m) }
                     }
-                    if CallsSection.isPinned(p, m) {
-                        Button("Remove from Speed Dial") { CallsSection.removeFromSpeedDial(p, m) }
-                    } else if CallsSection.member(p) != nil {
-                        Button("Add to Speed Dial") { CallsSection.addToSpeedDial(p, m) }
+                    .accessibilityAction(named: "Speed Dial") {
+                        if CallsSection.isPinned(p, m) { CallsSection.removeFromSpeedDial(p, m) }
+                        else if CallsSection.member(p) != nil { CallsSection.addToSpeedDial(p, m) }
                     }
-                    if CallsSection.isRecent(id) {
-                        Button("Remove from Recents") { CallsSection.removeFromRecents([id], m) }
+                    .accessibilityAction(named: "Remove from Recents") {
+                        if CallsSection.isRecent(id) { CallsSection.removeFromRecents([id], m) }
                     }
-                }
             } else {
                 content
             }
@@ -300,7 +298,7 @@ struct CallsDetailPane: View {
                 .padding(.vertical, 8)
             }
             if !recent.isEmpty {
-                Section("Recent Calls") {
+                Section(header: Text("Recent Calls")) {
                     ForEach(Array(recent)) { r in
                         LabeledContent {
                             Text(ActivityRow.time(r.date, now: now)).monospacedDigit()

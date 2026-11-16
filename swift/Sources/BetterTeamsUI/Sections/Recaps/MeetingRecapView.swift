@@ -280,12 +280,12 @@ struct MeetingRecapView: View {
         case .loaded(let ai):
             List {
                 if !ai.notes.isEmpty {
-                    Section("Meeting Notes") {
+                    Section(header: Text("Meeting Notes")) {
                         ForEach(Self.rows(ai.notes, "note"), id: \.id) { r in Text(r.text).textSelection(.enabled) }
                     }
                 }
                 if !ai.followUps.isEmpty {
-                    Section("Follow-up Tasks") {
+                    Section(header: Text("Follow-up Tasks")) {
                         ForEach(Self.rows(ai.followUps, "task"), id: \.id) { r in
                             Label(r.text, systemImage: "checkmark.circle").textSelection(.enabled)
                         }

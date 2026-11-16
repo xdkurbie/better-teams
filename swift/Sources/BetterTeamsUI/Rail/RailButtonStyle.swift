@@ -65,10 +65,10 @@ private struct RailButtonBody: View {
 
     private var background: AnyShapeStyle {
         if isSelected {
-            return isKey ? AnyShapeStyle(.tint.quaternary) : AnyShapeStyle(.fill.tertiary)
+            return isKey ? AnyShapeStyle(CompatFill.tintQuaternary) : AnyShapeStyle(CompatFill.tertiary)
         }
-        if pressed { return AnyShapeStyle(.fill.tertiary) }
-        if hovered { return AnyShapeStyle(.fill.quaternary) }
+        if pressed { return AnyShapeStyle(CompatFill.tertiary) }
+        if hovered { return AnyShapeStyle(CompatFill.quaternary) }
         return AnyShapeStyle(.clear)
     }
 }

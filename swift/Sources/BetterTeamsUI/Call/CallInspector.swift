@@ -58,7 +58,7 @@ private struct CallPeopleList: View {
                 if let lobby = session.meetingVideo?.lobbyQueue {
                     LobbySection(lobby: lobby)
                 }
-                Section("In This Call (\(people.count))") {
+                Section(header: Text("In This Call (\(people.count))")) {
                     ForEach(people) { p in
                         HStack(spacing: 8) {
                             Avatar(name: p.name)

@@ -111,7 +111,7 @@ private struct AppStoreCard: View {
                     }
                     Text(app.developer ?? "").font(.caption).compatForeground(.secondary).lineLimit(1)
                     Text(app.shortDescription ?? "").font(.callout).compatForeground(.secondary)
-                        .lineLimit(2, reservesSpace: true)
+                        .lineLimit(2)
                         .padding(.top, 2)
                 }
                 Spacer(minLength: 0)

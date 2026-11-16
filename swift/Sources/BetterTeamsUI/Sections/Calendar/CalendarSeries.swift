@@ -21,7 +21,7 @@ struct SeriesLinks: View {
                 }
                 Button("Show All Instances") { CalendarSection.showInstances(meeting, model) }
             }
-            .menuStyle(.button)
+            .compatMenuButton()
             .controlSize(.small)
             .fixedSize()
         }

@@ -317,7 +317,7 @@ private struct GIFThumb: View {
     var body: some View {
         WithPerceptionTracking {
             ZStack {
-                RoundedRectangle(cornerRadius: 6, style: .continuous).fill(.fill.quaternary)
+                RoundedRectangle(cornerRadius: 6, style: .continuous).fill(CompatFill.quaternary)
                 if let img = model.image {
                     Image(nsImage: img).resizable().aspectRatio(contentMode: .fill)
                 } else if case .failed = model.phase {

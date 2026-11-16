@@ -111,7 +111,7 @@ struct AIPane: View {
     /// The pre-AICATCH provider picker, reachable only with the hidden
     /// defaults key set.
     @ViewBuilder private var deprecatedProviderSection: some View {
-        Section("Provider (Deprecated)") {
+        Section(header: Text("Provider (Deprecated)")) {
             Picker("Provider", selection: Binding(get: { catchUp.config.provider },
                                                   set: { catchUp.selectProvider($0) })) {
                 ForEach(CatchUpProvider.allCases) { Text($0.title).tag($0) }

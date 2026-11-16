@@ -13,13 +13,12 @@ struct RailView: View {
     let navigator: Navigator
     @ObservedObject var badges: RailBadgeFeed
     @Environment(\.windowModel) private var model
-    @Environment(\.sidebarRowSize) private var systemRowSize
     @State private var railHeight: CGFloat = 0
 
     var body: some View {
         WithPerceptionTracking {
             if let model {
-                let h = RailModel.itemHeight(model.options.railSize ?? RailSize(systemRowSize))
+                let h = RailModel.itemHeight(model.options.railSize ?? .medium)
                 let call = model.call.flatMap { $0.showsRailItem ? $0 : nil }
                 let fixed = SectionID.builtIns.count + 1 + (model.rail.transient == nil ? 0 : 1) + (call == nil ? 0 : 1)
                 let layout = RailModel.layout(railHeight: railHeight, itemHeight: h,
@@ -120,7 +119,7 @@ struct RailView: View {
         } label: {
             RailButtonLabel(title: "More", symbol: "ellipsis", badge: nil)
         }
-        .menuStyle(.button)
+        .compatMenuButton()
         .menuIndicator(.hidden)
         .buttonStyle(RailButtonStyle(selected: active, height: height))
         .help("More Apps")
@@ -168,12 +167,3 @@ enum RailInfo {
     }
 }
 
-extension RailSize {
-    init(_ s: SidebarRowSize) {
-        switch s {
-        case .small: self = .small
-        case .large: self = .large
-        default: self = .medium
-        }
-    }
-}

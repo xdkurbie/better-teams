@@ -151,18 +151,19 @@ struct ChatTabBar: View {
 
     var body: some View {
         WithPerceptionTracking {
-            if #available(macOS 13, *) {
-                ViewThatFits(in: .horizontal) {
-                    ForEach(layout.folds(selected: selection, opened: temporary)) { fold in
-                        row(fold, limit: ChatTabLayout.maxSegmentTitle)
+            Group {
+                if #available(macOS 13, *) {
+                    ViewThatFits(in: .horizontal) {
+                        ForEach(layout.folds(selected: selection, opened: temporary)) { fold in
+                            row(fold, limit: ChatTabLayout.maxSegmentTitle)
+                        }
+                        if let narrowest = layout.folds(selected: selection, opened: temporary).last {
+                            row(narrowest, limit: ChatTabLayout.compactSegmentTitle)
+                        }
                     }
-                    // Last resort in a narrow pane: the selected tab alone, shorter.
-                    if let narrowest = layout.folds(selected: selection, opened: temporary).last {
-                        row(narrowest, limit: ChatTabLayout.compactSegmentTitle)
-                    }
+                } else if let narrowest = layout.folds(selected: selection, opened: temporary).last {
+                    row(narrowest, limit: ChatTabLayout.compactSegmentTitle)
                 }
-            } else if let narrowest = layout.folds(selected: selection, opened: temporary).last {
-                row(narrowest, limit: ChatTabLayout.compactSegmentTitle)
             }
             .accessibilityElement(children: .contain)
             .accessibilityLabel("Tabs")
@@ -196,7 +197,7 @@ struct ChatTabBar: View {
                 } label: {
                     Text("More")
                 }
-                .menuStyle(.button)
+                .compatMenuButton()
                 .fixedSize()
                 .help("More Tabs")
                 .accessibilityLabel(fold.more.isEmpty ? "More Tabs" : "\(fold.more.count) More Tabs")
@@ -265,9 +266,6 @@ struct ChatTabSegments: NSViewRepresentable {
         control.selectedSegment = selected ?? -1
     }
 
-    func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSSegmentedControl, context: Context) -> CGSize? {
-        nsView.intrinsicContentSize
-    }
 }
 
 /// One pinned tab's pane.

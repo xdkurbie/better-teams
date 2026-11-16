@@ -233,7 +233,7 @@ struct TeamInspector: View {
             let members = TeamRosterViewModel.nonOwners(of: sorted)
             Form {
                 if !owners.isEmpty {
-                    Section("Owners (\(owners.count))") {
+                    Section(header: Text("Owners (\(owners.count))")) {
                         ForEach(owners) { memberRow($0) }
                     }
                 }

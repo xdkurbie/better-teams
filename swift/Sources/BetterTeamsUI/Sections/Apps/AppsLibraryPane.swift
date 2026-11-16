@@ -53,7 +53,7 @@ struct AppsListPane: View {
         return List(selection: selection) {
             if !filtering {
                 // The Apps store (APPHOST-B2): all apps, then categories.
-                Section("Discover") {
+                Section(header: Text("Discover")) {
                     StoreNavRow(title: AppStoreRoute.all, symbol: "square.grid.2x2")
                         .tag("\(AppStoreRoute.group)|\(AppStoreRoute.categoryPrefix)\(AppStoreRoute.all)")
                     ForEach(library.store.categories.map(NamedItem.init)) { c in
@@ -63,30 +63,30 @@ struct AppsListPane: View {
                 }
             }
             if !pinned.isEmpty {
-                Section("Pinned") {
+                Section(header: Text("Pinned")) {
                     ForEach(pinned) { AppRow(item: $0, pinned: true).tag("pinned|\($0.id)") }
                 }
             }
             if !builtIns.isEmpty {
-                Section("Built-in") {
+                Section(header: Text("Built-in")) {
                     ForEach(builtIns) { AppRow(item: $0, pinned: pinnedSet.contains($0.entry)).tag($0.id) }
                 }
             }
             if personal {
-                Section("Personal Apps") {
+                Section(header: Text("Personal Apps")) {
                     // Installed apps from the Teams app catalog, hosted natively.
                     ForEach(apps) { AppRow(item: $0, pinned: pinnedSet.contains($0.entry)).tag($0.id) }
                 }
             }
             if !links.isEmpty {
-                Section("Web Links") {
+                Section(header: Text("Web Links")) {
                     ForEach(links) { AppRow(item: $0, pinned: pinnedSet.contains($0.entry)).tag($0.id) }
                 }
             }
         }
         // The list's top edge draws no full-width rule above whichever
         // section comes first; the rules between sections stay inset.
-        .listSectionSeparator(.hidden, edges: .top)
+        .compatListSectionSeparator()
         .listStyle(.inset)
         .compatSelectionMenu(forSelectionType: String.self) { tags in
             if let tag = tags.first, let item = library.item(Self.selection(for: tag).id ?? "") {
@@ -245,7 +245,7 @@ private struct AppCard: View {
                     .symbolRenderingMode(.hierarchical)
                     .compatForeground(.tint)
                     .frame(width: 64, height: 64)
-                    .background(.tint.quaternary, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .background(CompatFill.tintQuaternary, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(item.title).font(.title2.compatWeight(.semibold))

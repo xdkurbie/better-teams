@@ -201,7 +201,7 @@ struct FilePopoutView: View {
                             Text(file.name).font(.headline).lineLimit(2).truncationMode(.middle).textSelection(.enabled)
                         }
                     }
-                    Section("Info") {
+                    Section(header: Text("Info")) {
                         LabeledContent("Kind", value: Self.kind(file))
                         if !file.isFolder { LabeledContent("Size", value: FilesFormat.size(file.size)) }
                         if let m = file.modified ?? file.created { LabeledContent("Modified", value: FilesFormat.date(iso: m)) }

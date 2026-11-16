@@ -111,7 +111,7 @@ final class CallDevicesButton: NSButton {
 
 extension CallToolbar {
     static func devicesButton(in toolbar: NSToolbar?) -> NSView? {
-        toolbar?.items.first { $0.itemIdentifier.rawValue == CallCommands.devices.rawValue && !$0.isHidden }?.view
+        toolbar?.items.first { $0.itemIdentifier.rawValue == CallCommands.devices.rawValue && !$0.btHidden }?.view
     }
 }
 

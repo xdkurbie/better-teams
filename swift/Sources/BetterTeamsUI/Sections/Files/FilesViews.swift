@@ -38,7 +38,7 @@ struct FilesSourceList: View {
                 row(.shared)
             }
             if !teams.teams.isEmpty {
-                Section("Teams") {
+                Section(header: Text("Teams")) {
                     ForEach(teams.teams) { team in
                         DisclosureGroup(isExpanded: expanded(team, current)) {
                             ForEach(team.channels) { c in
@@ -368,7 +368,7 @@ struct FilesInspector: View {
                     Text(it.name).font(AppFont.bodyEmphasized(m.textScale)).lineLimit(2).truncationMode(.middle)
                 }
             }
-            Section("Info") {
+            Section(header: Text("Info")) {
                 LabeledContent("Kind", value: it.kindLabel)
                 if !it.isFolder { LabeledContent("Size", value: FilesFormat.size(it.size)) }
                 LabeledContent("Modified", value: FilesFormat.date(it.modified))
@@ -396,7 +396,7 @@ struct FilesInspector: View {
                 }
             }
             if let row = it.row, !it.isFolder, row.file.drive_id != nil {
-                Section("Versions") {
+                Section(header: Text("Versions")) {
                     versionList(row.file.id)
                 }
             }

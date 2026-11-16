@@ -3,7 +3,7 @@
 //
 // The identifier list is the fixed superset of every item any state can
 // show, created once at window creation. Items are never inserted,
-// removed, or recreated after launch; `sync(visible:)` flips `isHidden`
+// removed, or recreated after launch; `sync(visible:)` flips `btHidden`
 // on the difference. Enablement comes from validation, never hiding.
 //
 //   sidebarTracking | list group | list·detail tracking | detail group
@@ -114,23 +114,23 @@ final class ShellToolbarController: NSObject, NSToolbarDelegate, NSSearchFieldDe
         items[Self.ident(ShellCommand.search)] as? NSSearchToolbarItem
     }
 
-    /// Flips `isHidden` on the difference (never insert/remove).
+    /// Flips `btHidden` on the difference (never insert/remove).
     func sync(visible: Set<CommandID>) {
         lastVisible = visible
         for id in commandIDs {
             guard let item = items[Self.ident(id)] else { continue }
             let hidden = !visible.contains(id)
-            if item.isHidden != hidden { item.isHidden = hidden }
+            if item.btHidden != hidden { item.btHidden = hidden }
         }
     }
 
     func setListSeparatorHidden(_ hidden: Bool) {
         listSeparatorHidden = hidden
-        if let item = items[.listDetailSeparator], item.isHidden != hidden { item.isHidden = hidden }
+        if let item = items[.listDetailSeparator], item.btHidden != hidden { item.btHidden = hidden }
     }
 
     func isVisible(_ id: CommandID) -> Bool {
-        items[Self.ident(id)].map { !$0.isHidden } ?? false
+        items[Self.ident(id)].map { !$0.btHidden } ?? false
     }
 
     /// Connection item: one item, relabeled per state (§5.7).
@@ -173,10 +173,10 @@ final class ShellToolbarController: NSObject, NSToolbarDelegate, NSSearchFieldDe
         } else if ident == .listDetailSeparator {
             guard let splitView else { return nil }
             item = NSTrackingSeparatorToolbarItem(identifier: ident, splitView: splitView, dividerIndex: 1)
-            item?.isHidden = listSeparatorHidden
+            item?.btHidden = listSeparatorHidden
         } else if let cmd = CommandCatalog.command(CommandID(ident.rawValue)) {
             item = makeItem(cmd, ident)
-            if let v = lastVisible { item?.isHidden = !v.contains(cmd.id) }
+            if let v = lastVisible { item?.btHidden = !v.contains(cmd.id) }
         } else {
             item = nil
         }

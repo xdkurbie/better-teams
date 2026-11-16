@@ -57,7 +57,7 @@ private struct TeamsSheetFrame<Content: View>: View {
 /// Field prompt in the system placeholder color, so a prompt never
 /// reads as a typed value in dark sheets (§10).
 private func prompt(_ s: String) -> Text {
-    Text(s).compatForeground(Color(nsColor: .placeholderTextColor))
+    Text(s).foregroundColor(Color(nsColor: .placeholderTextColor))
 }
 
 private func trimmed(_ s: String) -> String { s.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -76,8 +76,8 @@ struct CreateTeamSheet: View {
                             error: submitted ? teams.teamCreateError : nil, perform: create) {
                 Form {
                     TextField("Name", text: $name, prompt: prompt("Team name"))
-                    TextField("Description", text: $about, prompt: prompt("Optional"), axis: .vertical)
-                        .lineLimit(2...4)
+                    TextField("Description", text: $about, prompt: prompt("Optional"))
+                        .lineLimit(4)
                 }
                 .compatFormStyleColumns()
                 HStack {
@@ -266,8 +266,8 @@ struct CreateChannelSheet: View {
                         ForEach(teams.teams) { t in Text(t.name).tag(t.teamId) }
                     }
                     TextField("Name", text: $name, prompt: prompt("Channel name"))
-                    TextField("Description", text: $about, prompt: prompt("Optional"), axis: .vertical)
-                        .lineLimit(2...4)
+                    TextField("Description", text: $about, prompt: prompt("Optional"))
+                        .lineLimit(4)
                 }
                 .compatFormStyleColumns()
             }
@@ -313,8 +313,8 @@ struct EditChannelSheet: View {
                     // Same fields, disabled, so the sheet keeps its size.
                     Form {
                         TextField("Name", text: .constant(""), prompt: prompt("Channel name"))
-                        TextField("Description", text: .constant(""), prompt: prompt("Optional"), axis: .vertical)
-                            .lineLimit(2...4)
+                        TextField("Description", text: .constant(""), prompt: prompt("Optional"))
+                            .lineLimit(4)
                     }
                     .compatFormStyleColumns()
                     .disabled(true)
@@ -355,8 +355,8 @@ private struct EditChannelForm: View {
                             error: submitted ? teams.actionError : nil, perform: save) {
                 Form {
                     TextField("Name", text: $name, prompt: prompt("Channel name"))
-                    TextField("Description", text: $about, prompt: prompt("Optional"), axis: .vertical)
-                        .lineLimit(2...4)
+                    TextField("Description", text: $about, prompt: prompt("Optional"))
+                        .lineLimit(4)
                 }
                 .compatFormStyleColumns()
             }

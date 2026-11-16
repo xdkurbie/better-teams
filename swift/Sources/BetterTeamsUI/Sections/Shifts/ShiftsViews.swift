@@ -73,7 +73,12 @@ struct ShiftsWeekPane: View {
         return Table(rows, selection: selection) {
             TableColumn("Member") { row in ShiftsPersonCell(row: row) }
                 .width(min: 140, ideal: 180)
-            TableColumnForEach(days) { day in
+            if #available(macOS 14.4, *) {
+                TableColumnForEach(days) { day in
+                    TableColumn(day.title) { row in ShiftsDayCell(cells: row.days[day.id]) }
+                        .width(min: 96, ideal: 130)
+                }
+            } else if let day = days.first {
                 TableColumn(day.title) { row in ShiftsDayCell(cells: row.days[day.id]) }
                     .width(min: 96, ideal: 130)
             }

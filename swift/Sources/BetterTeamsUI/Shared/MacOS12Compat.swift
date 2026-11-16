@@ -26,6 +26,47 @@ extension View {
     }
 }
 
+/// Hierarchical fills introduced in macOS 14. macOS 12 uses a faint primary wash.
+enum CompatFill {
+    static var quaternary: AnyShapeStyle {
+        if #available(macOS 14, *) { return AnyShapeStyle(.fill.quaternary) }
+        return AnyShapeStyle(Color.primary.opacity(0.06))
+    }
+    static var tertiary: AnyShapeStyle {
+        if #available(macOS 14, *) { return AnyShapeStyle(.fill.tertiary) }
+        return AnyShapeStyle(Color.primary.opacity(0.10))
+    }
+    static var quinary: AnyShapeStyle {
+        if #available(macOS 14, *) { return AnyShapeStyle(.fill.quinary) }
+        return AnyShapeStyle(Color.primary.opacity(0.04))
+    }
+    static var tintQuaternary: AnyShapeStyle {
+        if #available(macOS 14, *) { return AnyShapeStyle(.tint.quaternary) }
+        return AnyShapeStyle(Color.accentColor.opacity(0.15))
+    }
+}
+
+extension NSToolbarItem {
+    /// `isHidden` is macOS 15. On older systems the item stays visible.
+    var btHidden: Bool {
+        get {
+            if #available(macOS 15, *) { return isHidden }
+            return false
+        }
+        set {
+            if #available(macOS 15, *) { isHidden = newValue }
+        }
+    }
+}
+
+func activateApp() {
+    if #available(macOS 14, *) {
+        NSApp.activate()
+    } else {
+        NSApp.activate(ignoringOtherApps: true)
+    }
+}
+
 enum MontereyInk {
     /// Best-effort Color for a ShapeStyle the macOS 12 foreground API can draw.
     static func color<S: ShapeStyle>(_ style: S) -> Color {
@@ -111,8 +152,45 @@ extension View {
 
     @ViewBuilder
     func compatScrollBounceBasedOnSize() -> some View {
-        if #available(macOS 13, *) {
+        if #available(macOS 13.3, *) {
             self.scrollBounceBehavior(.basedOnSize)
+        } else {
+            self
+        }
+    }
+
+    /// `.menuStyle(.button)` is macOS 13. Older systems use the borderless menu style.
+    @ViewBuilder
+    func compatMenuButton() -> some View {
+        if #available(macOS 13, *) {
+            self.menuStyle(.button)
+        } else {
+            self.menuStyle(.borderlessButton)
+        }
+    }
+
+    @ViewBuilder
+    func compatSelectionDisabled() -> some View {
+        if #available(macOS 14, *) {
+            self.selectionDisabled()
+        } else {
+            self
+        }
+    }
+
+    @ViewBuilder
+    func compatBadgeProminence() -> some View {
+        if #available(macOS 14, *) {
+            self.badgeProminence(.increased)
+        } else {
+            self
+        }
+    }
+
+    @ViewBuilder
+    func compatListSectionSeparator() -> some View {
+        if #available(macOS 13, *) {
+            self.listSectionSeparator(.hidden)
         } else {
             self
         }

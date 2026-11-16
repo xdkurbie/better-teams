@@ -1420,7 +1420,9 @@ public final class FrameHost {
         config.mediaTypesRequiringUserActionForPlayback = .all
         // A pane out of the window, idle, is suspended by WebKit: no
         // script, timers or layout until it is shown again (APPEFF R3).
-        config.preferences.inactiveSchedulingPolicy = .suspend
+        if #available(macOS 14, *) {
+            config.preferences.inactiveSchedulingPolicy = .suspend
+        }
         // Telemetry / analytics beacons never leave a pane (APPEFF R5).
         if !isDemo { PaneContentRules.apply(to: config.userContentController) }
         var js: TeamsJSHost?

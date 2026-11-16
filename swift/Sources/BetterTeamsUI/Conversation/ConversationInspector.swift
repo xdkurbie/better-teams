@@ -104,7 +104,7 @@ struct InfoPane: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 6)
                 }
-                Section("Notifications") {
+                Section(header: Text("Notifications")) {
                     Picker("Notify Me", selection: Binding(get: { rules.level(chatID: ref) },
                                                            set: { rules.setLevel(chatID: ref, level: $0) })) {
                         Text("All Messages").tag(ChatNotifyLevel.all)
@@ -131,7 +131,7 @@ struct InfoPane: View {
                     Toggle("Pin to Top of List", isOn: Binding(get: { chats.isPinned(ref) },
                                                               set: { $0 ? chats.pin(ref) : chats.unpin(ref) }))
                 }
-                Section("People in This Conversation") {
+                Section(header: Text("People in This Conversation")) {
                     if let app = model?.app {
                         RosterPeople(chatID: ref, roster: app.chatRoster, presence: app.presence, isGroup: isGroup) {
                             senderPeople(isGroup: isGroup, messages: messages)
@@ -389,7 +389,7 @@ struct CatchUpPane: View {
                 CatchUpMentionsSection(mentions: flagged, collapsed: $digest.mentionsCollapsed,
                                        chatName: { _ in nil }, open: jump)
             }
-            Section("Summary") {
+            Section(header: Text("Summary")) {
                 if parsed.isEmpty {
                     Text(text).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
                 } else {
@@ -398,7 +398,7 @@ struct CatchUpPane: View {
                                        dismiss: { feedback.dismiss($0, chatID: chatID) })
                 }
             }
-            Section("Action Items") {
+            Section(header: Text("Action Items")) {
                 if parsed.actions.isEmpty {
                     actionItems(updating: updating)
                 } else if actions.isEmpty {

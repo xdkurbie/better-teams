@@ -130,7 +130,7 @@ struct MeetingTileView: View {
     var body: some View {
         WithPerceptionTracking {
             ZStack {
-                RoundedRectangle(cornerRadius: 10, style: .continuous).fill(.fill.tertiary)
+                RoundedRectangle(cornerRadius: 10, style: .continuous).fill(CompatFill.tertiary)
                 if showsVideo {
                     videoLayer.transition(.opacity)
                 } else {
@@ -216,7 +216,7 @@ private struct RemoteShareView: View {
     var body: some View {
         WithPerceptionTracking {
             ZStack {
-                RoundedRectangle(cornerRadius: 10, style: .continuous).fill(.fill.tertiary)
+                RoundedRectangle(cornerRadius: 10, style: .continuous).fill(CompatFill.tertiary)
                 if let img = model.remoteImage {
                     Image(decorative: img, scale: 1)
                         .resizable()
@@ -273,7 +273,7 @@ private struct DemoShareView: View {
     var body: some View {
         WithPerceptionTracking {
             ZStack {
-                RoundedRectangle(cornerRadius: 10, style: .continuous).fill(.fill.tertiary)
+                RoundedRectangle(cornerRadius: 10, style: .continuous).fill(CompatFill.tertiary)
                 if let slide = DemoSlide.image {
                     Image(nsImage: slide)
                         .resizable()

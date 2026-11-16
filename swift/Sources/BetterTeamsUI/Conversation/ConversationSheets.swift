@@ -55,7 +55,7 @@ struct ForwardSheet: View {
                 }
                 .padding(10)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(.fill.quaternary, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .background(CompatFill.quaternary, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                 SearchField(text: $query, placeholder: "Search Chats")
                     .frame(height: 24)
                 // Group label over a bordered list (the in-sheet list idiom,

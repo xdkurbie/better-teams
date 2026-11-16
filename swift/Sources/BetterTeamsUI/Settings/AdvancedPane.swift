@@ -36,7 +36,7 @@ struct AdvancedPane: View {
     var body: some View {
         WithPerceptionTracking {
             Form {
-                Section("Diagnostics") {
+                Section(header: Text("Diagnostics")) {
                     LabeledContent("Core", value: app.coreLine)
                     LabeledContent("Session", value: app.sessionLine)
                     LabeledContent("Realtime", value: app.feedWord)
@@ -48,7 +48,7 @@ struct AdvancedPane: View {
                         }
                     }
                 }
-                Section("MCP") {
+                Section(header: Text("MCP")) {
                     LabeledContent("Server", value: Self.mcpHelper == nil ? "Not included in this build" : "Installed")
                     if let url = Self.mcpHelper {
                         LabeledContent("Location") {

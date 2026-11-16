@@ -224,7 +224,7 @@ struct CallTileView: View {
     var body: some View {
         WithPerceptionTracking {
             ZStack {
-                RoundedRectangle(cornerRadius: 10, style: .continuous).fill(.fill.tertiary)
+                RoundedRectangle(cornerRadius: 10, style: .continuous).fill(CompatFill.tertiary)
                 content
             }
             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))

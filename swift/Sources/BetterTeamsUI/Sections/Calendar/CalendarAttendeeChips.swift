@@ -24,7 +24,7 @@ struct AttendeeChipsEditor: View {
                 }
                 HStack(spacing: 6) {
                     TextField("Attendees", text: $typed,
-                              prompt: Text("Add people: name@example.com; \u{2026}").compatForeground(Color(nsColor: .placeholderTextColor)))
+                              prompt: Text("Add people: name@example.com; \u{2026}").foregroundColor(Color(nsColor: .placeholderTextColor)))
                         .onSubmit(addTyped)
                     Button("Add", action: addTyped)
                         .disabled(CalendarWeekStore.recipients(typed).isEmpty)

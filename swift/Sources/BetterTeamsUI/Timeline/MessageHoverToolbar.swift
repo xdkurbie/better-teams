@@ -380,7 +380,7 @@ struct MessageHoverToolbar: View {
                 } label: {
                     Image(systemName: "ellipsis")
                 }
-                .menuStyle(.button)
+                .compatMenuButton()
                 .menuIndicator(.hidden)
                 .buttonStyle(.borderless)
                 .fixedSize()

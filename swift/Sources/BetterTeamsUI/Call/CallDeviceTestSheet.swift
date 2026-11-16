@@ -36,8 +36,8 @@ struct CallDeviceTestSheet: View {
                             ForEach(devices.mics, id: \.description) { Text($0).tag($0) }
                         }
                         LabeledContent("Input Level") {
-                            Gauge(value: devices.levelLive ? devices.level : 0) { EmptyView() }
-                                .gaugeStyle(.accessoryLinearCapacity)
+                            ProgressView(value: devices.levelLive ? devices.level : 0)
+                                .progressViewStyle(.linear)
                                 .frame(maxWidth: 160)
                                 .accessibilityLabel(devices.levelLive ? "Input level" : "No input")
                         }

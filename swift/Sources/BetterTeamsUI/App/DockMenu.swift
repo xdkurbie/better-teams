@@ -88,7 +88,7 @@ final class AppMenuActions: NSObject {
     }
 
     private func bringForward(_ wc: ShellWindowController) {
-        NSApp.activate()
+        activateApp()
         wc.window?.makeKeyAndOrderFront(nil)
     }
 

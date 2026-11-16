@@ -313,7 +313,7 @@ private struct RecapInspectorDetail: View {
                     if let d = recording?.durationLabel { LabeledContent("Duration", value: d) }
                     if let s = recording?.source ?? recap.source { LabeledContent("Location", value: s) }
                 }
-                Section("Action Items") { items }
+                Section(header: Text("Action Items")) { items }
                 Section {
                     if let r = recording {
                         Button("Save Recording to Downloads") { recordings.save(r) }

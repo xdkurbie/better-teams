@@ -40,14 +40,14 @@ struct CallsSettingsPane: View {
                     }
                     .pickerStyle(.radioGroup)
                 }
-                Section("Devices") {
+                Section(header: Text("Devices")) {
                     CallDevicesForm(devices: devices)
                     LabeledContent("Test") {
                         Button("Test Speaker and Microphone\u{2026}") { testing = true }
                             .disabled(!devices.loaded)
                     }
                 }
-                Section("Camera") {
+                Section(header: Text("Camera")) {
                     Toggle("Preview camera", isOn: $previewOn)
                     CallTileView(tile: CallTile(id: "self", name: model?.ownDisplayName ?? "You", kind: .selfView,
                                                 speaking: false, muted: false, cameraOn: previewOn),

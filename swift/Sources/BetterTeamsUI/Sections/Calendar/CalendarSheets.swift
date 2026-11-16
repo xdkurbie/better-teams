@@ -55,7 +55,7 @@ private struct CalendarSheetFrame<Content: View>: View {
 }
 
 private func prompt(_ s: String) -> Text {
-    Text(s).compatForeground(Color(nsColor: .placeholderTextColor))
+    Text(s).foregroundColor(Color(nsColor: .placeholderTextColor))
 }
 
 private func trimmed(_ s: String) -> String { s.trimmingCharacters(in: .whitespacesAndNewlines) }

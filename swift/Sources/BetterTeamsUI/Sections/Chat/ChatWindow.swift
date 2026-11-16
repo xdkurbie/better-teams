@@ -168,7 +168,9 @@ final class PopoutToolbar: NSObject, NSToolbarDelegate, NSToolbarItemValidation 
         toolbar.delegate = self
         toolbar.displayMode = .iconOnly
         toolbar.allowsUserCustomization = false
-        toolbar.centeredItemIdentifiers = [Self.tabsItem]
+        if #available(macOS 13, *) {
+            toolbar.centeredItemIdentifiers = [Self.tabsItem]
+        }
         chromeToken = Chrome.observe { [weak toolbar] glass in
             Chrome.apply(.toolbarItems, glass: glass, to: toolbar?.items ?? [])
         }

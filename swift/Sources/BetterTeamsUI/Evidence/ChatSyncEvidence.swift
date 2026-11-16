@@ -101,6 +101,7 @@ enum ChatSyncEvidence {
     static func menuText<V: View>(_ content: V) -> String {
         // NSHostingMenu: the AppKit menu SwiftUI builds from the same
         // menu content (items appear on the menu's update pass).
+        guard #available(macOS 14.4, *) else { return "(menu needs macOS 14.4)\n" }
         let menu = NSHostingMenu(rootView: content)
         menu.delegate?.menuNeedsUpdate?(menu)
         menu.update()

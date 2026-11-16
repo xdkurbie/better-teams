@@ -100,7 +100,7 @@ struct TeamsListPane: View {
             set: { tag in select(tag, m) })
         return List(selection: selection) {
             if !pinned.isEmpty {
-                Section("Pinned") {
+                Section(header: Text("Pinned")) {
                     ForEach(pinned) { p in
                         channelRow(p.channel, team: p.team, showsTeam: true, m)
                     }
@@ -113,7 +113,7 @@ struct TeamsListPane: View {
                     }
                 }
             }
-            Section("Your Teams") {
+            Section(header: Text("Your Teams")) {
                 ForEach(all.filter { !prefs.isHidden($0.teamId) }) { team in
                     DisclosureGroup(isExpanded: Binding(get: { state.isExpanded(team.teamId) },
                                                         set: { state.setExpanded(team.teamId, $0) })) {
@@ -152,7 +152,7 @@ struct TeamsListPane: View {
             }
             let hiddenTeams = all.filter { prefs.isHidden($0.teamId) }
             if !hiddenTeams.isEmpty {
-                Section("Hidden Teams") {
+                Section(header: Text("Hidden Teams")) {
                     ForEach(hiddenTeams) { team in
                         TeamRow(name: team.name, unread: false)
                             .compatForeground(.secondary)
@@ -420,7 +420,7 @@ struct ChannelRow: View {
                 }
             }
             .badge(mentioned ? Text("@") : nil)
-            .badgeProminence(.increased)
+            .compatBadgeProminence()
             .help(teamName.map { "\(name) — \($0)" } ?? name)
             .accessibilityElement(children: .combine)
             .accessibilityLabel(label)
@@ -459,7 +459,7 @@ struct HiddenChannelsRow: View {
                 .compatForeground(.secondary)
             }
             .buttonStyle(.plain)
-            .selectionDisabled()
+            .compatSelectionDisabled()
         }
     }
 }

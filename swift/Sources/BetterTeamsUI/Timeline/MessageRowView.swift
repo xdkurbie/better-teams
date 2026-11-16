@@ -1,7 +1,7 @@
 // MessageRowView.swift — one timeline message row (UI-SPEC §6.2.1).
 //
 // Header name (`.headline`) + time (`.caption`); body from MessageRender
-// with mentions tinted and code monospaced on `.fill.quaternary`; reply
+// with mentions tinted and code monospaced on `CompatFill.quaternary`; reply
 // quote; images in reserved slots (R13); file chips; adaptive/bot cards with native
 // buttons; link preview; reaction chips; edited marker; translation;
 // "Seen by …" on the last own message. In chats every message sits on
@@ -459,12 +459,6 @@ struct MessageRowView: View {
                 Rectangle().fill(Palette.messageHighlight)
             } else {
                 Rectangle().fill(Palette.messageHighlight)
-                    .keyframeAnimator(initialValue: 1.0, repeating: false) { v, opacity in
-                        v.opacity(opacity)
-                    } keyframes: { _ in
-                        LinearKeyframe(1.0, duration: 0.6)
-                        LinearKeyframe(0.0, duration: 0.9)
-                    }
             }
         }
     }
@@ -483,7 +477,7 @@ struct MessageRowView: View {
 
     /// Splits the semantic body into prose and code-block segments and
     /// maps runs to the palette: mentions tinted (own: tinted
-    /// background too), inline code monospaced on `.fill.quaternary`.
+    /// background too), inline code monospaced on `CompatFill.quaternary`.
     /// AppKit font for selectable text. `NSFont` is not `Sendable`, so
     /// the typed `appKit.font` setter (which requires a `Sendable` value)
     /// warns; the attribute-dictionary container sets the same `.font`
@@ -597,14 +591,6 @@ private struct MessageAccessibilityActions: ViewModifier {
                     .accessibilityAction(named: "Forward") { a.forward(m) }
                     .accessibilityAction(named: row.isSaved ? "Unsave" : "Save") { a.toggleSave(m) }
                     .accessibilityAction(named: row.isPinned ? "Unpin" : "Pin") { a.togglePin(m) }
-                    .accessibilityActions {
-                        // The hover toolbar's quick reactions.
-                        if HoverToolbarRules.isAvailable(row) {
-                            ForEach(Indexed.wrap(HoverToolbarRules.quickReactions)) { r in
-                                Button("React \(r.value.name)") { a.toggleReaction(m, r.value.emoji) }
-                            }
-                        }
-                    }
             } else {
                 content
             }

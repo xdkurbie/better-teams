@@ -178,10 +178,10 @@ struct NotesAppendBar: View {
                         .lineLimit(2)
                 }
                 HStack(alignment: .bottom, spacing: 8) {
-                    TextField("Append to Page", text: $draft, axis: .vertical)
+                    TextField("Append to Page", text: $draft)
                         .textFieldStyle(.roundedBorder)
                         .font(AppFont.body(scale))
-                        .lineLimit(1 ... 4)
+                        .lineLimit(4)
                         .onSubmit { if Self.canAppend(draft, appending: appending) { submit() } }
                     if appending {
                         ProgressView().controlSize(.small)

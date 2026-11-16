@@ -32,7 +32,7 @@ struct EventDetailsToolbar: View {
                 EventTrackingToggle(shown: $trackingShown)
             }
             .buttonStyle(.bordered)
-            .menuStyle(.button)
+            .compatMenuButton()
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
         }
@@ -439,8 +439,8 @@ struct ForwardEventPopover: View {
             VStack(alignment: .leading, spacing: 10) {
                 Text("Forward \u{201C}\(meeting.subject)\u{201D}").font(.headline).lineLimit(1)
                 TextField("To", text: $to, prompt: Text("name@example.com; \u{2026}"))
-                TextField("Message", text: $note, prompt: Text("Add a note (optional)"), axis: .vertical)
-                    .lineLimit(2 ... 4)
+                TextField("Message", text: $note, prompt: Text("Add a note (optional)"))
+                    .lineLimit(4)
                 HStack {
                     if week.forwarding { ProgressView().controlSize(.small) }
                     if let error = week.forwardError {

@@ -155,7 +155,7 @@ struct ChatListPane: View {
             Spacer()
         }
         .frame(height: 24)
-        .selectionDisabled()
+        .compatSelectionDisabled()
         .task(id: chats.nextPageLink) { await chats.loadMore() }
     }
 
@@ -192,17 +192,17 @@ struct ChatListPane: View {
         return ScrollViewReader { proxy in
         List(selection: selection) {
             if !pinned.isEmpty {
-                Section("Pinned") {
+                Section(header: Text("Pinned")) {
                     ForEach(pinned) { c in row(c, pinned: true, now: now) }
                 }
             }
             if !favorites.isEmpty {
-                Section("Favorites") {
+                Section(header: Text("Favorites")) {
                     ForEach(favorites) { c in row(c, pinned: false, now: now) }
                 }
             }
             if !recent.isEmpty {
-                Section("Recent") {
+                Section(header: Text("Recent")) {
                     ForEach(recent) { c in
                         row(c, pinned: false, now: now)
                             .onAppear {
@@ -222,7 +222,7 @@ struct ChatListPane: View {
                     Spacer()
                 }
                 .frame(height: 24)
-                .selectionDisabled()
+                .compatSelectionDisabled()
             }
         }
         .listStyle(.inset)

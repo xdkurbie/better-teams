@@ -63,7 +63,7 @@ final class QuickComposerController {
         }
         let p = Self.makePanel(view, model: m)
         panel = p
-        NSApp.activate()
+        activateApp()
         p.makeKeyAndOrderFront(nil)
     }
 
@@ -113,8 +113,8 @@ struct QuickComposerView: View {
                     Picker("To:", selection: $to) {
                         ForEach(targets) { Text($0.name).tag($0.id) }
                     }
-                    TextField("Message:", text: $text, axis: .vertical)
-                        .lineLimit(1...4)
+                    TextField("Message:", text: $text)
+                        .lineLimit(4)
                 }
                 .compatFormStyleColumns()
                 .padding(16)

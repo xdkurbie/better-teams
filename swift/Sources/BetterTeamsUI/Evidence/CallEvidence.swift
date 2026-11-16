@@ -205,7 +205,7 @@ enum CallEvidence {
         var found: [(String, CGRect)] = []
         func walk(_ v: NSView) {
             if String(describing: type(of: v)).contains("ItemViewer"), v.responds(to: NSSelectorFromString("item")),
-               let item = v.value(forKey: "item") as? NSToolbarItem, !item.isHidden {
+               let item = v.value(forKey: "item") as? NSToolbarItem, !item.btHidden {
                 let r = v.convert(v.bounds, to: nil)
                 if r.width > 0 { found.append((item.itemIdentifier.rawValue, r)) }
             }

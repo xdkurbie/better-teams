@@ -232,7 +232,7 @@ struct ChannelHeader: View {
                 } label: {
                     Text("More")
                 }
-                .menuStyle(.button)
+                .compatMenuButton()
                 .fixedSize()
                 .help("More Tabs")
             }

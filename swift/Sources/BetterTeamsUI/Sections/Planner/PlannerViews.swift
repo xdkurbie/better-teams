@@ -127,7 +127,7 @@ struct PlannerBoardPane: View {
                 }
             }
             if !orphans.isEmpty {
-                Section("Other Tasks") {
+                Section(header: Text("Other Tasks")) {
                     ForEach(orphans) { task in
                         PlannerTaskRow(task: task, now: now, assignees: PlannerFormat.assignees(task, planner).map(\.name)) {
                             PlannerSection.toggle(task, planner)
@@ -297,7 +297,7 @@ struct PlannerTaskInspector: View {
                         .compatForeground(.red)
                 }
             }
-            Section("Assigned To") {
+            Section(header: Text("Assigned To")) {
                 let people = PlannerFormat.assignees(task, planner)
                 if people.isEmpty {
                     Text("Unassigned").compatForeground(.secondary)

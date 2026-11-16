@@ -103,7 +103,7 @@ struct ImageSlot: View {
     var body: some View {
         WithPerceptionTracking {
             ZStack {
-                RoundedRectangle(cornerRadius: 8, style: .continuous).fill(.fill.quaternary)
+                RoundedRectangle(cornerRadius: 8, style: .continuous).fill(CompatFill.quaternary)
                 switch model.phase {
                 case .loading:
                     ProgressView().controlSize(.small)
@@ -379,7 +379,7 @@ struct FileChips: View {
             } label: {
                 Image(systemName: "ellipsis.circle")
             }
-            .menuStyle(.button)
+            .compatMenuButton()
             .buttonStyle(.borderless)
             .menuIndicator(.hidden)
             .fixedSize()
@@ -433,7 +433,7 @@ struct LinkPreviewCard: View {
                     Image(systemName: "link")
                         .compatForeground(.secondary)
                         .frame(width: 28, height: 28)
-                        .background(.fill.tertiary, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                        .background(CompatFill.tertiary, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
                     VStack(alignment: .leading, spacing: 1) {
                         Text(title).font(AppFont.bodyEmphasized(scale)).lineLimit(1)
                         Text(host).font(AppFont.caption(scale)).compatForeground(.secondary).lineLimit(1)
@@ -443,7 +443,7 @@ struct LinkPreviewCard: View {
                 }
                 .padding(8)
                 .frame(maxWidth: 360, alignment: .leading)
-                .background(.fill.quaternary, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .background(CompatFill.quaternary, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                 .overlay {
                     RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Palette.panelEdge, lineWidth: 1)
                 }

@@ -711,7 +711,7 @@ public final class ShellWindowController: NSWindowController, NSWindowDelegate, 
 
     /// Settings actions show their sheet on this window.
     private func bringForward() {
-        NSApp.activate()
+        activateApp()
         window?.makeKeyAndOrderFront(nil)
     }
 

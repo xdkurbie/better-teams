@@ -501,7 +501,7 @@ final class FilesSection: SectionProvider, InspectorCapable {
         if m.nav.section != .files { m.navigator?.select(section: .files) }
         guard let window = Self.window(m) else { return }
         let item = window.toolbar?.items.first {
-            $0.itemIdentifier.rawValue == FilesCommands.transfers.rawValue && !$0.isHidden
+            $0.itemIdentifier.rawValue == FilesCommands.transfers.rawValue && !$0.btHidden
         }
         transfersPopover.toggle(transfers: app.transfers, model: m, item: item, window: window)
     }

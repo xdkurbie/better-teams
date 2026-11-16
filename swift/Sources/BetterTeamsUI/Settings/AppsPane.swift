@@ -74,7 +74,7 @@ struct AppsPane: View {
                                   text: "While another app is in front, the app pages stop updating to save battery and processor time. They resume when you return. Notifications, calls and unread counts keep working.")
                     }
                 }
-                Section("Apps in Memory") {
+                Section(header: Text("Apps in Memory")) {
                     let _ = residentsTick
                     let residents = host.residentPages
                     if residents.isEmpty {

@@ -110,7 +110,7 @@ final class NotificationRouter {
     }
 
     private func bringForward(_ wc: ShellWindowController) {
-        NSApp.activate()
+        activateApp()
         wc.window?.makeKeyAndOrderFront(nil)
     }
 

@@ -112,7 +112,7 @@ private struct SearchResultsContent: View {
                                 .font(AppFont.subheadline(scale))
                                 .compatForeground(.secondary)
                         }
-                        .selectionDisabled()
+                        .compatSelectionDisabled()
                     } else if search.scope == .messages || search.inConversation, !offline, messages.canLoadMore {
                         Button("Show More Results") { Task { await messages.loadMore() } }
                             .buttonStyle(.link)
@@ -160,13 +160,13 @@ private struct SearchResultsContent: View {
                     .font(AppFont.subheadline(scale).compatWeight(.semibold))
                     .compatForeground(.secondary)
                     .padding(.top, 4)
-                    .selectionDisabled()
+                    .compatSelectionDisabled()
                     .compatListRowSeparatorHidden()
                     .accessibilityAddTraits(.isHeader)
             }
             content()
         }
-        .listSectionSeparator(.hidden)
+        .compatListSectionSeparator()
     }
 
     private func placeName(_ h: SearchHit) -> String {
@@ -200,7 +200,8 @@ struct SearchScopeBar: View {
                     case .scope(let s): search.setScope(s)
                     }
                 })
-            if #available(macOS 13, *) {
+            Group {
+                if #available(macOS 13, *) {
                 ViewThatFits(in: .horizontal) {
                     picker(binding)
                         .pickerStyle(.segmented)
@@ -216,12 +217,13 @@ struct SearchScopeBar: View {
                         .fixedSize()
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
-            } else {
-                picker(binding)
-                    .pickerStyle(.menu)
-                    .controlSize(.small)
-                    .fixedSize()
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    picker(binding)
+                        .pickerStyle(.menu)
+                        .controlSize(.small)
+                        .fixedSize()
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
             }
             .labelsHidden()
             .frame(maxWidth: .infinity)

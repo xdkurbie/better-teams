@@ -62,9 +62,13 @@ public enum TeamsJSPolicy {
 
     /// BCP-47, lowercased as Teams sends it (`en-us`, `de-de`).
     public static func locale(_ l: Locale = .current) -> String {
-        let lang = l.language.languageCode?.identifier ?? "en"
-        guard let region = l.region?.identifier else { return lang.lowercased() }
-        return "\(lang)-\(region)".lowercased()
+        if #available(macOS 13, *) {
+            let lang = l.language.languageCode?.identifier ?? "en"
+            guard let region = l.region?.identifier else { return lang.lowercased() }
+            return "\(lang)-\(region)".lowercased()
+        }
+        let id = l.identifier.replacingOccurrences(of: "_", with: "-")
+        return id.lowercased()
     }
 
     // MARK: manifest URL placeholders

@@ -159,7 +159,7 @@ struct Composer: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 5)
-        .background(.fill.quaternary, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .background(CompatFill.quaternary, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 
     /// Toolbar-like icon row: 24 pt targets, 6 pt apart (HIG spacing).
@@ -214,7 +214,7 @@ struct Composer: View {
             .padding(.vertical, Self.fieldInset)
             .chromeBackground(.composerField, in: RoundedRectangle(cornerRadius: 8, style: .continuous)) {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(.fill.quinary)
+                    .fill(CompatFill.quinary)
                     .overlay {
                         RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(.separator, lineWidth: 1)
                     }
@@ -257,7 +257,7 @@ struct Composer: View {
         } primaryAction: {
             submit()
         }
-        .menuStyle(.button)
+        .compatMenuButton()
         .buttonStyle(.borderless)
         .menuIndicator(.visible)
         .controlSize(.large)
@@ -559,7 +559,7 @@ private struct AttachmentChips: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 3)
-        .background(.fill.quaternary, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+        .background(CompatFill.quaternary, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
     }
 
     private func status(_ a: ComposeAttachment) -> String {
@@ -656,6 +656,7 @@ final class ComposerNSTextView: NSTextView {
 
     /// The accessory's own placement hook (kept: some macOS versions
     /// honor it for the Caps Lock glyph).
+    @available(macOS 14, *)
     override func preferredTextAccessoryPlacement() -> NSTextCursorAccessoryPlacement {
         .invisible
     }

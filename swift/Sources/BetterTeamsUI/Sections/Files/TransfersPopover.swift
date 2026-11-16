@@ -27,7 +27,11 @@ final class TransfersPopover: NSObject, NSPopoverDelegate {
                                                      role: .popover, model: model)
         popover = p
         if let item {
-            p.show(relativeTo: item)
+            if #available(macOS 14, *) {
+                p.show(relativeTo: item)
+            } else if let view = item.view {
+                p.show(relativeTo: view.bounds, of: view, preferredEdge: .minY)
+            }
         } else if let v = window.contentView {
             // Toolbar hidden or item in overflow: top trailing corner.
             p.show(relativeTo: NSRect(x: v.bounds.maxX - 40, y: v.bounds.maxY - 1, width: 1, height: 1),

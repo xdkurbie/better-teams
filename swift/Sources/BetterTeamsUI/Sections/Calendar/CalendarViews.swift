@@ -125,7 +125,7 @@ struct CalendarHeaderBar: View {
                     } primaryAction: {
                         model.presentSheet(SheetRequest(CalendarCommands.newMeetingSheet, in: .calendar))
                     }
-                    .menuStyle(.button)
+                    .compatMenuButton()
                     .buttonStyle(.borderedProminent)
                     .fixedSize()
                 }
@@ -514,7 +514,7 @@ struct MeetingInspector: View {
                                 Menu(EventRespondControl.title(info.myResponse)) {
                                     RSVPMenuItems(meeting: meeting, week: week)
                                 }
-                                .menuStyle(.button)
+                                .compatMenuButton()
                                 .fixedSize()
                                 .disabled(week.respondingID != nil)
                             }

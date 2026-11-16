@@ -421,7 +421,7 @@ private struct WeekInitialScroll: ViewModifier {
     let y: CGFloat
 
     func body(content: Content) -> some View {
-        if #available(macOS 14, *) {
+        if #available(macOS 15, *) {
             WeekScrollOffset(content: content, id: id, y: y)
         } else {
             content
@@ -429,7 +429,7 @@ private struct WeekInitialScroll: ViewModifier {
     }
 }
 
-@available(macOS 14, *)
+@available(macOS 15, *)
 private struct WeekScrollOffset<V: View>: View {
     let content: V
     let id: String?
