@@ -63,12 +63,12 @@ struct ChatRow: View {
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 4) {
                         Text(chat.name)
-                            .font(AppFont.body(scale).weight(style.nameWeight))
+                            .font(AppFont.body(scale).compatWeight(style.nameWeight))
                             .lineLimit(1)
                             .truncationMode(.tail)
                         Spacer(minLength: 4)
                         Text(ChatListFormat.previewTime(chat.last_message_time, now: now))
-                            .font(AppFont.caption(scale).weight(style.timeWeight))
+                            .font(AppFont.caption(scale).compatWeight(style.timeWeight))
                             .compatForeground(style.previewPrimary ? .primary : .secondary)
                             .fixedSize()
                     }
@@ -78,7 +78,7 @@ struct ChatRow: View {
                     // off the name line, laid out only when present.
                     HStack(spacing: 2) {
                         Image(systemName: "exclamationmark.circle")
-                            .font(AppFont.caption(scale).weight(.semibold))
+                            .font(AppFont.caption(scale).compatWeight(.semibold))
                             .compatForeground(Palette.failed)
                             .frame(width: Self.sendStateSlot * scale, alignment: .leading)
                             .opacity(notSent ? 1 : 0)
@@ -91,7 +91,7 @@ struct ChatRow: View {
                                 Text(preview)
                             }
                         }
-                        .font(AppFont.subheadline(scale).weight(style.previewWeight))
+                        .font(AppFont.subheadline(scale).compatWeight(style.previewWeight))
                         .compatForeground(style.previewPrimary ? .primary : .secondary)
                         .lineLimit(1)
                         .truncationMode(.tail)

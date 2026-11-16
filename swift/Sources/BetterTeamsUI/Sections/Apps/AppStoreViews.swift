@@ -57,7 +57,7 @@ struct AppStoreHome: View {
     private var header: some View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(category ?? "Apps").font(.largeTitle.weight(.semibold))
+                Text(category ?? "Apps").font(.largeTitle.compatWeight(.semibold))
                 Text(category == nil ? "Apps for you and your team, running right in Better Teams."
                                      : "Apps in \(category ?? "")")
                     .compatForeground(.secondary)
@@ -76,7 +76,7 @@ struct AppStoreHome: View {
     @ViewBuilder
     private func shelf(_ title: String?, _ apps: [TeamsAppManifest], _ m: WindowModel) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            if let title { Text(title).font(.title3.weight(.semibold)) }
+            if let title { Text(title).font(.title3.compatWeight(.semibold)) }
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 260, maximum: 420), spacing: 12)], spacing: 12) {
                 ForEach(apps) { a in
                     Button {
@@ -292,7 +292,7 @@ struct AppStoreDetail: View {
         return HStack(alignment: .top, spacing: 16) {
             AppIconTile(app: app, size: 72)
             VStack(alignment: .leading, spacing: 4) {
-                Text(app.name).font(.title.weight(.semibold))
+                Text(app.name).font(.title.compatWeight(.semibold))
                 Text(app.developer ?? "Unknown publisher").compatForeground(.secondary)
                 if let cats = app.categories, !cats.isEmpty {
                     Text(cats.joined(separator: " · ")).font(.caption).compatForeground(.tertiary)

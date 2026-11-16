@@ -151,7 +151,7 @@ struct EventDetailsView: View {
                     .help(type.title)
                     .accessibilityLabel(type.title)
                 Text(m.subject)
-                    .font(AppFont.title3(scale).weight(.semibold))
+                    .font(AppFont.title3(scale).compatWeight(.semibold))
                     .textSelection(.enabled)
                 if m.isSeries { SeriesBadge() }
                 if type == .webinar || type == .townHall { EventTypeBadge(type: type) }

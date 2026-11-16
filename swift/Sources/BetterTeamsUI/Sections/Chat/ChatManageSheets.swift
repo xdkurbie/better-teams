@@ -154,7 +154,7 @@ struct AddPeopleSheet: View {
                     DirectoryResults(contacts: contacts, people: $people, members: members)
                 }
                 Text("Chat History")
-                    .font(.subheadline.weight(.semibold))
+                    .font(.subheadline.compatWeight(.semibold))
                     .compatForeground(.secondary)
                 Picker("Chat History", selection: $mode) {
                     Text("Don't include chat history").tag(AddPeopleHistoryMode.none)

@@ -75,7 +75,7 @@ struct SignInHeader: View {
                     .frame(width: 64, height: 64)
                     .accessibilityHidden(true)
                 Text(title)
-                    .font(.title.weight(.semibold))
+                    .font(.title.compatWeight(.semibold))
             }
         }
     }

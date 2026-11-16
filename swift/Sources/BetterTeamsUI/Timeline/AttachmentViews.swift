@@ -25,7 +25,7 @@ struct QuoteBlock: View {
     var body: some View {
         WithPerceptionTracking {
             let content = VStack(alignment: .leading, spacing: 1) {
-                Text(quote.sender).font(AppFont.caption(scale).weight(.semibold)).lineLimit(1)
+                Text(quote.sender).font(AppFont.caption(scale).compatWeight(.semibold)).lineLimit(1)
                 Text(quote.preview).font(AppFont.subheadline(scale))
                     .compatForeground(contrast == .increased ? AnyShapeStyle(.primary) : AnyShapeStyle(Palette.quoteText))
                     .lineLimit(2)
@@ -300,7 +300,7 @@ struct AdaptiveCardView: View {
         case .default: AppFont.body(scale)
         case .medium, .large, .extraLarge: AppFont.title3(scale)
         }
-        return t.weight == .bolder ? base.weight(.semibold) : base
+        return t.weight == .bolder ? base.compatWeight(.semibold) : base
     }
 }
 

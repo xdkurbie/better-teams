@@ -26,18 +26,20 @@ public final class ChatFilterPager: ObservableObject {
     public private(set) var pagesFetched = 0
 
     public let maxPages: Int
-    public let timeout: Duration
+    /// Seconds before an in-flight search is finished even if a page never returns.
+    public let timeout: TimeInterval
     /// Matches that fill the pane; the search stops once reached.
     public let target: Int
-    private let clock: any Clock<Duration>
+    /// Test seam. Nil sleeps with `Task.sleep` (wall clock).
+    private let sleeper: (@Sendable (TimeInterval) async -> Void)?
     private var run = 0
 
-    public init(maxPages: Int = 2, timeout: Duration = .seconds(10), target: Int = 20,
-                clock: any Clock<Duration> = ContinuousClock()) {
+    public init(maxPages: Int = 2, timeout: TimeInterval = 10, target: Int = 20,
+                sleeper: (@Sendable (TimeInterval) async -> Void)? = nil) {
         self.maxPages = maxPages
         self.timeout = timeout
         self.target = target
-        self.clock = clock
+        self.sleeper = sleeper
     }
 
     /// Start a bounded search for more rows matching the filter.
@@ -51,10 +53,14 @@ public final class ChatFilterPager: ObservableObject {
             return
         }
         phase = .searching
-        let clock = clock
+        let sleeper = sleeper
         let timeout = timeout
         Task { [weak self] in
-            try? await Self.sleep(clock, timeout)
+            if let sleeper {
+                await sleeper(timeout)
+            } else {
+                try? await BTSleep.seconds(timeout)
+            }
             self?.finish(current)
         }
         Task { [weak self] in
@@ -83,11 +89,5 @@ public final class ChatFilterPager: ObservableObject {
     private func finish(_ which: Int) {
         guard which == run, phase == .searching else { return }
         phase = .finished
-    }
-
-    private nonisolated static func sleep<C: Clock>(_ clock: C, _ d: Duration) async throws
-        where C.Duration == Duration
-    {
-        try await clock.sleep(until: clock.now.advanced(by: d), tolerance: nil)
     }
 }

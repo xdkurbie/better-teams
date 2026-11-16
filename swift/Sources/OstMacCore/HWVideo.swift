@@ -23,6 +23,38 @@ import CoreGraphics
 import CoreMedia
 import CoreVideo
 import Foundation
+
+/// One in-flight VideoToolbox decode. The session callback (set for every
+/// decompression session) writes the result here via `frameRefcon`.
+final class VTFrameBox: @unchecked Sendable {
+    let sema = DispatchSemaphore(value: 0)
+    var status: OSStatus = noErr
+    var image: CGImage?
+}
+
+private func vtOutputCallback(
+    _ decompressionOutputRefCon: UnsafeMutableRawPointer?,
+    _ sourceFrameRefCon: UnsafeMutableRawPointer?,
+    _ status: OSStatus,
+    _ infoFlags: VTDecodeInfoFlags,
+    _ imageBuffer: CVImageBuffer?,
+    _ presentationTimeStamp: CMTime,
+    _ presentationDuration: CMTime
+) {
+    guard let sourceFrameRefCon else { return }
+    let box = Unmanaged<VTFrameBox>.fromOpaque(sourceFrameRefCon).takeUnretainedValue()
+    box.status = status
+    if status == noErr, let imageBuffer, let image = VideoPixel.cgImage(from: imageBuffer) {
+        box.image = image
+    }
+    box.sema.signal()
+}
+
+private enum VTCallbackStore {
+    static var record = VTDecompressionOutputCallbackRecord(
+        decompressionOutputCallback: vtOutputCallback,
+        decompressionOutputRefCon: nil)
+}
 import VideoToolbox
 import os
 
@@ -178,6 +210,25 @@ public enum HWVideo {
         return nil
     }
 
+    /// Decode one sample with the session callback (macOS 12). The completion-handler
+    /// overload of `VTDecompressionSessionDecodeFrame` is macOS 14+.
+    public static func decodeFrame(
+        session: VTDecompressionSession, sampleBuffer: CMSampleBuffer, timeout: TimeInterval
+    ) -> (status: OSStatus, image: CGImage?, timedOut: Bool) {
+        let box = VTFrameBox()
+        let ref = Unmanaged.passUnretained(box).toOpaque()
+        var flags = VTDecodeInfoFlags()
+        let status = VTDecompressionSessionDecodeFrame(
+            session,
+            sampleBuffer: sampleBuffer,
+            flags: [._EnableAsynchronousDecompression],
+            frameRefcon: ref,
+            infoFlagsOut: &flags)
+        if status != noErr { return (status, nil, false) }
+        let timedOut = box.sema.wait(timeout: .now() + timeout) == .timedOut
+        return (box.status, box.image, timedOut)
+    }
+
     /// Create a decompression session through the attempt ladder.
     public static func makeDecompressionSession(
         format: CMVideoFormatDescription,
@@ -201,14 +252,16 @@ public enum HWVideo {
         var failures: [String] = []
         for (i, a) in (ladder ?? attempts(codec: codec, lowLatency: false)).enumerated() {
             var session: VTDecompressionSession?
-            let status = VTDecompressionSessionCreate(
-                allocator: kCFAllocatorDefault,
-                formatDescription: format,
-                decoderSpecification: decoderSpecification(
-                    requireHardware: a.requireHardware) as CFDictionary,
-                imageBufferAttributes: (outputAttributes ?? surfaceAttributes()) as CFDictionary,
-                outputCallback: nil,
-                decompressionSessionOut: &session)
+            let status = withUnsafePointer(to: &VTCallbackStore.record) { callback in
+                VTDecompressionSessionCreate(
+                    allocator: kCFAllocatorDefault,
+                    formatDescription: format,
+                    decoderSpecification: decoderSpecification(
+                        requireHardware: a.requireHardware) as CFDictionary,
+                    imageBufferAttributes: (outputAttributes ?? surfaceAttributes()) as CFDictionary,
+                    outputCallback: callback,
+                    decompressionSessionOut: &session)
+            }
             guard status == noErr, let session else {
                 failures.append("attempt\(i) status=\(status)")
                 continue

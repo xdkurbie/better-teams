@@ -145,7 +145,7 @@ struct RailBadge: View {
                     .accessibilityHidden(true)
             } else {
                 Text(count > 99 ? "99+" : "\(count)")
-                    .font(.caption2.monospacedDigit().weight(.semibold))
+                    .font(.caption2.monospacedDigit().compatWeight(.semibold))
                     .compatForeground(Palette.badgeText)
                     .padding(.horizontal, 4)
                     .frame(minWidth: 16, minHeight: 16)

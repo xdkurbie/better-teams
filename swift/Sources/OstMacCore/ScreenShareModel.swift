@@ -195,7 +195,7 @@ public final class ScreenShareModel: NSObject, ObservableObject {
         config.pixelFormat = kCVPixelFormatType_32BGRA
         config.showsCursor = true
         config.scalesToFit = true
-        config.preservesAspectRatio = true
+        if #available(macOS 14, *) { config.preservesAspectRatio = true }
         config.queueDepth = 4
         let stream = SCStream(filter: filter, configuration: config, delegate: self)
         do {
@@ -250,15 +250,21 @@ public final class ScreenShareModel: NSObject, ObservableObject {
     @available(macOS 12.3, *)
     static func describe(filter: SCContentFilter) -> ScreenShareSource {
         let kind: ScreenShareSource.Kind
-        if filter.style == .window {
-            kind = .window
-        } else if filter.style == .application {
-            kind = .app
+        let dims: String
+        if #available(macOS 14, *) {
+            if filter.style == .window {
+                kind = .window
+            } else if filter.style == .application {
+                kind = .app
+            } else {
+                kind = .display
+            }
+            let rect = filter.contentRect
+            dims = "\(Int(rect.width))×\(Int(rect.height))"
         } else {
             kind = .display
+            dims = "display"
         }
-        let rect = filter.contentRect
-        let dims = "\(Int(rect.width))×\(Int(rect.height))"
         return ScreenShareSource(id: "\(kind.rawValue)-\(dims)", kind: kind, name: dims)
     }
 }

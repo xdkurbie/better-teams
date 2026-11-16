@@ -47,7 +47,7 @@ struct ForwardSheet: View {
             VStack(alignment: .leading, spacing: 12) {
                 Text("Forward Message").font(.headline)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(message.isOwn ? "You" : message.sender).font(.caption.weight(.semibold))
+                    Text(message.isOwn ? "You" : message.sender).font(.caption.compatWeight(.semibold))
                     Text(MessageActions.forwardPreview(for: message))
                         .font(.callout)
                         .compatForeground(.secondary)
@@ -62,7 +62,7 @@ struct ForwardSheet: View {
                 // as New Chat): its edge lines up with the title and quote.
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Chats")
-                        .font(.subheadline.weight(.semibold))
+                        .font(.subheadline.compatWeight(.semibold))
                         .compatForeground(.secondary)
                     List(selection: $picked) {
                         ForEach(candidates) { c in

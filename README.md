@@ -354,6 +354,8 @@ What still works on macOS 12.7: sign-in, chats, messages, and standard notificat
 
 The app links FoundationModels, Translation, and ScreenCaptureKit weakly so a missing framework does not abort launch.
 
+On macOS 12, Swift's custom task executors are not in the system runtime, so blocking Teams calls run on the cooperative thread pool. A busy launch can stall the interface longer than it does on macOS 15 or later. Sign-in and chat still complete.
+
 ### Build and run
 
 ```sh

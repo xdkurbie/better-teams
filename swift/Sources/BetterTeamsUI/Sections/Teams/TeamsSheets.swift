@@ -155,7 +155,7 @@ struct JoinTeamSheet: View {
                     .frame(height: 24)
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Public Teams")
-                        .font(.subheadline.weight(.semibold))
+                        .font(.subheadline.compatWeight(.semibold))
                         .compatForeground(.secondary)
                     List(selection: $picked) {
                         if forced == nil {

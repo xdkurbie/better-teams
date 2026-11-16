@@ -84,7 +84,7 @@ struct NewChatSheet: View {
     private var recentContacts: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Recent Contacts")
-                .font(.subheadline.weight(.semibold))
+                .font(.subheadline.compatWeight(.semibold))
                 .compatForeground(.secondary)
             List(selection: $picked) {
                 ForEach(candidates) { c in
@@ -197,7 +197,7 @@ struct DirectoryResults: View {
         WithPerceptionTracking {
             VStack(alignment: .leading, spacing: 6) {
                 Text("People")
-                    .font(.subheadline.weight(.semibold))
+                    .font(.subheadline.compatWeight(.semibold))
                     .compatForeground(.secondary)
                 List {
                     ForEach(rows) { p in

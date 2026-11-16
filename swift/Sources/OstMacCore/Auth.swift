@@ -458,7 +458,7 @@ public final class AuthViewModel: ObservableObject {
         let delay = pollIntervalOverride ?? TimeInterval(max(info.interval, 5))
         pollTask = Task {
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(delay))
+                try? await BTSleep.seconds(delay)
                 if Task.isCancelled { break }
                 await self.pollOnce()
                 if case .polling = self.state { continue }

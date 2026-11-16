@@ -235,7 +235,7 @@ public struct CalendarGraph: Sendable {
         return found
     }
 
-    static let selfCache = OSAllocatedUnfairLock<[String: [String]]>(initialState: [:])
+    static let selfCache = LockedBox<[String: [String]]>([:])
 
     /// Outlook color categories (`/me/outlook/masterCategories`).
     public func masterCategories() throws -> [CalendarCategory] {

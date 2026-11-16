@@ -386,7 +386,7 @@ private struct ContactStatusLines: View {
                                         Image(systemName: "calendar").compatForeground(.secondary)
                                     }
                                     Text(line)
-                                        .font(AppFont.subheadline(scale).weight(.semibold))
+                                        .font(AppFont.subheadline(scale).compatWeight(.semibold))
                                         .compatForeground(.primary)
                                 }
                             }

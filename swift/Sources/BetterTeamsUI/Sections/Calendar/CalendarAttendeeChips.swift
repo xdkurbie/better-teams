@@ -15,7 +15,7 @@ struct AttendeeChipsEditor: View {
         WithPerceptionTracking {
             VStack(alignment: .leading, spacing: 6) {
                 Text("Attendees (\(people.count))")
-                    .font(AppFont.caption(scale).weight(.semibold))
+                    .font(AppFont.caption(scale).compatWeight(.semibold))
                     .compatForeground(.secondary)
                 if people.isEmpty {
                     Text("None").font(AppFont.caption(scale)).compatForeground(.secondary)

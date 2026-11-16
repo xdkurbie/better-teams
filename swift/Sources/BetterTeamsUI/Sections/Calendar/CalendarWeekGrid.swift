@@ -336,7 +336,7 @@ private struct WeekEventBlock: View {
                                 ViewThatFits(in: .horizontal) {
                                     HStack(spacing: 4) {
                                         Text(meeting.subject)
-                                            .font(AppFont.caption(scale).weight(.semibold))
+                                            .font(AppFont.caption(scale).compatWeight(.semibold))
                                             .lineLimit(1)
                                         Text(CalendarFormat.date(meeting.start).map(CalendarFormat.time) ?? "")
                                             .font(AppFont.caption(scale))
@@ -347,7 +347,7 @@ private struct WeekEventBlock: View {
                                     // Narrow lane: a 30-minute block has room for two lines
                                     // of title; a 15-minute one keeps one and truncates.
                                     Text(meeting.subject)
-                                        .font(AppFont.caption(scale).weight(.semibold))
+                                        .font(AppFont.caption(scale).compatWeight(.semibold))
                                         .lineLimit(isTiny ? 1 : 2)
                                         // Wrap onto the second line rather than cutting the first
                                         // with an ellipsis; the block's edge trims any overflow.
@@ -355,14 +355,14 @@ private struct WeekEventBlock: View {
                                 }
                             } else {
                                 Text(meeting.subject)
-                                    .font(AppFont.caption(scale).weight(.semibold))
+                                    .font(AppFont.caption(scale).compatWeight(.semibold))
                                     .lineLimit(isTiny ? 1 : 2)
                                     .fixedSize(horizontal: false, vertical: true)
                             }
                         } else {
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(meeting.subject)
-                                    .font(AppFont.caption(scale).weight(.semibold))
+                                    .font(AppFont.caption(scale).compatWeight(.semibold))
                                     .lineLimit(4)
                                 // Narrow lanes: start time only, never a clipped range.
                                 if #available(macOS 13, *) {

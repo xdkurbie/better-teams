@@ -147,7 +147,7 @@ struct Composer: View {
         HStack(spacing: 8) {
             Image(systemName: symbol).compatForeground(.tint)
             VStack(alignment: .leading, spacing: 0) {
-                Text(title).font(AppFont.caption(scale).weight(.semibold))
+                Text(title).font(AppFont.caption(scale).compatWeight(.semibold))
                 Text(detail).font(AppFont.caption(scale)).compatForeground(.secondary).lineLimit(1)
             }
             Spacer(minLength: 8)

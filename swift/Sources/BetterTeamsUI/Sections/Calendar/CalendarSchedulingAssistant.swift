@@ -294,7 +294,7 @@ struct SchedulingAssistantSheet: View {
 
     private var suggestionList: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Suggested times").font(AppFont.subheadline(scale).weight(.semibold))
+            Text("Suggested times").font(AppFont.subheadline(scale).compatWeight(.semibold))
             let list = ranked
             if people.isEmpty {
                 Text("Add people to see their free/busy and times that suit everyone.").compatForeground(.secondary)

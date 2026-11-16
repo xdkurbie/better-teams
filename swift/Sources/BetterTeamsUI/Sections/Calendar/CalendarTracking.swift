@@ -68,7 +68,7 @@ struct EventTracking: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.top, 4)
                     } label: {
-                        Text(g.header).font(AppFont.subheadline(scale).weight(.semibold))
+                        Text(g.header).font(AppFont.subheadline(scale).compatWeight(.semibold))
                     }
                 }
                 if groups.isEmpty {
@@ -79,7 +79,7 @@ struct EventTracking: View {
     }
 
     private func sectionHeader(_ s: String) -> some View {
-        Text(s).font(AppFont.caption(scale).weight(.semibold)).compatForeground(.secondary)
+        Text(s).font(AppFont.caption(scale).compatWeight(.semibold)).compatForeground(.secondary)
     }
 
     private func attendeeRow(_ p: EventAttendee) -> some View {

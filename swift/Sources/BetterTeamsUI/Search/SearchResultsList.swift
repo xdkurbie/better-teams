@@ -157,7 +157,7 @@ private struct SearchResultsContent: View {
         Section {
             if let title {
                 Text(title)
-                    .font(AppFont.subheadline(scale).weight(.semibold))
+                    .font(AppFont.subheadline(scale).compatWeight(.semibold))
                     .compatForeground(.secondary)
                     .padding(.top, 4)
                     .selectionDisabled()

@@ -39,7 +39,7 @@ public final class ActivityBadgeDwell {
     /// Real timer: a main-actor Task sleeping the delay.
     public static let taskScheduler: Scheduler = { delay, fire in
         let task = Task { @MainActor in
-            try? await Task.sleep(for: .seconds(delay))
+            try? await BTSleep.seconds(delay)
             if !Task.isCancelled { fire() }
         }
         return { task.cancel() }

@@ -248,7 +248,7 @@ private struct AppCard: View {
                     .background(.tint.quaternary, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(item.title).font(.title2.weight(.semibold))
+                    Text(item.title).font(.title2.compatWeight(.semibold))
                     Text(item.sourceLine).compatForeground(.secondary)
                 }
             }

@@ -77,7 +77,7 @@ public enum ArchiveCodec {
         case .lzbitmap:
             return true // macOS 12.0+; target is macOS 14.
         case .lzraven:
-            if #available(macOS 27, *) { return true }
+            // LZRAVEN is not in the macOS 26 SDK this fork builds with.
             return false
         case .lzmesh:
             return false
@@ -102,7 +102,6 @@ public enum ArchiveCodec {
         case .lzbitmap:
             return COMPRESSION_LZBITMAP
         case .lzraven:
-            if #available(macOS 27, *) { return COMPRESSION_LZRAVEN }
             throw ArchiveCodecError.unavailable(.lzraven)
         case .lzmesh:
             throw ArchiveCodecError.unimplemented("LZMESH slot reserved; cleanroom vendoring pending")

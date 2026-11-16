@@ -103,46 +103,17 @@ public enum H264Decode {
             throw H264DecodeError.decode(status)
         }
 
-        let box = ResultBox()
         // HWACCEL: hardware decoder required (logged software fallback);
         // IOSurface BGRA out, wrapped into a CGImage without a copy.
         guard let made = HWVideo.makeDecompressionSession(
             format: formatDesc, path: "oneshot-decode")
         else { throw H264DecodeError.session(-1) }
         let session = made.session
-
-        var flagsOut = VTDecodeInfoFlags()
-        let sema = DispatchSemaphore(value: 0)
-        status = VTDecompressionSessionDecodeFrame(
-            session,
-            sampleBuffer: sampleBuffer,
-            flags: [._EnableAsynchronousDecompression],
-            infoFlagsOut: &flagsOut,
-            completionHandler: { decodeStatus, _, imageBuffer, _, _, _ in
-                box.status = decodeStatus
-                if decodeStatus == noErr, let imageBuffer,
-                   let image = VideoPixel.cgImage(from: imageBuffer)
-                {
-                    box.image = image
-                }
-                sema.signal()
-            })
-        guard status == noErr else {
-            VTDecompressionSessionInvalidate(session)
-            throw H264DecodeError.decode(status)
-        }
-        if sema.wait(timeout: .now() + timeoutSecs) == .timedOut {
-            VTDecompressionSessionInvalidate(session)
-            throw H264DecodeError.timeout
-        }
+        let decoded = HWVideo.decodeFrame(session: session, sampleBuffer: sampleBuffer, timeout: timeoutSecs)
         VTDecompressionSessionInvalidate(session)
-
-        if let image = box.take() {
-            return image
-        }
-        if let vtStatus = box.status, vtStatus != noErr {
-            throw H264DecodeError.decode(vtStatus)
-        }
+        if decoded.timedOut { throw H264DecodeError.timeout }
+        if decoded.status != noErr { throw H264DecodeError.decode(decoded.status) }
+        if let image = decoded.image { return image }
         throw H264DecodeError.noImage
     }
 }

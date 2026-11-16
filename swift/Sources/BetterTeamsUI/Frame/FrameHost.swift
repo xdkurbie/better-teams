@@ -459,7 +459,12 @@ public final class FrameHost {
     public private(set) lazy var dataStore: WKWebsiteDataStore = {
         if let storeOverride { return storeOverride }
         if isDemo { return .nonPersistent() }
-        let store = WKWebsiteDataStore(forIdentifier: Self.storeUUID(accountKey))
+        let store: WKWebsiteDataStore
+        if #available(macOS 14, *) {
+            store = WKWebsiteDataStore(forIdentifier: Self.storeUUID(accountKey))
+        } else {
+            store = .default()
+        }
         WebSessionKeeper.watch(store)
         return store
     }()
@@ -1804,7 +1809,11 @@ public final class FrameHost {
         let config = WKWebViewConfiguration()
         let store: WKWebsiteDataStore
         if let addingProfile, !isDemo, storeOverride == nil {
-            store = WKWebsiteDataStore(forIdentifier: Self.storeUUID(addingProfile))
+            if #available(macOS 14, *) {
+                store = WKWebsiteDataStore(forIdentifier: Self.storeUUID(addingProfile))
+            } else {
+                store = .default()
+            }
         } else {
             store = dataStore
         }

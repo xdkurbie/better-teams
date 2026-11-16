@@ -9,7 +9,7 @@ struct EvidenceControlView: View {
         WithPerceptionTracking {
             VStack(alignment: .leading, spacing: 24) {
                 Text("EVIDENCE CONTROL")
-                    .font(.largeTitle.weight(.bold))
+                    .font(.largeTitle.compatWeight(.bold))
                 HStack(spacing: 12) {
                     swatch(Color(nsColor: .systemRed), "red")
                     swatch(Color(nsColor: .systemGreen), "green")
@@ -17,7 +17,7 @@ struct EvidenceControlView: View {
                     swatch(Color(nsColor: .labelColor), "label")
                     swatch(Color(nsColor: .windowBackgroundColor), "window")
                 }
-                Text("Rail button states").font(.title2.weight(.semibold))
+                Text("Rail button states").font(.title2.compatWeight(.semibold))
                 HStack(alignment: .top, spacing: 16) {
                     ForEach(RailButtonForced.allCases, id: \.rawValue) { f in
                         VStack(spacing: 6) {
@@ -29,7 +29,7 @@ struct EvidenceControlView: View {
                         }
                     }
                 }
-                Text("Badges").font(.title2.weight(.semibold))
+                Text("Badges").font(.title2.compatWeight(.semibold))
                 HStack(alignment: .top, spacing: 16) {
                     ForEach(BadgeSample.all) { sample in
                         let n = sample.count

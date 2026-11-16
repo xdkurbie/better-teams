@@ -95,7 +95,7 @@ struct InfoPane: View {
                 Section {
                     VStack(spacing: 8) {
                         Avatar(name: name, isGroup: isGroup, diameter: 56)
-                        Text(name).font(.title3.weight(.semibold)).multilineTextAlignment(.center)
+                        Text(name).font(.title3.compatWeight(.semibold)).multilineTextAlignment(.center)
                         RosterBound(chatID: ref, roster: model?.app?.chatRoster) { count in
                             let sub = ConversationDetail.subtitle(isGroup: isGroup, messages: messages, rosterCount: count)
                             if !sub.isEmpty { Text(sub).compatForeground(.secondary) }
@@ -496,7 +496,7 @@ struct CatchUpSummaryBody: View {
                     CatchUpBulletRow(text: p.text, dismiss: dismiss.map { d in { d(p.text) } })
                 }
                 if includeActions, !actions.isEmpty {
-                    Text("Action Items").font(.subheadline.weight(.semibold)).padding(.top, 2)
+                    Text("Action Items").font(.subheadline.compatWeight(.semibold)).padding(.top, 2)
                     ForEach(actions) { a in
                         CatchUpBulletRow(text: a.text, dismiss: dismiss.map { d in { d(a.text) } })
                     }
@@ -594,7 +594,7 @@ struct CatchUpMentionsSection: View {
                 } label: {
                     HStack(spacing: 5) {
                         Image(systemName: "chevron.right")
-                            .font(.caption.weight(.semibold))
+                            .font(.caption.compatWeight(.semibold))
                             .rotationEffect(.degrees(collapsed ? 0 : 90))
                         Text("Mentions You")
                         if collapsed, !mentions.isEmpty {

@@ -480,7 +480,7 @@ public final class CatchUpDemoTransport: CatchUpStreamingTransport, @unchecked S
     public func stream(prompt: String, maxTokens _: Int?, onPartial: @escaping @Sendable (String) -> Void) async throws -> String {
         if holding {
             if let holdPartial { onPartial(holdPartial) }
-            try await Task.sleep(for: .seconds(3600))
+            try await BTSleep.seconds(3600)
         }
         if let canned = DemoData.catchUpSummaries.first(where: { prompt.contains($0.marker) })?.text { return canned }
         return Self.extractive(prompt) ?? DemoData.catchUpSummary

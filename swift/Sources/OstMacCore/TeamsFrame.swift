@@ -516,8 +516,12 @@ public final class TeamsFrameStore: ObservableObject {
             }
         }
         if dataStore == nil {
-            dataStore = WKWebsiteDataStore(
-                forIdentifier: TeamsFrameConfig.dataStoreIdentifier)
+            if #available(macOS 14, *) {
+                dataStore = WKWebsiteDataStore(forIdentifier: TeamsFrameConfig.dataStoreIdentifier)
+            } else {
+                // Per-account data stores need macOS 14. Monterey shares the default store.
+                dataStore = WKWebsiteDataStore.default()
+            }
         }
         if !alive { alive = true }
         print("[teams-frame] activate (keepAlive \(keepAliveMinutes) min)")

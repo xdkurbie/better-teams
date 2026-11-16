@@ -48,6 +48,14 @@ enum MontereyInk {
     }
 }
 
+extension Font {
+    /// `Font.weight` is macOS 13+. Older systems keep the base font.
+    func compatWeight(_ weight: Font.Weight) -> Font {
+        if #available(macOS 13, *) { return self.weight(weight) }
+        return self
+    }
+}
+
 extension Text {
     /// `fontWeight` (macOS 13+). Older systems bold only the heavy weights.
     func compatWeight(_ weight: Font.Weight) -> Text {
