@@ -18,7 +18,6 @@ let weakSystemFrameworks: [LinkerSetting] = [
     .unsafeFlags(["-Xlinker", "-weak_framework", "-Xlinker", "FoundationModels"]),
     .unsafeFlags(["-Xlinker", "-weak_framework", "-Xlinker", "Translation"]),
     .unsafeFlags(["-Xlinker", "-weak_framework", "-Xlinker", "ScreenCaptureKit"]),
-    .unsafeFlags(["-Xlinker", "-weak_framework", "-Xlinker", "Observation"]),
 ]
 
 let rustLink: [LinkerSetting] = [
