@@ -12,10 +12,13 @@ let rustLibDir = URL(fileURLWithPath: #filePath)
 
 // Frameworks that do not exist on macOS 12.0. Availability checks make
 // the references weak; these flags keep a strong autolink from winning.
+// SwiftPM passes linkerSettings to the Swift driver, which only forwards
+// ld-only options placed after -Xlinker.
 let weakSystemFrameworks: [LinkerSetting] = [
-    .unsafeFlags(["-weak_framework", "FoundationModels"]),
-    .unsafeFlags(["-weak_framework", "Translation"]),
-    .unsafeFlags(["-weak_framework", "ScreenCaptureKit"]),
+    .unsafeFlags(["-Xlinker", "-weak_framework", "-Xlinker", "FoundationModels"]),
+    .unsafeFlags(["-Xlinker", "-weak_framework", "-Xlinker", "Translation"]),
+    .unsafeFlags(["-Xlinker", "-weak_framework", "-Xlinker", "ScreenCaptureKit"]),
+    .unsafeFlags(["-Xlinker", "-weak_framework", "-Xlinker", "Observation"]),
 ]
 
 let rustLink: [LinkerSetting] = [
