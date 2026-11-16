@@ -276,7 +276,7 @@ public enum FramePolicy {
 /// Names every known web app, process-wide (rail titles, Go menu,
 /// window titles are nonisolated lookups). Filled by the Apps library.
 public enum FrameAppDirectory {
-    private static let apps = OSAllocatedUnfairLock<[FrameAppID: FrameApp]>(initialState: [:])
+    private static let apps = LockedBox<[FrameAppID: FrameApp]>([:])
 
     public static func register(_ list: [FrameApp]) {
         apps.withLock { d in for a in list { d[a.id] = a } }

@@ -4,6 +4,7 @@
 // The thread reuses the conversation timeline in its Thread scope.
 import OstMacCore
 import SwiftUI
+import Perception
 
 struct TeamsInspectorPane: View {
     @ObservedObject var teams: TeamsViewModel
@@ -12,16 +13,18 @@ struct TeamsInspectorPane: View {
     @Environment(\.windowModel) private var model
 
     var body: some View {
-        if let model {
-            let sel = model.forced(.teams) == nil ? TeamsSelection(model.nav.selection(in: .teams)) : nil
-            let team = sel.flatMap { s in teams.teams.first { $0.teamId == s.teamID } }
-            if let sel, let team, let ch = sel.channelID, let root = sel.threadID {
-                ThreadInspector(team: team, channelID: ch, rootID: root, sel: sel, conv: conv,
-                                state: section.state(model))
-            } else if let team {
-                TeamInspector(team: team, roster: section.roster(team.teamId, model), conv: conv)
-            } else {
-                EmptyPane("No Team Selected", systemImage: "person.3")
+        WithPerceptionTracking {
+            if let model {
+                let sel = model.forced(.teams) == nil ? TeamsSelection(model.nav.selection(in: .teams)) : nil
+                let team = sel.flatMap { s in teams.teams.first { $0.teamId == s.teamID } }
+                if let sel, let team, let ch = sel.channelID, let root = sel.threadID {
+                    ThreadInspector(team: team, channelID: ch, rootID: root, sel: sel, conv: conv,
+                                    state: section.state(model))
+                } else if let team {
+                    TeamInspector(team: team, roster: section.roster(team.teamId, model), conv: conv)
+                } else {
+                    EmptyPane("No Team Selected", systemImage: "person.3")
+                }
             }
         }
     }
@@ -46,24 +49,26 @@ struct ThreadInspectorHeader: View {
     }
 
     var body: some View {
-        HStack(spacing: 8) {
-            VStack(alignment: .leading, spacing: 1) {
-                Text("Thread").font(AppFont.headline(scale))
-                Text("#\(channel) · \(replies == 1 ? "1 reply" : "\(replies) replies")")
-                    .font(AppFont.caption(scale))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+        WithPerceptionTracking {
+            HStack(spacing: 8) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Thread").font(AppFont.headline(scale))
+                    Text("#\(channel) · \(replies == 1 ? "1 reply" : "\(replies) replies")")
+                        .font(AppFont.caption(scale))
+                        .compatForeground(.secondary)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 8)
+                Button(action: close) {
+                    Image(systemName: "xmark")
+                }
+                .buttonStyle(.borderless)
+                .help(Self.closeLabel)
+                .accessibilityLabel(Self.closeLabel)
             }
-            Spacer(minLength: 8)
-            Button(action: close) {
-                Image(systemName: "xmark")
-            }
-            .buttonStyle(.borderless)
-            .help(Self.closeLabel)
-            .accessibilityLabel(Self.closeLabel)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
     }
 }
 
@@ -78,33 +83,35 @@ struct ThreadInspector: View {
     @Environment(\.contentTextScale) private var scale
 
     var body: some View {
-        let loaded = conv.chatID == channelID && !(conv.loading && conv.messages.isEmpty)
-        let threads = ChannelThreads(loaded ? conv.messages : [])
-        let root = threads.roots.first { $0.id == rootID }
-        let replies = threads.replies[rootID]?.count ?? 0
-        let channel = team.channels.first { $0.channelId == channelID }?.name ?? "Channel"
-        VStack(spacing: 0) {
-            ThreadInspectorHeader(channel: channel, replies: replies) {
-                ThreadInspectorHeader.closeThread(sel, model)
-            }
-            Divider()
-            if !loaded {
-                LoadingPane("Loading Members\u{2026}")
-            } else if root == nil {
-                EmptyPane("Post No Longer Available", systemImage: "exclamationmark.bubble",
-                          message: "It may have been deleted, or it's older than the loaded history.")
-            } else {
-                TimelineRepresentable(conv: conv, scope: .thread(rootID: rootID))
+        WithPerceptionTracking {
+            let loaded = conv.chatID == channelID && !(conv.loading && conv.messages.isEmpty)
+            let threads = ChannelThreads(loaded ? conv.messages : [])
+            let root = threads.roots.first { $0.id == rootID }
+            let replies = threads.replies[rootID]?.count ?? 0
+            let channel = team.channels.first { $0.channelId == channelID }?.name ?? "Channel"
+            VStack(spacing: 0) {
+                ThreadInspectorHeader(channel: channel, replies: replies) {
+                    ThreadInspectorHeader.closeThread(sel, model)
+                }
                 Divider()
-                ThreadReplyComposer(rootID: rootID, conv: conv, state: state)
+                if !loaded {
+                    LoadingPane("Loading Members\u{2026}")
+                } else if root == nil {
+                    EmptyPane("Post No Longer Available", systemImage: "exclamationmark.bubble",
+                              message: "It may have been deleted, or it's older than the loaded history.")
+                } else {
+                    TimelineRepresentable(conv: conv, scope: .thread(rootID: rootID))
+                    Divider()
+                    ThreadReplyComposer(rootID: rootID, conv: conv, state: state)
+                }
             }
-        }
-        // No close button of its own: the toolbar toggle / ⌥⌘I hides the
-        // inspector (HIG). Esc deselects the post (Team inspector again).
-        .onExitCommand {
-            var s = sel
-            s.threadID = nil
-            model?.navigator?.select(s.selection, in: .teams)
+            // No close button of its own: the toolbar toggle / ⌥⌘I hides the
+            // inspector (HIG). Esc deselects the post (Team inspector again).
+            .onExitCommand {
+                var s = sel
+                s.threadID = nil
+                model?.navigator?.select(s.selection, in: .teams)
+            }
         }
     }
 }
@@ -129,31 +136,33 @@ struct ThreadReplyComposer: View {
     }
 
     var body: some View {
-        HStack(alignment: .bottom, spacing: 8) {
-            ComposerTextView(text: draft, height: $fieldHeight, focusRequest: 0, scale: scale,
-                             onSubmit: send, onCommand: { _ in false }, onPasteFiles: { _ in })
-                .frame(height: fieldHeight)
-                .overlay(alignment: .topLeading) {
-                    if (state.replyDrafts[rootID] ?? "").isEmpty {
-                        Text("Reply")
-                            .font(AppFont.body(scale))
-                            .foregroundStyle(.tertiary)
-                            .allowsHitTesting(false)
-                            .accessibilityHidden(true)
+        WithPerceptionTracking {
+            HStack(alignment: .bottom, spacing: 8) {
+                ComposerTextView(text: draft, height: $fieldHeight, focusRequest: 0, scale: scale,
+                                 onSubmit: send, onCommand: { _ in false }, onPasteFiles: { _ in })
+                    .frame(height: fieldHeight)
+                    .overlay(alignment: .topLeading) {
+                        if (state.replyDrafts[rootID] ?? "").isEmpty {
+                            Text("Reply")
+                                .font(AppFont.body(scale))
+                                .compatForeground(.tertiary)
+                                .allowsHitTesting(false)
+                                .accessibilityHidden(true)
+                        }
                     }
+                    .groupBoxed()
+                Button(action: send) {
+                    Image(systemName: "paperplane.fill")
                 }
-                .groupBoxed()
-            Button(action: send) {
-                Image(systemName: "paperplane.fill")
+                .buttonStyle(.borderless)
+                .controlSize(.large)
+                .disabled(!canSend)
+                .help("Send Reply")
+                .accessibilityLabel("Send Reply")
+                .padding(.bottom, 6)
             }
-            .buttonStyle(.borderless)
-            .controlSize(.large)
-            .disabled(!canSend)
-            .help("Send Reply")
-            .accessibilityLabel("Send Reply")
-            .padding(.bottom, 6)
+            .padding(12)
         }
-        .padding(12)
     }
 
     private func send() {
@@ -183,21 +192,23 @@ struct TeamInspector: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 10) {
-                TeamTile(name: team.name, size: 32)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(team.name).font(.headline).lineLimit(1)
-                    Text(summary).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+        WithPerceptionTracking {
+            VStack(spacing: 0) {
+                HStack(spacing: 10) {
+                    TeamTile(name: team.name, size: 32)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(team.name).font(.headline).lineLimit(1)
+                        Text(summary).font(.caption).compatForeground(.secondary).lineLimit(1)
+                    }
+                    Spacer(minLength: 0)
                 }
-                Spacer(minLength: 0)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .accessibilityElement(children: .combine)
+                Divider()
+                content
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .accessibilityElement(children: .combine)
-            Divider()
-            content
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 
@@ -222,13 +233,13 @@ struct TeamInspector: View {
             let members = TeamRosterViewModel.nonOwners(of: sorted)
             Form {
                 if !owners.isEmpty {
-                    Section("Owners (\(owners.count))") {
+                    Section(header: Text("Owners (\(owners.count))")) {
                         ForEach(owners) { memberRow($0) }
                     }
                 }
                 Section(members.isEmpty ? "Members" : "Members (\(members.count))") {
                     if members.isEmpty {
-                        Text("No other members").foregroundStyle(.secondary)
+                        Text("No other members").compatForeground(.secondary)
                     } else {
                         ForEach(members) { memberRow($0) }
                     }
@@ -244,7 +255,7 @@ struct TeamInspector: View {
                     }
                 }
             }
-            .formStyle(.grouped)
+            .compatFormStyleGrouped()
         }
     }
 
@@ -261,7 +272,7 @@ struct TeamInspector: View {
             VStack(alignment: .leading, spacing: 0) {
                 Text(shown).lineLimit(1)
                 if let email = m.email, !email.isEmpty {
-                    Text(email).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    Text(email).font(.caption).compatForeground(.secondary).lineLimit(1)
                 }
             }
             Spacer(minLength: 4)

@@ -3,6 +3,7 @@
 import AVKit
 import OstMacCore
 import SwiftUI
+import Perception
 
 // MARK: list
 
@@ -27,57 +28,59 @@ struct RecapsListPane: View {
     @Environment(\.windowModel) private var model
 
     var body: some View {
-        if let model {
-            let all = Recap.withMeetingChats(RecapsSection.recaps(recordings, transcripts), chats: chats.chats)
-            let resolved = RecapsListState.resolve(
-                recordings: recordings.state, transcripts: transcripts.state, count: all.count,
-                forced: model.forced(.native(.recaps)), offline: model.connection == .offline,
-                chatsLoading: chats.state == .loading, chatsError: Self.chatsError(chats.state))
-            // A search (field text or server hits) keeps the search UI:
-            // zero hits read "No Results", never the no-recaps pane.
-            let searching = !filter.isEmpty || recordings.isSearchResults || transcripts.isSearchResults
-            let state = searching && model.forced(.native(.recaps)) == nil ? .recaps : resolved
-            switch state {
-            case .loading: LoadingPane("Loading Recaps\u{2026}")
-            case .error(let title, let message):
-                ErrorPane(title: title, message: message) {
-                    recordings.refresh()
-                    transcripts.refresh()
-                }
-            case .empty:
-                EmptyPane(RecapsListState.emptyTitle, systemImage: NativeAppID.recaps.symbol,
-                          message: RecapsListState.emptyMessage)
-            case .recaps:
-                VStack(spacing: 0) {
-                    HStack(spacing: 6) {
-                        SearchField(text: $filter, placeholder: "Search Recaps")
-                            .accessibilityLabel("Search Recaps")
-                        // Server search runs behind the rows on screen.
-                        ProgressView()
-                            .controlSize(.small)
-                            .opacity(recordings.isSearching || transcripts.isSearching ? 1 : 0)
-                            .accessibilityHidden(!(recordings.isSearching || transcripts.isSearching))
+        WithPerceptionTracking {
+            if let model {
+                let all = Recap.withMeetingChats(RecapsSection.recaps(recordings, transcripts), chats: chats.chats)
+                let resolved = RecapsListState.resolve(
+                    recordings: recordings.state, transcripts: transcripts.state, count: all.count,
+                    forced: model.forced(.native(.recaps)), offline: model.connection == .offline,
+                    chatsLoading: chats.state == .loading, chatsError: Self.chatsError(chats.state))
+                // A search (field text or server hits) keeps the search UI:
+                // zero hits read "No Results", never the no-recaps pane.
+                let searching = !filter.isEmpty || recordings.isSearchResults || transcripts.isSearchResults
+                let state = searching && model.forced(.native(.recaps)) == nil ? .recaps : resolved
+                switch state {
+                case .loading: LoadingPane("Loading Recaps\u{2026}")
+                case .error(let title, let message):
+                    ErrorPane(title: title, message: message) {
+                        recordings.refresh()
+                        transcripts.refresh()
                     }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 8)
-                    if let error = recordings.searchError ?? transcripts.searchError {
-                        Label(error, systemImage: "exclamationmark.triangle")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
-                            .padding(.horizontal, 10)
-                            .padding(.bottom, 6)
+                case .empty:
+                    EmptyPane(RecapsListState.emptyTitle, systemImage: NativeAppID.recaps.symbol,
+                              message: RecapsListState.emptyMessage)
+                case .recaps:
+                    VStack(spacing: 0) {
+                        HStack(spacing: 6) {
+                            SearchField(text: $filter, placeholder: "Search Recaps")
+                                .accessibilityLabel("Search Recaps")
+                            // Server search runs behind the rows on screen.
+                            ProgressView()
+                                .controlSize(.small)
+                                .opacity(recordings.isSearching || transcripts.isSearching ? 1 : 0)
+                                .accessibilityHidden(!(recordings.isSearching || transcripts.isSearching))
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 8)
+                        if let error = recordings.searchError ?? transcripts.searchError {
+                            Label(error, systemImage: "exclamationmark.triangle")
+                                .font(.caption)
+                                .compatForeground(.secondary)
+                                .lineLimit(2)
+                                .padding(.horizontal, 10)
+                                .padding(.bottom, 6)
+                        }
+                        list(all, model)
                     }
-                    list(all, model)
+                    // R12: a list refresh runs behind the rows on screen.
+                    .refreshStatus(recordings.state == .loading || transcripts.state == .loading,
+                                   failure: RecapsListState.failure(recordings.state, transcripts.state),
+                                   label: "Updating Recaps", retry: {
+                                       recordings.refresh()
+                                       transcripts.refresh()
+                                   })
+                    .onChange(of: filter) { q in search(q) }
                 }
-                // R12: a list refresh runs behind the rows on screen.
-                .refreshStatus(recordings.state == .loading || transcripts.state == .loading,
-                               failure: RecapsListState.failure(recordings.state, transcripts.state),
-                               label: "Updating Recaps", retry: {
-                                   recordings.refresh()
-                                   transcripts.refresh()
-                               })
-                .onChange(of: filter) { _, q in search(q) }
             }
         }
     }
@@ -122,25 +125,27 @@ struct RecapRow: View {
     @Environment(\.contentTextScale) private var scale
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Image(systemName: recap.symbol)
-                .foregroundStyle(.secondary)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(recap.title)
-                    .font(AppFont.body(scale))
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                Text([recap.kind, recap.recording?.durationLabel, recap.source]
-                        .compactMap { $0 }.joined(separator: " \u{00B7} "))
-                    .font(AppFont.subheadline(scale))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
+        WithPerceptionTracking {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Image(systemName: recap.symbol)
+                    .compatForeground(.secondary)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(recap.title)
+                        .font(AppFont.body(scale))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                    Text([recap.kind, recap.recording?.durationLabel, recap.source]
+                            .compactMap { $0 }.joined(separator: " \u{00B7} "))
+                        .font(AppFont.subheadline(scale))
+                        .compatForeground(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
             }
+            .padding(.vertical, 2)
+            .accessibilityElement(children: .combine)
         }
-        .padding(.vertical, 2)
-        .accessibilityElement(children: .combine)
     }
 }
 
@@ -173,23 +178,35 @@ struct RecapDetailPane: View {
     @Environment(\.windowModel) private var model
 
     var body: some View {
+        WithPerceptionTracking {
+            detail
+        }
+    }
+
+    @ViewBuilder
+    private var detail: some View {
         if let model {
             if model.forced(.native(.recaps)) == nil, let recap = RecapsSection.current(model) {
-                let vm = RecapsSection.model(for: recap, store)
-                MeetingRecapView(recap: vm, recordings: recordings, identity: recap.id)
-                    .task(id: (recap.recording?.id ?? "-") + "|" + (recap.transcript?.id ?? "-") + "|"
-                          + (Self.listError(recordings.state) ?? "") + "|" + (Self.listError(transcripts.state) ?? "")) {
-                        if recap.threadID != nil {
-                            vm.updateFiles(recording: recap.recording, transcript: recap.transcript)
-                        } else {
-                            vm.updateListErrors(recordings: Self.listError(recordings.state),
-                                                transcripts: Self.listError(transcripts.state))
-                        }
-                    }
+                recapView(recap)
             } else {
                 NoSelectionPane(RecapDetailState.noSelectionTitle)
             }
         }
+    }
+
+    private func recapView(_ recap: Recap) -> some View {
+        let vm = RecapsSection.model(for: recap, store)
+        let token = (recap.recording?.id ?? "-") + "|" + (recap.transcript?.id ?? "-") + "|"
+            + (Self.listError(recordings.state) ?? "") + "|" + (Self.listError(transcripts.state) ?? "")
+        return MeetingRecapView(recap: vm, recordings: recordings, identity: recap.id)
+            .task(id: token) {
+                if recap.threadID != nil {
+                    vm.updateFiles(recording: recap.recording, transcript: recap.transcript)
+                } else {
+                    vm.updateListErrors(recordings: Self.listError(recordings.state),
+                                        transcripts: Self.listError(transcripts.state))
+                }
+            }
     }
 }
 
@@ -204,31 +221,33 @@ struct TranscriptTurnRow: View {
     @Environment(\.contentTextScale) private var scale
 
     var body: some View {
-        Button(action: seek) {
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text(cue.startLabel)
-                    .font(AppFont.subheadline(scale))
-                    .monospacedDigit()
-                    .foregroundStyle(seekable ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
-                VStack(alignment: .leading, spacing: 2) {
-                    if let speaker = cue.speaker, !speaker.isEmpty {
-                        Text(speaker)
-                            .font(AppFont.bodyEmphasized(scale))
+        WithPerceptionTracking {
+            Button(action: seek) {
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Text(cue.startLabel)
+                        .font(AppFont.subheadline(scale))
+                        .monospacedDigit()
+                        .compatForeground(seekable ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+                    VStack(alignment: .leading, spacing: 2) {
+                        if let speaker = cue.speaker, !speaker.isEmpty {
+                            Text(speaker)
+                                .font(AppFont.bodyEmphasized(scale))
+                        }
+                        Text(cue.text)
+                            .font(AppFont.body(scale))
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    Text(cue.text)
-                        .font(AppFont.body(scale))
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                .contentShape(Rectangle())
             }
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+            .disabled(!seekable)
+            .padding(.vertical, 2)
+            .help(seekable ? "Play from \(cue.startLabel)" : "")
+            .accessibilityHint(seekable ? "Plays the recording from here" : "")
+            .accessibilityAddTraits(isCurrent ? .isSelected : [])
         }
-        .buttonStyle(.plain)
-        .disabled(!seekable)
-        .padding(.vertical, 2)
-        .help(seekable ? "Play from \(cue.startLabel)" : "")
-        .accessibilityHint(seekable ? "Plays the recording from here" : "")
-        .accessibilityAddTraits(isCurrent ? .isSelected : [])
     }
 }
 
@@ -267,11 +286,13 @@ struct RecapInspector: View {
     @Environment(\.contentTextScale) private var scale
 
     var body: some View {
-        if let recap = model.flatMap({ $0.forced(.native(.recaps)) == nil ? RecapsSection.current($0) : nil }) {
-            RecapInspectorDetail(recap: recap, vm: RecapsSection.model(for: recap, store), recordings: recordings,
-                                 transcripts: transcripts, actionItems: actionItems, scale: scale)
-        } else {
-            NoSelectionPane(RecapDetailState.noSelectionTitle)
+        WithPerceptionTracking {
+            if let recap = model.flatMap({ $0.forced(.native(.recaps)) == nil ? RecapsSection.current($0) : nil }) {
+                RecapInspectorDetail(recap: recap, vm: RecapsSection.model(for: recap, store), recordings: recordings,
+                                     transcripts: transcripts, actionItems: actionItems, scale: scale)
+            } else {
+                NoSelectionPane(RecapDetailState.noSelectionTitle)
+            }
         }
     }
 }
@@ -289,46 +310,48 @@ private struct RecapInspectorDetail: View {
     private var recording: RecordingItem? { vm.recording.value ?? recap.recording }
 
     var body: some View {
-        Form {
-            Section {
-                Text(recap.title)
-                    .font(AppFont.title3(scale))
-                    .textSelection(.enabled)
-                    .padding(.vertical, 4)
+        WithPerceptionTracking {
+            Form {
+                Section {
+                    Text(recap.title)
+                        .font(AppFont.title3(scale))
+                        .textSelection(.enabled)
+                        .padding(.vertical, 4)
+                }
+                Section {
+                    LabeledContent("Contains", value: contains)
+                    if let d = recording?.durationLabel { LabeledContent("Duration", value: d) }
+                    if let s = recording?.source ?? recap.source { LabeledContent("Location", value: s) }
+                }
+                Section(header: Text("Action Items")) { items }
+                Section {
+                    if let r = recording {
+                        Button("Save Recording to Downloads") { recordings.save(r) }
+                            .disabled(r.drive_id == nil)
+                    }
+                    if let t = recap.transcript {
+                        Button("Save Transcript to Downloads") { transcripts.save(t) }
+                            .disabled(t.drive_id == nil)
+                    }
+                    if let saved = recordings.savedPath ?? transcripts.savedPath {
+                        Label("Saved \u{201C}\((saved as NSString).lastPathComponent)\u{201D}",
+                              systemImage: "checkmark.circle")
+                            .compatForeground(.secondary)
+                    }
+                    if let error = recordings.actionError ?? transcripts.actionError {
+                        Label(error, systemImage: "exclamationmark.triangle")
+                            .compatForeground(.secondary)
+                    }
+                    Button("Open in Browser") {
+                        if let r = recording { recordings.open(r) } else if let t = recap.transcript { transcripts.open(t) }
+                    }
+                    .disabled(recording?.web_url == nil && recap.transcript?.web_url == nil)
+                }
             }
-            Section {
-                LabeledContent("Contains", value: contains)
-                if let d = recording?.durationLabel { LabeledContent("Duration", value: d) }
-                if let s = recording?.source ?? recap.source { LabeledContent("Location", value: s) }
-            }
-            Section("Action Items") { items }
-            Section {
-                if let r = recording {
-                    Button("Save Recording to Downloads") { recordings.save(r) }
-                        .disabled(r.drive_id == nil)
-                }
-                if let t = recap.transcript {
-                    Button("Save Transcript to Downloads") { transcripts.save(t) }
-                        .disabled(t.drive_id == nil)
-                }
-                if let saved = recordings.savedPath ?? transcripts.savedPath {
-                    Label("Saved \u{201C}\((saved as NSString).lastPathComponent)\u{201D}",
-                          systemImage: "checkmark.circle")
-                        .foregroundStyle(.secondary)
-                }
-                if let error = recordings.actionError ?? transcripts.actionError {
-                    Label(error, systemImage: "exclamationmark.triangle")
-                        .foregroundStyle(.secondary)
-                }
-                Button("Open in Browser") {
-                    if let r = recording { recordings.open(r) } else if let t = recap.transcript { transcripts.open(t) }
-                }
-                .disabled(recording?.web_url == nil && recap.transcript?.web_url == nil)
-            }
+            .compatFormStyleGrouped()
+            // Action items belong to one meeting: another recap starts clean.
+            .onChange(of: recap.id) { _ in actionItems.reset() }
         }
-        .formStyle(.grouped)
-        // Action items belong to one meeting: another recap starts clean.
-        .onChange(of: recap.id) { _, _ in actionItems.reset() }
     }
 
     /// What the viewer found (parts read so far).
@@ -348,7 +371,7 @@ private struct RecapInspectorDetail: View {
         switch actionItems.state {
         case .idle:
             if cues.isEmpty {
-                Text("Action items need a transcript.").foregroundStyle(.secondary)
+                Text("Action items need a transcript.").compatForeground(.secondary)
             } else {
                 Button("Find Action Items") {
                     Task { await actionItems.extractFromCues(cues, transcriptID: recap.id) }
@@ -361,13 +384,13 @@ private struct RecapInspectorDetail: View {
             ForEach(list) { item in
                 VStack(alignment: .leading, spacing: 1) {
                     Text(item.title)
-                    Text(item.owner).font(.caption).foregroundStyle(.secondary)
+                    Text(item.owner).font(.caption).compatForeground(.secondary)
                 }
             }
         case .empty(let copy):
-            Text(copy).foregroundStyle(.secondary)
+            Text(copy).compatForeground(.secondary)
         case .failed(let message):
-            Text(message).foregroundStyle(.secondary)
+            Text(message).compatForeground(.secondary)
         }
     }
 }

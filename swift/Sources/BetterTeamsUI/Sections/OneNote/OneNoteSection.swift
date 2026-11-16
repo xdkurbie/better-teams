@@ -5,6 +5,7 @@
 // OneNote, so browsing here never moves a conversation's Notes tab.
 import OstMacCore
 import SwiftUI
+import Perception
 
 @MainActor
 final class OneNoteSection: SectionProvider {
@@ -46,23 +47,25 @@ struct OneNoteOutline: View {
     @State private var collapsed: Set<String> = []
 
     var body: some View {
-        let forced = model?.forced(.native(.onenote))
-        switch forced {
-        case .loading: LoadingPane("Loading Notebooks\u{2026}")
-        case .empty:
-            EmptyPane(NotesPaneState.noNotebooksTitle, systemImage: NativeAppID.onenote.symbol,
-                      message: NotesStore.noNotebooksBody(groupID: nil))
-        case .error:
-            ErrorPane(title: model?.connection == .offline ? NotesPaneState.offlineTitle : NotesPaneState.errorTitle,
-                      message: model?.connection == .offline ? NotesPaneState.offlineMessage
-                                                               : "Something went wrong.") {}
-        case nil:
-            if store.notebooks.isEmpty {
-                listState
-            } else {
-                // R12: sections load behind the outline on screen.
-                outline
-                    .refreshStatus(store.state == .loading, label: "Updating Notebooks")
+        WithPerceptionTracking {
+            let forced = model?.forced(.native(.onenote))
+            switch forced {
+            case .loading: LoadingPane("Loading Notebooks\u{2026}")
+            case .empty:
+                EmptyPane(NotesPaneState.noNotebooksTitle, systemImage: NativeAppID.onenote.symbol,
+                          message: NotesStore.noNotebooksBody(groupID: nil))
+            case .error:
+                ErrorPane(title: model?.connection == .offline ? NotesPaneState.offlineTitle : NotesPaneState.errorTitle,
+                          message: model?.connection == .offline ? NotesPaneState.offlineMessage
+                                                                   : "Something went wrong.") {}
+            case nil:
+                if store.notebooks.isEmpty {
+                    listState
+                } else {
+                    // R12: sections load behind the outline on screen.
+                    outline
+                        .refreshStatus(store.state == .loading, label: "Updating Notebooks")
+                }
             }
         }
     }

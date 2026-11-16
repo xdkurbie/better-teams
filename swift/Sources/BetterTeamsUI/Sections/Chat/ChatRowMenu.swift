@@ -9,6 +9,7 @@
 import AppKit
 import OstMacCore
 import SwiftUI
+import Perception
 
 /// Context menu items for one chat row.
 struct ChatRowMenu: View {
@@ -21,83 +22,85 @@ struct ChatRowMenu: View {
     let model: WindowModel?
 
     var body: some View {
-        let isUnread = unread.isUnread(chatID: id)
-        Button(isUnread ? "Mark as Read" : "Mark as Unread") {
-            // CHATSYNC S3c: on Teams too (read position / bookmark).
-            if let app = model?.app {
-                app.setChatUnread(id, unread: !isUnread)
-            } else if isUnread { unread.markRead(chatID: id) } else { unread.markUnread(chatID: id) }
-        }
-        Button(chats.isPinned(id) ? "Unpin" : "Pin") {
-            if chats.isPinned(id) { chats.unpin(id) } else { chats.pin(id) }
-        }
-        Divider()
-        Button(rules.level(chatID: id) == .muted ? "Unmute" : "Mute") {
-            ChatRowActions.toggleMute(id, rules)
-        }
-        Menu("Snooze") {
-            if snooze.isSnoozed(chatID: id) {
-                Button("Turn Off Snooze") { snooze.unsnooze(chatID: id) }
-                Divider()
+        WithPerceptionTracking {
+            let isUnread = unread.isUnread(chatID: id)
+            Button(isUnread ? "Mark as Read" : "Mark as Unread") {
+                // CHATSYNC S3c: on Teams too (read position / bookmark).
+                if let app = model?.app {
+                    app.setChatUnread(id, unread: !isUnread)
+                } else if isUnread { unread.markRead(chatID: id) } else { unread.markUnread(chatID: id) }
             }
-            ForEach(SnoozeDuration.allCases, id: \.rawValue) { d in
-                Button(InfoPane.title(d)) { snooze.snooze(chatID: id, duration: d) }
+            Button(chats.isPinned(id) ? "Unpin" : "Pin") {
+                if chats.isPinned(id) { chats.unpin(id) } else { chats.pin(id) }
             }
             Divider()
-            Button("Custom…") { ChatRowActions.customSnooze(id, model) }
-        }
-        Menu("Notifications") {
-            ForEach(ChatRowActions.levels, id: \.level) { item in
-                Toggle(item.title, isOn: Binding(get: { rules.level(chatID: id) == item.level },
-                                                 set: { if $0 { rules.setLevel(chatID: id, level: item.level) } }))
+            Button(rules.level(chatID: id) == .muted ? "Unmute" : "Mute") {
+                ChatRowActions.toggleMute(id, rules)
             }
-        }
-        Menu("Move to Folder") {
-            // Teams folders (Favorites, folders made in Teams): the move
-            // is saved to Teams, so it shows in Teams too.
-            if folders.serverMover != nil, !folders.serverFolders.isEmpty {
-                ForEach(folders.serverFolders) { f in
-                    Toggle(f.name, isOn: Binding(
-                        get: { folders.overrides[id] == nil && folders.serverAssignments[id] == f.id },
-                        set: { on in Task { await folders.moveOnServer(chatID: id, to: on ? f.id : nil) } }))
+            Menu("Snooze") {
+                if snooze.isSnoozed(chatID: id) {
+                    Button("Turn Off Snooze") { snooze.unsnooze(chatID: id) }
+                    Divider()
                 }
-                .disabled(folders.movingIDs.contains(id))
+                ForEach(SnoozeDuration.allCases, id: \.rawValue) { d in
+                    Button(InfoPane.title(d)) { snooze.snooze(chatID: id, duration: d) }
+                }
                 Divider()
+                Button("Custom…") { ChatRowActions.customSnooze(id, model) }
             }
-            ForEach(folders.folders) { f in
-                Toggle(f.name, isOn: Binding(get: { folders.overrides[id] == f.id },
-                                             set: { folders.assign(chatID: id, folderID: $0 ? f.id : nil) }))
+            Menu("Notifications") {
+                ForEach(ChatRowActions.levels, id: \.level) { item in
+                    Toggle(item.title, isOn: Binding(get: { rules.level(chatID: id) == item.level },
+                                                     set: { if $0 { rules.setLevel(chatID: id, level: item.level) } }))
+                }
             }
-            if folders.overrides[id] != nil {
-                Divider()
-                Button("Remove from Folder") { folders.assign(chatID: id, folderID: nil) }
+            Menu("Move to Folder") {
+                // Teams folders (Favorites, folders made in Teams): the move
+                // is saved to Teams, so it shows in Teams too.
+                if folders.serverMover != nil, !folders.serverFolders.isEmpty {
+                    ForEach(folders.serverFolders) { f in
+                        Toggle(f.name, isOn: Binding(
+                            get: { folders.overrides[id] == nil && folders.serverAssignments[id] == f.id },
+                            set: { on in Task { await folders.moveOnServer(chatID: id, to: on ? f.id : nil) } }))
+                    }
+                    .disabled(folders.movingIDs.contains(id))
+                    Divider()
+                }
+                ForEach(folders.folders) { f in
+                    Toggle(f.name, isOn: Binding(get: { folders.overrides[id] == f.id },
+                                                 set: { folders.assign(chatID: id, folderID: $0 ? f.id : nil) }))
+                }
+                if folders.overrides[id] != nil {
+                    Divider()
+                    Button("Remove from Folder") { folders.assign(chatID: id, folderID: nil) }
+                }
+                if !folders.folders.isEmpty || folders.overrides[id] != nil { Divider() }
+                Button("New Folder…") { ChatRowActions.newFolder(id, model) }
             }
-            if !folders.folders.isEmpty || folders.overrides[id] != nil { Divider() }
-            Button("New Folder…") { ChatRowActions.newFolder(id, model) }
-        }
-        Divider()
-        Button(rules.isHidden(chatID: id) ? "Show in Chat List" : "Hide") {
-            rules.setHidden(chatID: id, hidden: !rules.isHidden(chatID: id))
-        }
-        Button("Copy Link") { ChatRowActions.copyLink(id) }
-        // CHATSYNC2b R4: the chat in its own window (Teams "Pop out chat").
-        Button("Pop Out Chat") { if let model { ChatWindowController.show(model, chatID: id) } }
-            .disabled(model?.app == nil)
-        Divider()
-        if let row = chats.chat(id: id) {
-            if row.is_group {
-                Button("Rename Chat…") { ChatManageActions.rename(id, model) }
-                Button("Add People…") { ChatManageActions.addPeople(id, model) }
-                Button("Leave Chat…") { ChatRowActions.leave(id, chats, model) }
-                    .disabled(chats.leavingIDs.contains(id))
-            } else if !ChatListFilter.isSelfChat(id) {
-                Button("Block…") { ChatRowActions.block(id, chats, model) }
+            Divider()
+            Button(rules.isHidden(chatID: id) ? "Show in Chat List" : "Hide") {
+                rules.setHidden(chatID: id, hidden: !rules.isHidden(chatID: id))
             }
-            // CHATSYNC2b R1: offered where Teams offers it (policy +
-            // meeting organizer rule, ChatDeleteRule).
-            if chats.canDelete(id) {
-                Button("Delete…", role: .destructive) { ChatRowActions.delete(id, chats, model) }
-                    .disabled(chats.deletingIDs.contains(id))
+            Button("Copy Link") { ChatRowActions.copyLink(id) }
+            // CHATSYNC2b R4: the chat in its own window (Teams "Pop out chat").
+            Button("Pop Out Chat") { if let model { ChatWindowController.show(model, chatID: id) } }
+                .disabled(model?.app == nil)
+            Divider()
+            if let row = chats.chat(id: id) {
+                if row.is_group {
+                    Button("Rename Chat…") { ChatManageActions.rename(id, model) }
+                    Button("Add People…") { ChatManageActions.addPeople(id, model) }
+                    Button("Leave Chat…") { ChatRowActions.leave(id, chats, model) }
+                        .disabled(chats.leavingIDs.contains(id))
+                } else if !ChatListFilter.isSelfChat(id) {
+                    Button("Block…") { ChatRowActions.block(id, chats, model) }
+                }
+                // CHATSYNC2b R1: offered where Teams offers it (policy +
+                // meeting organizer rule, ChatDeleteRule).
+                if chats.canDelete(id) {
+                    Button("Delete…", role: .destructive) { ChatRowActions.delete(id, chats, model) }
+                        .disabled(chats.deletingIDs.contains(id))
+                }
             }
         }
     }
@@ -194,16 +197,18 @@ struct ChatRowAccessibility: ViewModifier {
     let model: WindowModel?
 
     func body(content: Content) -> some View {
-        content
-            .accessibilityAction(named: unread.isUnread(chatID: id) ? "Mark as Read" : "Mark as Unread") {
-                ChatRowActions.toggleRead(id, chats: chats, unread: unread, model: model)
-            }
-            .accessibilityAction(named: chats.isPinned(id) ? "Unpin" : "Pin") {
-                ChatRowActions.togglePin(id, chats)
-            }
-            .accessibilityAction(named: rules.level(chatID: id) == .muted ? "Unmute" : "Mute") {
-                ChatRowActions.toggleMute(id, rules)
-            }
+        WithPerceptionTracking {
+            content
+                .accessibilityAction(named: unread.isUnread(chatID: id) ? "Mark as Read" : "Mark as Unread") {
+                    ChatRowActions.toggleRead(id, chats: chats, unread: unread, model: model)
+                }
+                .accessibilityAction(named: chats.isPinned(id) ? "Unpin" : "Pin") {
+                    ChatRowActions.togglePin(id, chats)
+                }
+                .accessibilityAction(named: rules.level(chatID: id) == .muted ? "Unmute" : "Mute") {
+                    ChatRowActions.toggleMute(id, rules)
+                }
+        }
     }
 }
 
@@ -216,22 +221,24 @@ struct NewFolderSheet: View {
     @Environment(\.windowModel) private var model
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("New Folder").font(.headline)
-            TextField("Folder Name", text: $name)
-                .textFieldStyle(.roundedBorder)
-                .onSubmit(create)
-            HStack {
-                Spacer()
-                Button("Cancel", role: .cancel) { model?.dismissSheet() }
-                    .keyboardShortcut(.cancelAction)
-                Button("Create") { create() }
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(!isValid)
+        WithPerceptionTracking {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("New Folder").font(.headline)
+                TextField("Folder Name", text: $name)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit(create)
+                HStack {
+                    Spacer()
+                    Button("Cancel", role: .cancel) { model?.dismissSheet() }
+                        .keyboardShortcut(.cancelAction)
+                    Button("Create") { create() }
+                        .keyboardShortcut(.defaultAction)
+                        .disabled(!isValid)
+                }
             }
+            .padding(20)
+            .frame(width: 320)
         }
-        .padding(20)
-        .frame(width: 320)
     }
 
     private var isValid: Bool {

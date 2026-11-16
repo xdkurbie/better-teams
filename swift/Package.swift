@@ -10,12 +10,22 @@ let rustLibDir = URL(fileURLWithPath: #filePath)
     .appendingPathComponent("rust/ostmac-core/target/release")
     .standardizedFileURL.path
 
+// Frameworks that do not exist on macOS 12.0. Availability checks make
+// the references weak; these flags keep a strong autolink from winning.
+// SwiftPM passes linkerSettings to the Swift driver, which only forwards
+// ld-only options placed after -Xlinker.
+let weakSystemFrameworks: [LinkerSetting] = [
+    .unsafeFlags(["-Xlinker", "-weak_framework", "-Xlinker", "FoundationModels"]),
+    .unsafeFlags(["-Xlinker", "-weak_framework", "-Xlinker", "Translation"]),
+    .unsafeFlags(["-Xlinker", "-weak_framework", "-Xlinker", "ScreenCaptureKit"]),
+]
+
 let rustLink: [LinkerSetting] = [
     .unsafeFlags(["-L\(rustLibDir)", "-lostmac_core"]),
     .linkedFramework("Security"),
     .linkedFramework("CoreFoundation"),
     .linkedFramework("SystemConfiguration"),
-]
+] + weakSystemFrameworks
 
 // UI-SPEC §4: every target stays in Swift 5 language mode (no strict-
 // concurrency churn in the core).
@@ -24,10 +34,15 @@ let v5: [SwiftSetting] = [.swiftLanguageMode(.v5)]
 let package = Package(
     name: "OstMac",
     // Keep in sync with MACOSX_DEPLOYMENT_TARGET in scripts/build-rust.sh.
-    platforms: [.macOS(.v26)],
+    // macOS 12 is the floor (Monterey, including Intel). Newer APIs are
+    // runtime-gated; see Shared/MacOS12Compat.swift.
+    platforms: [.macOS(.v12)],
     products: [
         .executable(name: "OstMac", targets: ["OstMac"]),
         .executable(name: "ostmac-mcp", targets: ["ostmac-mcp"]),
+    ],
+    dependencies: [
+        .package(url: "https://github.com/pointfreeco/swift-perception", from: "2.0.12"),
     ],
     targets: [
         .target(name: "COstMac", publicHeadersPath: "include"),
@@ -39,7 +54,11 @@ let package = Package(
         // until P1.
         .target(
             name: "BetterTeamsUI",
-            dependencies: ["OstMacCore", "COstMac"],
+            dependencies: [
+                "OstMacCore",
+                "COstMac",
+                .product(name: "Perception", package: "swift-perception"),
+            ],
             swiftSettings: v5
         ),
         .executableTarget(

@@ -13,6 +13,7 @@ import AppKit
 import Combine
 import OstMacCore
 import SwiftUI
+import Perception
 
 /// One row's SwiftUI content.
 struct TimelineRowContent: View {
@@ -28,10 +29,12 @@ struct TimelineRowContent: View {
     @Environment(\.messageDensity) private var density
 
     var body: some View {
-        if fills {
-            rowBody.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        } else {
-            rowBody
+        WithPerceptionTracking {
+            if fills {
+                rowBody.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            } else {
+                rowBody
+            }
         }
     }
 
@@ -41,7 +44,7 @@ struct TimelineRowContent: View {
         case .daySeparator(_, let label):
             HStack(spacing: 8) {
                 Palette.dayRule.frame(height: 1)
-                Text(label).font(AppFont.caption(scale)).foregroundStyle(.secondary).fixedSize()
+                Text(label).font(AppFont.caption(scale)).compatForeground(.secondary).fixedSize()
                 Palette.dayRule.frame(height: 1)
             }
             .padding(.horizontal, 16)
@@ -50,7 +53,7 @@ struct TimelineRowContent: View {
         case .newMessagesDivider:
             HStack(spacing: 8) {
                 VStack { Divider().overlay(Palette.newMessages) }
-                Text("New Messages").font(AppFont.caption(scale)).foregroundStyle(Palette.failed).fixedSize()
+                Text("New Messages").font(AppFont.caption(scale)).compatForeground(Palette.failed).fixedSize()
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 4)
@@ -75,17 +78,19 @@ struct JumpToLatestButton: View {
     let action: () -> Void
 
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: 4) {
-                Image(systemName: "chevron.down.circle.fill")
-                if count > 0 { Text("\(count)").monospacedDigit() }
+        WithPerceptionTracking {
+            Button(action: action) {
+                HStack(spacing: 4) {
+                    Image(systemName: "chevron.down.circle.fill")
+                    if count > 0 { Text("\(count)").monospacedDigit() }
+                }
             }
+            .chromeButtonStyle(.jumpToLatest)
+            .controlSize(.large)
+            .help("Jump to Latest")
+            .accessibilityLabel(count > 0 ? "Jump to latest, \(count) new" : "Jump to latest")
+            .padding(12)
         }
-        .chromeButtonStyle(.jumpToLatest)
-        .controlSize(.large)
-        .help("Jump to Latest")
-        .accessibilityLabel(count > 0 ? "Jump to latest, \(count) new" : "Jump to latest")
-        .padding(12)
     }
 }
 

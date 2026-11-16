@@ -5,6 +5,7 @@
 // (`JoinParse`) and opens the call pre-join in the chosen presentation.
 import OstMacCore
 import SwiftUI
+import Perception
 
 private struct CalendarSheetFrame<Content: View>: View {
     let title: String
@@ -17,42 +18,44 @@ private struct CalendarSheetFrame<Content: View>: View {
     @Environment(\.windowModel) private var model
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(title).font(.headline)
-            content
-            HStack(spacing: 8) {
-                HStack(spacing: 6) {
-                    if let busy {
-                        ProgressView().controlSize(.small)
-                        Text(busy).foregroundStyle(.secondary)
-                    } else if let error {
-                        Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Palette.failed)
-                        Text(error).foregroundStyle(.secondary)
+        WithPerceptionTracking {
+            VStack(alignment: .leading, spacing: 12) {
+                Text(title).font(.headline)
+                content
+                HStack(spacing: 8) {
+                    HStack(spacing: 6) {
+                        if let busy {
+                            ProgressView().controlSize(.small)
+                            Text(busy).compatForeground(.secondary)
+                        } else if let error {
+                            Image(systemName: "exclamationmark.triangle.fill").compatForeground(Palette.failed)
+                            Text(error).compatForeground(.secondary)
+                        }
                     }
+                    .font(.caption)
+                    .lineLimit(2)
+                    // A real spacer: the status stack is empty when idle, and a
+                    // frame on empty content does not render, which pinned the
+                    // buttons leading. Buttons trail (HIG).
+                    Spacer(minLength: 0)
+                    Button("Cancel", role: .cancel) {
+                        model?.app?.calWeek.clearUpdateError()
+                        model?.dismissSheet()
+                    }
+                    .keyboardShortcut(.cancelAction)
+                    Button(action, action: perform)
+                        .keyboardShortcut(.defaultAction)
+                        .disabled(!enabled || busy != nil)
                 }
-                .font(.caption)
-                .lineLimit(2)
-                // A real spacer: the status stack is empty when idle, and a
-                // frame on empty content does not render, which pinned the
-                // buttons leading. Buttons trail (HIG).
-                Spacer(minLength: 0)
-                Button("Cancel", role: .cancel) {
-                    model?.app?.calWeek.clearUpdateError()
-                    model?.dismissSheet()
-                }
-                .keyboardShortcut(.cancelAction)
-                Button(action, action: perform)
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(!enabled || busy != nil)
             }
+            .padding(20)
+            .frame(width: 440)
         }
-        .padding(20)
-        .frame(width: 440)
     }
 }
 
 private func prompt(_ s: String) -> Text {
-    Text(s).foregroundStyle(Color(nsColor: .placeholderTextColor))
+    Text(s).foregroundColor(Color(nsColor: .placeholderTextColor))
 }
 
 private func trimmed(_ s: String) -> String { s.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -68,21 +71,23 @@ struct NewMeetingSheet: View {
     @Environment(\.windowModel) private var model
 
     var body: some View {
-        CalendarSheetFrame(title: "New Meeting", action: "Schedule",
-                           enabled: !trimmed(subject).isEmpty && end > start,
-                           busy: week.scheduling ? "Scheduling…" : nil,
-                           error: submitted ? week.scheduleError : nil, perform: schedule) {
-            Form {
-                TextField("Subject", text: $subject, prompt: prompt("Add a title"))
-                DatePicker("Starts", selection: $start)
-                DatePicker("Ends", selection: $end)
-                Toggle("Teams meeting", isOn: $online)
+        WithPerceptionTracking {
+            CalendarSheetFrame(title: "New Meeting", action: "Schedule",
+                               enabled: !trimmed(subject).isEmpty && end > start,
+                               busy: week.scheduling ? "Scheduling…" : nil,
+                               error: submitted ? week.scheduleError : nil, perform: schedule) {
+                Form {
+                    TextField("Subject", text: $subject, prompt: prompt("Add a title"))
+                    DatePicker("Starts", selection: $start)
+                    DatePicker("Ends", selection: $end)
+                    Toggle("Teams meeting", isOn: $online)
+                }
+                .compatFormStyleColumns()
             }
-            .formStyle(.columns)
-        }
-        .onChange(of: week.scheduling) { _, busy in
-            // Async (live) path: close once the created event landed.
-            if !busy, submitted, week.scheduleError == nil { model?.dismissSheet() }
+            .onChange(of: week.scheduling) { busy in
+                // Async (live) path: close once the created event landed.
+                if !busy, submitted, week.scheduleError == nil { model?.dismissSheet() }
+            }
         }
     }
 
@@ -134,34 +139,36 @@ struct JoinMeetingSheet: View {
     }
 
     var body: some View {
-        CalendarSheetFrame(title: "Join with ID or Link", action: "Join", enabled: joinText != nil,
-                           busy: meetings.resolvingMeetingID ? "Finding meeting\u{2026}" : nil,
-                           error: submitted && mode == .meetingID ? meetings.meetingIDError : nil,
-                           perform: join) {
-            Picker("Join with", selection: $mode) {
-                ForEach(Mode.allCases) { Text($0.rawValue).tag($0) }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            Form {
-                switch mode {
-                case .meetingID:
-                    TextField("Meeting ID", text: $meetingID, prompt: prompt("123 456 789 012"))
-                    TextField("Passcode", text: $passcode, prompt: prompt("Required"))
-                case .link:
-                    TextField("Meeting link", text: $text, prompt: prompt("Paste a Teams meeting link"))
+        WithPerceptionTracking {
+            CalendarSheetFrame(title: "Join with ID or Link", action: "Join", enabled: joinText != nil,
+                               busy: meetings.resolvingMeetingID ? "Finding meeting\u{2026}" : nil,
+                               error: submitted && mode == .meetingID ? meetings.meetingIDError : nil,
+                               perform: join) {
+                Picker("Join with", selection: $mode) {
+                    ForEach(Mode.allCases) { Text($0.rawValue).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                Form {
+                    switch mode {
+                    case .meetingID:
+                        TextField("Meeting ID", text: $meetingID, prompt: prompt("123 456 789 012"))
+                        TextField("Passcode", text: $passcode, prompt: prompt("Required"))
+                    case .link:
+                        TextField("Meeting link", text: $text, prompt: prompt("Paste a Teams meeting link"))
+                    }
+                }
+                .compatFormStyleColumns()
+                HStack {
+                    Spacer()
+                    InfoButton(subject: "joining by link",
+                               text: "The meeting opens where you chose to show calls in Settings.")
                 }
             }
-            .formStyle(.columns)
-            HStack {
-                Spacer()
-                InfoButton(subject: "joining by link",
-                           text: "The meeting opens where you chose to show calls in Settings.")
+            .onChange(of: meetings.resolvingMeetingID) { busy in
+                guard !busy, submitted, mode == .meetingID, meetings.meetingIDError == nil else { return }
+                resolved()
             }
-        }
-        .onChange(of: meetings.resolvingMeetingID) { _, busy in
-            guard !busy, submitted, mode == .meetingID, meetings.meetingIDError == nil else { return }
-            resolved()
         }
     }
 
@@ -221,49 +228,51 @@ struct MeetNowSheet: View {
     private var defaultName: String { "Meeting with \(model?.ownDisplayName ?? "You")" }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Start a meeting now").font(.headline)
-            Form {
-                TextField("Meeting name", text: $name, prompt: prompt(defaultName))
-                    .disabled(created != nil)
-            }
-            .formStyle(.columns)
-            if let created, let link = created.joinURL {
-                HStack(spacing: 6) {
-                    Image(systemName: copied ? "checkmark.circle.fill" : "link").foregroundStyle(.tint)
-                    Text(copied ? "Meeting link copied" : "Meeting link").foregroundStyle(.secondary)
-                    Text(link).lineLimit(1).truncationMode(.middle).textSelection(.enabled).help(link)
+        WithPerceptionTracking {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Start a meeting now").font(.headline)
+                Form {
+                    TextField("Meeting name", text: $name, prompt: prompt(defaultName))
+                        .disabled(created != nil)
                 }
-                .font(.caption)
-            }
-            HStack(spacing: 8) {
-                HStack(spacing: 6) {
-                    if week.meetingNow {
-                        ProgressView().controlSize(.small)
-                        Text("Creating meeting\u{2026}").foregroundStyle(.secondary)
-                    } else if let error = week.meetNowError {
-                        Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Palette.failed)
-                        Text(error).foregroundStyle(.secondary)
+                .compatFormStyleColumns()
+                if let created, let link = created.joinURL {
+                    HStack(spacing: 6) {
+                        Image(systemName: copied ? "checkmark.circle.fill" : "link").compatForeground(.tint)
+                        Text(copied ? "Meeting link copied" : "Meeting link").compatForeground(.secondary)
+                        Text(link).lineLimit(1).truncationMode(.middle).textSelection(.enabled).help(link)
                     }
+                    .font(.caption)
                 }
-                .font(.caption)
-                .lineLimit(2)
-                Spacer(minLength: 0)
-                Button("Cancel", role: .cancel) { close() }
-                    .keyboardShortcut(.cancelAction)
-                if created == nil {
-                    Button("Get a link to share") { Task { await create(start: false) } }
-                        .disabled(week.meetingNow)
+                HStack(spacing: 8) {
+                    HStack(spacing: 6) {
+                        if week.meetingNow {
+                            ProgressView().controlSize(.small)
+                            Text("Creating meeting\u{2026}").compatForeground(.secondary)
+                        } else if let error = week.meetNowError {
+                            Image(systemName: "exclamationmark.triangle.fill").compatForeground(Palette.failed)
+                            Text(error).compatForeground(.secondary)
+                        }
+                    }
+                    .font(.caption)
+                    .lineLimit(2)
+                    Spacer(minLength: 0)
+                    Button("Cancel", role: .cancel) { close() }
+                        .keyboardShortcut(.cancelAction)
+                    if created == nil {
+                        Button("Get a link to share") { Task { await create(start: false) } }
+                            .disabled(week.meetingNow)
+                    }
+                    Button("Start meeting") {
+                        if let created { start(created) } else { Task { await create(start: true) } }
+                    }
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(week.meetingNow)
                 }
-                Button("Start meeting") {
-                    if let created { start(created) } else { Task { await create(start: true) } }
-                }
-                .keyboardShortcut(.defaultAction)
-                .disabled(week.meetingNow)
             }
+            .padding(20)
+            .frame(width: 460)
         }
-        .padding(20)
-        .frame(width: 460)
     }
 
     private func close() {
@@ -327,33 +336,35 @@ struct EditEventSheet: View {
     }
 
     var body: some View {
-        CalendarSheetFrame(title: "Edit Meeting", action: "Save",
-                           enabled: !trimmed(subject).isEmpty && end > start && !patch.isEmpty,
-                           busy: week.updating ? "Saving\u{2026}" : nil,
-                           error: week.updateError, perform: save) {
-            Form {
-                if meeting.isSeries {
-                    Picker("Apply to", selection: $wholeSeries) {
-                        Text("This event").tag(false)
-                        Text("All events in the series").tag(true)
+        WithPerceptionTracking {
+            CalendarSheetFrame(title: "Edit Meeting", action: "Save",
+                               enabled: !trimmed(subject).isEmpty && end > start && !patch.isEmpty,
+                               busy: week.updating ? "Saving\u{2026}" : nil,
+                               error: week.updateError, perform: save) {
+                Form {
+                    if meeting.isSeries {
+                        Picker("Apply to", selection: $wholeSeries) {
+                            Text("This event").tag(false)
+                            Text("All events in the series").tag(true)
+                        }
+                        .pickerStyle(.segmented)
                     }
-                    .pickerStyle(.segmented)
+                    TextField("Title", text: $subject, prompt: prompt("Add a title"))
+                    if !meeting.isAllDay {
+                        DatePicker("Starts", selection: $start)
+                            .disabled(wholeSeries)
+                        DatePicker("Ends", selection: $end)
+                            .disabled(wholeSeries)
+                    }
+                    TextField("Location", text: $location, prompt: prompt("Add a location"))
                 }
-                TextField("Title", text: $subject, prompt: prompt("Add a title"))
-                if !meeting.isAllDay {
-                    DatePicker("Starts", selection: $start)
-                        .disabled(wholeSeries)
-                    DatePicker("Ends", selection: $end)
-                        .disabled(wholeSeries)
-                }
-                TextField("Location", text: $location, prompt: prompt("Add a location"))
-            }
-            .formStyle(.columns)
-            if wholeSeries {
-                HStack {
-                    Spacer()
-                    InfoButton(subject: "editing a series",
-                               text: "Series times stay as they are; title and location change for every event.")
+                .compatFormStyleColumns()
+                if wholeSeries {
+                    HStack {
+                        Spacer()
+                        InfoButton(subject: "editing a series",
+                                   text: "Series times stay as they are; title and location change for every event.")
+                    }
                 }
             }
         }
@@ -414,31 +425,33 @@ struct DuplicateEventSheet: View {
     }
 
     var body: some View {
-        CalendarSheetFrame(title: title, action: "Save",
-                           enabled: !trimmed(subject).isEmpty && end > start,
-                           busy: week.creating ? "Saving\u{2026}" : nil,
-                           error: week.createError, perform: save) {
-            Form {
-                TextField("Title", text: $subject, prompt: prompt("Add a title"))
-                if draft.isAllDay {
-                    DatePicker("Starts", selection: $start, displayedComponents: .date)
-                    DatePicker("Ends", selection: $end, displayedComponents: .date)
-                } else {
-                    DatePicker("Starts", selection: $start)
-                    DatePicker("Ends", selection: $end)
+        WithPerceptionTracking {
+            CalendarSheetFrame(title: title, action: "Save",
+                               enabled: !trimmed(subject).isEmpty && end > start,
+                               busy: week.creating ? "Saving\u{2026}" : nil,
+                               error: week.createError, perform: save) {
+                Form {
+                    TextField("Title", text: $subject, prompt: prompt("Add a title"))
+                    if draft.isAllDay {
+                        DatePicker("Starts", selection: $start, displayedComponents: .date)
+                        DatePicker("Ends", selection: $end, displayedComponents: .date)
+                    } else {
+                        DatePicker("Starts", selection: $start)
+                        DatePicker("Ends", selection: $end)
+                    }
+                    AttendeeChipsEditor(people: $people, typed: $typed)
+                    TextField("Location", text: $location, prompt: prompt("Add a location"))
+                    Toggle("Teams meeting", isOn: $online)
                 }
-                AttendeeChipsEditor(people: $people, typed: $typed)
-                TextField("Location", text: $location, prompt: prompt("Add a location"))
-                Toggle("Teams meeting", isOn: $online)
+                .compatFormStyleColumns()
+                if !draft.attendees.isEmpty || draft.bodyHTML != nil {
+                    Text("Saving sends the invitation to the attendees. The description and categories are copied.")
+                        .font(.caption)
+                        .compatForeground(.secondary)
+                }
             }
-            .formStyle(.columns)
-            if !draft.attendees.isEmpty || draft.bodyHTML != nil {
-                Text("Saving sends the invitation to the attendees. The description and categories are copied.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
+            .onAppear { week.clearCreateError() }
         }
-        .onAppear { week.clearCreateError() }
     }
 
     private func save() {
@@ -461,26 +474,28 @@ struct NewWebinarSheet: View {
     @Environment(\.windowModel) private var model
 
     var body: some View {
-        CalendarSheetFrame(title: "New Webinar", action: createdID == nil ? "Create Draft" : "Done",
-                           enabled: createdID != nil || (!trimmed(title).isEmpty && end > start),
-                           busy: week.creating ? "Creating\u{2026}" : nil,
-                           error: week.createError, perform: create) {
-            if createdID != nil {
-                Label("Draft webinar created. Finish registration and publish it in Teams.",
-                      systemImage: "checkmark.circle")
-            } else {
-                Form {
-                    TextField("Title", text: $title, prompt: prompt("Webinar title"))
-                    DatePicker("Starts", selection: $start)
-                    DatePicker("Ends", selection: $end)
+        WithPerceptionTracking {
+            CalendarSheetFrame(title: "New Webinar", action: createdID == nil ? "Create Draft" : "Done",
+                               enabled: createdID != nil || (!trimmed(title).isEmpty && end > start),
+                               busy: week.creating ? "Creating\u{2026}" : nil,
+                               error: week.createError, perform: create) {
+                if createdID != nil {
+                    Label("Draft webinar created. Finish registration and publish it in Teams.",
+                          systemImage: "checkmark.circle")
+                } else {
+                    Form {
+                        TextField("Title", text: $title, prompt: prompt("Webinar title"))
+                        DatePicker("Starts", selection: $start)
+                        DatePicker("Ends", selection: $end)
+                    }
+                    .compatFormStyleColumns()
+                    Text("Webinars need a Teams webinar license. Attendees register on the event page.")
+                        .font(.caption)
+                        .compatForeground(.secondary)
                 }
-                .formStyle(.columns)
-                Text("Webinars need a Teams webinar license. Attendees register on the event page.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
+            .onAppear { week.clearCreateError() }
         }
-        .onAppear { week.clearCreateError() }
     }
 
     private func create() {

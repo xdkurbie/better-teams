@@ -2,6 +2,7 @@
 // (UI-SPEC §6.7, §6 row conventions, R18 pane states).
 import OstMacCore
 import SwiftUI
+import Perception
 
 // MARK: plans list
 
@@ -11,24 +12,26 @@ struct PlannerListPane: View {
     @Environment(\.windowModel) private var model
 
     var body: some View {
-        if let model {
-            let groups = Self.groups(planner)
-            let state = PlannerListState.resolve(
-                planner.state, planCount: groups.reduce(0) { $0 + $1.plans.count },
-                plansError: planner.plansError, forced: model.forced(.native(.planner)),
-                offline: model.connection == .offline)
-            switch state {
-            case .loading: LoadingPane("Loading Plans\u{2026}")
-            case .error(let title, let message):
-                ErrorPane(title: title, message: message) { planner.refresh() }
-            case .empty:
-                EmptyPane(PlannerListState.emptyTitle, systemImage: NativeAppID.planner.symbol,
-                          message: PlannerListState.emptyMessage)
-            case .plans:
-                // R12: a refresh runs behind the plans on screen.
-                list(groups, model)
-                    .refreshStatus(planner.state == .loading, failure: PlannerListState.failure(planner),
-                                   label: "Updating Plans", retry: { planner.refresh() })
+        WithPerceptionTracking {
+            if let model {
+                let groups = Self.groups(planner)
+                let state = PlannerListState.resolve(
+                    planner.state, planCount: groups.reduce(0) { $0 + $1.plans.count },
+                    plansError: planner.plansError, forced: model.forced(.native(.planner)),
+                    offline: model.connection == .offline)
+                switch state {
+                case .loading: LoadingPane("Loading Plans\u{2026}")
+                case .error(let title, let message):
+                    ErrorPane(title: title, message: message) { planner.refresh() }
+                case .empty:
+                    EmptyPane(PlannerListState.emptyTitle, systemImage: NativeAppID.planner.symbol,
+                              message: PlannerListState.emptyMessage)
+                case .plans:
+                    // R12: a refresh runs behind the plans on screen.
+                    list(groups, model)
+                        .refreshStatus(planner.state == .loading, failure: PlannerListState.failure(planner),
+                                       label: "Updating Plans", retry: { planner.refresh() })
+                }
             }
         }
     }
@@ -77,25 +80,27 @@ struct PlannerBoardPane: View {
     @State private var drafts: [String: String] = [:]
 
     var body: some View {
-        if let model {
-            let planID = model.forced(.native(.planner)) == nil ? PlannerSection.current(model).planID : nil
-            let showing = planID != nil && planner.selectedPlanID == planID
-            let state = PlannerBoardState.resolve(
-                planSelected: planID != nil, showing: showing, loading: planner.boardLoading,
-                error: planner.boardError, bucketCount: planner.buckets.count, taskCount: planner.tasks.count,
-                offline: model.connection == .offline)
-            switch state {
-            case .noSelection: NoSelectionPane(PlannerBoardState.noSelectionTitle)
-            case .loading: LoadingPane("Loading Board\u{2026}")
-            case .error(let title, let message):
-                ErrorPane(title: title, message: message) { planner.refreshBoard() }
-            case .noBuckets:
-                EmptyPane("No Buckets", systemImage: NativeAppID.planner.symbol,
-                          message: "Add buckets to this plan in Planner to add tasks here.")
-            case .board:
-                board(model)
-                    .refreshStatus(planner.boardLoading, failure: planner.boardError,
-                                   label: "Updating Board", retry: { planner.refreshBoard() })
+        WithPerceptionTracking {
+            if let model {
+                let planID = model.forced(.native(.planner)) == nil ? PlannerSection.current(model).planID : nil
+                let showing = planID != nil && planner.selectedPlanID == planID
+                let state = PlannerBoardState.resolve(
+                    planSelected: planID != nil, showing: showing, loading: planner.boardLoading,
+                    error: planner.boardError, bucketCount: planner.buckets.count, taskCount: planner.tasks.count,
+                    offline: model.connection == .offline)
+                switch state {
+                case .noSelection: NoSelectionPane(PlannerBoardState.noSelectionTitle)
+                case .loading: LoadingPane("Loading Board\u{2026}")
+                case .error(let title, let message):
+                    ErrorPane(title: title, message: message) { planner.refreshBoard() }
+                case .noBuckets:
+                    EmptyPane("No Buckets", systemImage: NativeAppID.planner.symbol,
+                              message: "Add buckets to this plan in Planner to add tasks here.")
+                case .board:
+                    board(model)
+                        .refreshStatus(planner.boardLoading, failure: planner.boardError,
+                                       label: "Updating Board", retry: { planner.refreshBoard() })
+                }
             }
         }
     }
@@ -122,7 +127,7 @@ struct PlannerBoardPane: View {
                 }
             }
             if !orphans.isEmpty {
-                Section("Other Tasks") {
+                Section(header: Text("Other Tasks")) {
                     ForEach(orphans) { task in
                         PlannerTaskRow(task: task, now: now, assignees: PlannerFormat.assignees(task, planner).map(\.name)) {
                             PlannerSection.toggle(task, planner)
@@ -133,7 +138,7 @@ struct PlannerBoardPane: View {
             }
         }
         .listStyle(.inset)
-        .contextMenu(forSelectionType: String.self) { ids in
+        .compatSelectionMenu(forSelectionType: String.self) { ids in
             if let id = ids.first, let task = planner.tasks.first(where: { $0.taskId == id }) {
                 Button(task.completed ? "Mark as Incomplete" : "Mark as Complete") {
                     PlannerSection.toggle(task, planner)
@@ -161,43 +166,45 @@ struct PlannerTaskRow: View {
     @Environment(\.contentTextScale) private var scale
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Toggle(isOn: Binding(get: { task.completed }, set: { _ in toggle() })) {
-                EmptyView()
-            }
-            .toggleStyle(.checkbox)
-            .labelsHidden()
-            .accessibilityLabel(task.completed ? "Completed" : "Not completed")
-            if PlannerFormat.isFlagged(task.priority) {
-                Image(systemName: "exclamationmark")
-                    .font(AppFont.bodyEmphasized(scale))
-                    .foregroundStyle(.red)
-                    .accessibilityLabel(PlannerFormat.priority(task.priority))
-            }
-            Text(task.title)
-                .font(AppFont.body(scale))
-                .foregroundStyle(task.completed ? .secondary : .primary)
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            if let who = PlannerFormat.assigneeSummary(assignees) {
-                Label(who, systemImage: assignees.count > 1 ? "person.2" : "person")
-                    .font(AppFont.subheadline(scale))
-                    .foregroundStyle(.secondary)
+        WithPerceptionTracking {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Toggle(isOn: Binding(get: { task.completed }, set: { _ in toggle() })) {
+                    EmptyView()
+                }
+                .toggleStyle(.checkbox)
+                .labelsHidden()
+                .accessibilityLabel(task.completed ? "Completed" : "Not completed")
+                if PlannerFormat.isFlagged(task.priority) {
+                    Image(systemName: "exclamationmark")
+                        .font(AppFont.bodyEmphasized(scale))
+                        .compatForeground(.red)
+                        .accessibilityLabel(PlannerFormat.priority(task.priority))
+                }
+                Text(task.title)
+                    .font(AppFont.body(scale))
+                    .compatForeground(task.completed ? .secondary : .primary)
                     .lineLimit(1)
-                    .help(assignees.joined(separator: ", "))
-                    .accessibilityLabel("Assigned to \(assignees.joined(separator: ", "))")
+                    .truncationMode(.tail)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                if let who = PlannerFormat.assigneeSummary(assignees) {
+                    Label(who, systemImage: assignees.count > 1 ? "person.2" : "person")
+                        .font(AppFont.subheadline(scale))
+                        .compatForeground(.secondary)
+                        .lineLimit(1)
+                        .help(assignees.joined(separator: ", "))
+                        .accessibilityLabel("Assigned to \(assignees.joined(separator: ", "))")
+                }
+                if let due = PlannerFormat.dueDate(task.due) {
+                    Text(PlannerFormat.due(due, now: now))
+                        .font(AppFont.subheadline(scale))
+                        .monospacedDigit()
+                        .compatForeground(PlannerFormat.isOverdue(task, now: now) ? AnyShapeStyle(.red)
+                                                                                  : AnyShapeStyle(.secondary))
+                        .accessibilityLabel("Due \(PlannerFormat.due(due, now: now))")
+                }
             }
-            if let due = PlannerFormat.dueDate(task.due) {
-                Text(PlannerFormat.due(due, now: now))
-                    .font(AppFont.subheadline(scale))
-                    .monospacedDigit()
-                    .foregroundStyle(PlannerFormat.isOverdue(task, now: now) ? AnyShapeStyle(.red)
-                                                                              : AnyShapeStyle(.secondary))
-                    .accessibilityLabel("Due \(PlannerFormat.due(due, now: now))")
-            }
+            .padding(.vertical, 2)
         }
-        .padding(.vertical, 2)
     }
 }
 
@@ -208,14 +215,16 @@ struct AssignMenu: View {
     @ObservedObject var planner: PlannerViewModel
 
     var body: some View {
-        Menu("Assign To") {
-            if planner.members.isEmpty {
-                Text("No Team Members")
-            }
-            ForEach(planner.members) { member in
-                Toggle(member.name, isOn: Binding(
-                    get: { task.assignees.contains(member.id) },
-                    set: { planner.assign(taskID: task.taskId, userID: member.id, assigned: $0) }))
+        WithPerceptionTracking {
+            Menu("Assign To") {
+                if planner.members.isEmpty {
+                    Text("No Team Members")
+                }
+                ForEach(planner.members) { member in
+                    Toggle(member.name, isOn: Binding(
+                        get: { task.assignees.contains(member.id) },
+                        set: { planner.assign(taskID: task.taskId, userID: member.id, assigned: $0) }))
+                }
             }
         }
     }
@@ -228,16 +237,18 @@ struct AddTaskField: View {
     @Environment(\.contentTextScale) private var scale
 
     var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "plus")
-                .foregroundStyle(.secondary)
-                .accessibilityHidden(true)
-            TextField("Add Task", text: $text)
-                .textFieldStyle(.plain)
-                .font(AppFont.body(scale))
-                .onSubmit(submit)
+        WithPerceptionTracking {
+            HStack(spacing: 8) {
+                Image(systemName: "plus")
+                    .compatForeground(.secondary)
+                    .accessibilityHidden(true)
+                TextField("Add Task", text: $text)
+                    .textFieldStyle(.plain)
+                    .font(AppFont.body(scale))
+                    .onSubmit(submit)
+            }
+            .padding(.vertical, 2)
         }
-        .padding(.vertical, 2)
     }
 }
 
@@ -251,10 +262,12 @@ struct PlannerTaskInspector: View {
     @Environment(\.contentTextScale) private var scale
 
     var body: some View {
-        if let model, let task = PlannerSection.selectedTask(model) {
-            detail(task)
-        } else {
-            NoSelectionPane("No Task Selected")
+        WithPerceptionTracking {
+            if let model, let task = PlannerSection.selectedTask(model) {
+                detail(task)
+            } else {
+                NoSelectionPane("No Task Selected")
+            }
         }
     }
 
@@ -281,13 +294,13 @@ struct PlannerTaskInspector: View {
                 } ?? "None")
                 if PlannerFormat.isOverdue(task, now: now) {
                     Label("Overdue", systemImage: "exclamationmark.circle")
-                        .foregroundStyle(.red)
+                        .compatForeground(.red)
                 }
             }
-            Section("Assigned To") {
+            Section(header: Text("Assigned To")) {
                 let people = PlannerFormat.assignees(task, planner)
                 if people.isEmpty {
-                    Text("Unassigned").foregroundStyle(.secondary)
+                    Text("Unassigned").compatForeground(.secondary)
                 }
                 ForEach(people) { person in
                     Label(person.name, systemImage: "person")
@@ -301,6 +314,6 @@ struct PlannerTaskInspector: View {
                 }
             }
         }
-        .formStyle(.grouped)
+        .compatFormStyleGrouped()
     }
 }

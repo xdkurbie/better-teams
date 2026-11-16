@@ -5,7 +5,7 @@
 // Demo: a deterministic local catalog, no network, no user defaults.
 import AppKit
 import Foundation
-import Observation
+import Perception
 import OstMacCore
 
 /// Store selections inside the Apps section: `[<appID>, "store"]` is an
@@ -33,7 +33,7 @@ enum AppStoreRoute {
     }
 }
 
-@Observable
+@Perceptible
 @MainActor
 final class AppStoreModel {
     private(set) var sections: [TeamsAppStoreSection] = []
@@ -46,15 +46,15 @@ final class AppStoreModel {
     private(set) var searching = false
     private(set) var installing: Set<String> = []
     private(set) var installError: String?
-    @ObservationIgnored let demo: Bool
-    @ObservationIgnored private let accountKey: String
-    @ObservationIgnored private var searchTask: Task<Void, Never>?
-    @ObservationIgnored private let searchDelay = Debounce(milliseconds: 300)
+    @PerceptionIgnored let demo: Bool
+    @PerceptionIgnored private let accountKey: String
+    @PerceptionIgnored private var searchTask: Task<Void, Never>?
+    @PerceptionIgnored private let searchDelay = Debounce(milliseconds: 300)
     /// Installed catalog manifests (set by the library).
-    @ObservationIgnored private var catalog: [TeamsAppManifest] = []
+    @PerceptionIgnored private var catalog: [TeamsAppManifest] = []
     /// Demo installs land here (in memory only).
-    @ObservationIgnored var onDemoInstall: ((TeamsAppManifest) -> Void)?
-    @ObservationIgnored var onInstalled: (() -> Void)?
+    @PerceptionIgnored var onDemoInstall: ((TeamsAppManifest) -> Void)?
+    @PerceptionIgnored var onInstalled: (() -> Void)?
 
     init(accountKey: String) {
         self.accountKey = accountKey
@@ -94,7 +94,7 @@ final class AppStoreModel {
     /// Apps installed in a team but not for the user (APPHOST-B3): their
     /// channel tabs need the manifest to be matched.
     private(set) var teamApps: [TeamsAppManifest] = []
-    @ObservationIgnored private var teamAppsAsked: Set<String> = []
+    @PerceptionIgnored private var teamAppsAsked: Set<String> = []
 
     /// Loads (once per team) the manifests of the team's installed apps
     /// and of `tabAppIDs` the catalog doesn't know. Read-only; idempotent.

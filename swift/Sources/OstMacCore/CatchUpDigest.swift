@@ -89,9 +89,9 @@ public final class CatchUpDigestStore: ObservableObject {
     public var isFilling: Bool { working != nil && !filledPeriods.contains(period) }
 
     /// Coalescing window between an arrival and the cycle it triggers.
-    public var debounce: Duration = .seconds(30)
+    public var debounce: TimeInterval = 30
     /// Delay before filling a newly selected tab (Always up to date).
-    public var fillDelay: Duration = .seconds(1)
+    public var fillDelay: TimeInterval = 1
     /// Cap on conversations summarized per background cycle.
     public var maxChatsPerCycle = 3
     /// Cap per user-initiated cycle (Update Now, a tab switch).
@@ -274,7 +274,7 @@ public final class CatchUpDigestStore: ObservableObject {
             seedIfNeeded()
         case .alwaysUpToDate:
             seedIfNeeded()
-            schedule(after: .seconds(2))
+            schedule(after: 2)
         }
     }
 
@@ -349,14 +349,14 @@ public final class CatchUpDigestStore: ObservableObject {
         for s in picks { ingest(chatID: s.chatID, chatName: s.chatName, messages: s.messages) }
     }
 
-    private func schedule(after delay: Duration) {
+    private func schedule(after delay: TimeInterval) {
         guard cycleTask == nil, !running, pending > 0, mode() == .alwaysUpToDate else { return }
         if let p = currentPause() {
             paused = p
             return
         }
         cycleTask = Task(priority: .utility) { [weak self] in
-            try? await Task.sleep(for: delay)
+            try? await BTSleep.seconds(delay)
             guard !Task.isCancelled else { return }
             await self?.runCycle(userInitiated: false)
         }
@@ -377,7 +377,7 @@ public final class CatchUpDigestStore: ObservableObject {
             cycleTask?.cancel()
             cycleTask = nil
         } else {
-            schedule(after: .seconds(5))
+            schedule(after: 5)
         }
     }
 

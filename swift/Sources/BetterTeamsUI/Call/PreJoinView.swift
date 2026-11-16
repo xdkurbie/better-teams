@@ -4,6 +4,7 @@
 // Mute and Camera items show before joining.
 import OstMacCore
 import SwiftUI
+import Perception
 
 struct PreJoinView: View {
     let session: CallSession
@@ -13,34 +14,36 @@ struct PreJoinView: View {
     @Environment(\.contentTextScale) private var scale
 
     var body: some View {
-        PaneAnchorLayout {
-            VStack(spacing: 14) {
-                Text(session.title)
-                    .font(.title2)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.center)
-                Text(status)
-                    .font(AppFont.body(scale))
-                    .foregroundStyle(.secondary)
-                CallTileView(tile: preview, camera: session.camera)
-                    .aspectRatio(16.0 / 9.0, contentMode: .fit)
-                    .frame(width: 400)
-                HStack(spacing: 20) {
-                    Toggle("Microphone", isOn: Binding(get: { session.preMicOn },
-                                                       set: { if $0 != session.preMicOn { session.toggleMute() } }))
-                    Toggle("Camera", isOn: Binding(get: { session.preCameraOn },
-                                                   set: { if $0 != session.preCameraOn { session.toggleCamera() } }))
+        WithPerceptionTracking {
+            CenteredPane {
+                VStack(spacing: 14) {
+                    Text(session.title)
+                        .font(.title2)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.center)
+                    Text(status)
+                        .font(AppFont.body(scale))
+                        .compatForeground(.secondary)
+                    CallTileView(tile: preview, camera: session.camera)
+                        .aspectRatio(16.0 / 9.0, contentMode: .fit)
+                        .frame(width: 400)
+                    HStack(spacing: 20) {
+                        Toggle("Microphone", isOn: Binding(get: { session.preMicOn },
+                                                           set: { if $0 != session.preMicOn { session.toggleMute() } }))
+                        Toggle("Camera", isOn: Binding(get: { session.preCameraOn },
+                                                       set: { if $0 != session.preCameraOn { session.toggleCamera() } }))
+                    }
+                    .toggleStyle(.switch)
+                    CallDevicesForm(devices: session.devices)
+                        .frame(width: 400)
+                    Button(session.preCameraOn ? "Join with Video" : "Join Now") { session.joinNow() }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.large)
+                        .keyboardShortcut(.defaultAction)
+                        .disabled(!canJoin)
                 }
-                .toggleStyle(.switch)
-                CallDevicesForm(devices: session.devices)
-                    .frame(width: 400)
-                Button(session.preCameraOn ? "Join with Video" : "Join Now") { session.joinNow() }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(!canJoin)
+                .padding(24)
             }
-            .padding(24)
         }
     }
 

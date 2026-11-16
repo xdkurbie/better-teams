@@ -50,7 +50,7 @@ enum EvidenceGeometry {
         if let tb = bar {
             let items = tb.items.map { item -> String in
                 var s = item.itemIdentifier.rawValue.replacingOccurrences(of: "NSToolbar", with: "")
-                if item.isHidden { s += "(hidden)" }
+                if item.btHidden { s += "(hidden)" }
                 // Validation state (menu/action items, and view items'
                 // controls): "(off)" = disabled.
                 if !item.isEnabled || (item.view as? NSControl)?.isEnabled == false { s += "(off)" }
@@ -76,7 +76,7 @@ enum EvidenceGeometry {
                         guard v.responds(to: NSSelectorFromString("item")),
                               let item = v.value(forKey: "item") as? NSToolbarItem else { return nil }
                         let r = v.convert(v.bounds, to: nil)
-                        guard r.width > 0, !item.isHidden else { return nil }
+                        guard r.width > 0, !item.btHidden else { return nil }
                         return (item.itemIdentifier.rawValue, r)
                     }
                     .sorted { $0.1.minX < $1.1.minX }

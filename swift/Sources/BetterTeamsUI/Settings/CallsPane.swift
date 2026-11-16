@@ -8,9 +8,10 @@
 // placeholder camera feed, no hardware, no stored preferences.
 import OstMacCore
 import SwiftUI
+import Perception
 
 struct CallsSettingsPane: View {
-    @Bindable var settings: CallSettings
+    @Perception.Bindable var settings: CallSettings
     let devices: CallDevices
     let model: WindowModel?
     @State private var previewOn = false
@@ -29,58 +30,60 @@ struct CallsSettingsPane: View {
     }
 
     var body: some View {
-        Form {
-            Section {
-                Picker("Show calls:", selection: $settings.presentation) {
-                    ForEach(CallPresentation.allCases, id: \.rawValue) { p in
-                        Text(p.title).tag(p)
+        WithPerceptionTracking {
+            Form {
+                Section {
+                    Picker("Show calls:", selection: $settings.presentation) {
+                        ForEach(CallPresentation.allCases, id: \.rawValue) { p in
+                            Text(p.title).tag(p)
+                        }
+                    }
+                    .pickerStyle(.radioGroup)
+                }
+                Section(header: Text("Devices")) {
+                    CallDevicesForm(devices: devices)
+                    LabeledContent("Test") {
+                        Button("Test Speaker and Microphone\u{2026}") { testing = true }
+                            .disabled(!devices.loaded)
                     }
                 }
-                .pickerStyle(.radioGroup)
-            }
-            Section("Devices") {
-                CallDevicesForm(devices: devices)
-                LabeledContent("Test") {
-                    Button("Test Speaker and Microphone\u{2026}") { testing = true }
-                        .disabled(!devices.loaded)
+                Section(header: Text("Camera")) {
+                    Toggle("Preview camera", isOn: $previewOn)
+                    CallTileView(tile: CallTile(id: "self", name: model?.ownDisplayName ?? "You", kind: .selfView,
+                                                speaking: false, muted: false, cameraOn: previewOn),
+                                 camera: devices.capture)
+                        .aspectRatio(16.0 / 9.0, contentMode: .fit)
+                        .frame(width: 240)
+                        .frame(maxWidth: .infinity)
                 }
-            }
-            Section("Camera") {
-                Toggle("Preview camera", isOn: $previewOn)
-                CallTileView(tile: CallTile(id: "self", name: model?.ownDisplayName ?? "You", kind: .selfView,
-                                            speaking: false, muted: false, cameraOn: previewOn),
-                             camera: devices.capture)
-                    .aspectRatio(16.0 / 9.0, contentMode: .fit)
-                    .frame(width: 240)
-                    .frame(maxWidth: .infinity)
-            }
-            Section {
-                LabeledContent {
-                    Button("Start Test Call") { startTestCall() }
-                        .disabled(model?.app == nil || model?.call?.ended == false)
-                } label: {
-                    InfoLabel(title: "Test call", subject: "the test call",
-                              text: "Calls an echo service so you can hear yourself and check your devices.")
-                }
-            }
-            // R23: sheets go through SheetPresenter (R17), which Settings
-            // panes cannot reach; the device test expands inline instead.
-            if testing {
                 Section {
-                    CallDeviceTestSheet(devices: devices, callActive: model?.call?.ended == false) { testing = false }
+                    LabeledContent {
+                        Button("Start Test Call") { startTestCall() }
+                            .disabled(model?.app == nil || model?.call?.ended == false)
+                    } label: {
+                        InfoLabel(title: "Test call", subject: "the test call",
+                                  text: "Calls an echo service so you can hear yourself and check your devices.")
+                    }
+                }
+                // R23: sheets go through SheetPresenter (R17), which Settings
+                // panes cannot reach; the device test expands inline instead.
+                if testing {
+                    Section {
+                        CallDeviceTestSheet(devices: devices, callActive: model?.call?.ended == false) { testing = false }
+                    }
                 }
             }
+            .compatFormStyleGrouped()
+            .compatScrollDisabled()
+            .frame(width: SettingsWindowController.paneWidth)
+            .fixedSize(horizontal: false, vertical: true)
+            .onAppear { devices.setLevelWanted(true, by: .settings) }
+            .onDisappear {
+                devices.setLevelWanted(false, by: .settings)
+                previewOn = false
+            }
+            .onChange(of: previewOn) { on in devices.setSettingsPreview(on) }
         }
-        .formStyle(.grouped)
-        .scrollDisabled(true)
-        .frame(width: SettingsWindowController.paneWidth)
-        .fixedSize(horizontal: false, vertical: true)
-        .onAppear { devices.setLevelWanted(true, by: .settings) }
-        .onDisappear {
-            devices.setLevelWanted(false, by: .settings)
-            previewOn = false
-        }
-        .onChange(of: previewOn) { _, on in devices.setSettingsPreview(on) }
     }
 
     private func startTestCall() {

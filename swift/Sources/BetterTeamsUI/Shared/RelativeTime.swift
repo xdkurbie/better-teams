@@ -4,16 +4,16 @@
 // Under `--evidence` the clock is pinned to the demo epoch so captures
 // are deterministic.
 import Foundation
-import Observation
+import Perception
 
-@Observable
+@Perceptible
 @MainActor
 public final class RelativeClock {
     public static let shared = RelativeClock()
 
     public private(set) var now = Date()
-    @ObservationIgnored private var timer: Timer?
-    @ObservationIgnored private var pinned = false
+    @PerceptionIgnored private var timer: Timer?
+    @PerceptionIgnored private var pinned = false
 
     private init() {}
 

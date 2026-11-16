@@ -1,7 +1,7 @@
 // MessageRowView.swift — one timeline message row (UI-SPEC §6.2.1).
 //
 // Header name (`.headline`) + time (`.caption`); body from MessageRender
-// with mentions tinted and code monospaced on `.fill.quaternary`; reply
+// with mentions tinted and code monospaced on `CompatFill.quaternary`; reply
 // quote; images in reserved slots (R13); file chips; adaptive/bot cards with native
 // buttons; link preview; reaction chips; edited marker; translation;
 // "Seen by …" on the last own message. In chats every message sits on
@@ -13,6 +13,7 @@
 // `MessageRowData`, whose `extraRevision` feeds the height cache.
 import OstMacCore
 import SwiftUI
+import Perception
 
 /// Send state of one bubble (reserved slot, R13).
 enum SendState: Equatable {
@@ -119,15 +120,17 @@ struct FailedSendStatus: View {
     @Environment(\.contentTextScale) private var scale
 
     var body: some View {
-        HStack(spacing: 8) {
-            Label(Self.text, systemImage: "exclamationmark.circle")
-                .font(AppFont.caption(scale))
-                .foregroundStyle(Palette.failed)
-            if let retry {
-                Button(Self.retryTitle, action: retry)
-                    .controlSize(.small)
-                    .help("Send this message again.")
-                    .accessibilityLabel("Retry sending")
+        WithPerceptionTracking {
+            HStack(spacing: 8) {
+                Label(Self.text, systemImage: "exclamationmark.circle")
+                    .font(AppFont.caption(scale))
+                    .compatForeground(Palette.failed)
+                if let retry {
+                    Button(Self.retryTitle, action: retry)
+                        .controlSize(.small)
+                        .help("Send this message again.")
+                        .accessibilityLabel("Retry sending")
+                }
             }
         }
     }
@@ -147,43 +150,45 @@ struct MessageRowView: View {
     private var message: ChatMessage { row.message }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            if row.ownTrailing {
-                Spacer(minLength: Self.ownGutter)
-                VStack(alignment: .trailing, spacing: 4) {
-                    lane(ownHeader, slack: Self.ownGutter)
-                    bubbleReactions
-                    sendStatus
-                    if row.receipt.isVisible { receipt }
+        WithPerceptionTracking {
+            HStack(alignment: .top, spacing: 10) {
+                if row.ownTrailing {
+                    Spacer(minLength: Self.ownGutter)
+                    VStack(alignment: .trailing, spacing: 4) {
+                        lane(ownHeader, slack: Self.ownGutter)
+                        bubbleReactions
+                        sendStatus
+                        if row.receipt.isVisible { receipt }
+                    }
+                } else {
+                    Group {
+                        // Own posts (channels, threads): initials from the owner's name.
+                        if row.showsHeader {
+                            Avatar(name: message.isOwn ? (model?.ownDisplayName ?? message.sender) : message.sender)
+                                .contactHover(name: message.isOwn ? (model?.ownDisplayName ?? message.sender) : message.sender)
+                        } else { Color.clear }
+                    }
+                    .frame(width: 28, height: row.showsHeader ? 28 : 1)
+                    VStack(alignment: .leading, spacing: 4) {
+                        lane(header, slack: Self.otherGutter)
+                        bubbleReactions
+                        sendStatus
+                        if row.receipt.isVisible { receipt }
+                    }
+                    Spacer(minLength: Self.otherGutter)
                 }
-            } else {
-                Group {
-                    // Own posts (channels, threads): initials from the owner's name.
-                    if row.showsHeader {
-                        Avatar(name: message.isOwn ? (model?.ownDisplayName ?? message.sender) : message.sender)
-                            .contactHover(name: message.isOwn ? (model?.ownDisplayName ?? message.sender) : message.sender)
-                    } else { Color.clear }
-                }
-                .frame(width: 28, height: row.showsHeader ? 28 : 1)
-                VStack(alignment: .leading, spacing: 4) {
-                    lane(header, slack: Self.otherGutter)
-                    bubbleReactions
-                    sendStatus
-                    if row.receipt.isVisible { receipt }
-                }
-                Spacer(minLength: Self.otherGutter)
             }
+            .padding(.horizontal, 16)
+            .padding(.top, row.showsHeader ? density.metrics.headerTop : density.metrics.continuationTop)
+            .padding(.bottom, density.metrics.rowBottom)
+            .background { highlight }
+            .contentShape(Rectangle())
+            .onHover { inside in actions?.hover.pointer(inside, id: message.id) }
+            .contextMenu { if let actions { MessageContextMenu(row: row, actions: actions) } }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(accessibilityText)
+            .modifier(MessageAccessibilityActions(row: row, actions: actions))
         }
-        .padding(.horizontal, 16)
-        .padding(.top, row.showsHeader ? density.metrics.headerTop : density.metrics.continuationTop)
-        .padding(.bottom, density.metrics.rowBottom)
-        .background { highlight }
-        .contentShape(Rectangle())
-        .onHover { inside in actions?.hover.pointer(inside, id: message.id) }
-        .contextMenu { if let actions { MessageContextMenu(row: row, actions: actions) } }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(accessibilityText)
-        .modifier(MessageAccessibilityActions(row: row, actions: actions))
     }
 
     private var header: some View {
@@ -194,13 +199,13 @@ struct MessageRowView: View {
                 .contactHover(name: message.isOwn ? (model?.ownDisplayName ?? message.sender) : message.sender)
             Text(Self.time(message.timestamp))
                 .font(AppFont.caption(scale))
-                .foregroundStyle(.secondary)
+                .compatForeground(.secondary)
                 .fixedSize()
             if message.edited && !message.deleted {
-                Text("Edited").font(AppFont.caption(scale)).foregroundStyle(.secondary).fixedSize()
+                Text("Edited").font(AppFont.caption(scale)).compatForeground(.secondary).fixedSize()
             }
             if row.isPinned {
-                Image(systemName: "pin.fill").font(AppFont.caption(scale)).foregroundStyle(.secondary)
+                Image(systemName: "pin.fill").font(AppFont.caption(scale)).compatForeground(.secondary)
                     .accessibilityLabel("Pinned")
             }
         }
@@ -210,15 +215,15 @@ struct MessageRowView: View {
     private var ownHeader: some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
             if row.isPinned {
-                Image(systemName: "pin.fill").font(AppFont.caption(scale)).foregroundStyle(.secondary)
+                Image(systemName: "pin.fill").font(AppFont.caption(scale)).compatForeground(.secondary)
                     .accessibilityLabel("Pinned")
             }
             if message.edited && !message.deleted {
-                Text("Edited").font(AppFont.caption(scale)).foregroundStyle(.secondary).fixedSize()
+                Text("Edited").font(AppFont.caption(scale)).compatForeground(.secondary).fixedSize()
             }
             Text(Self.time(message.timestamp))
                 .font(AppFont.caption(scale))
-                .foregroundStyle(.secondary)
+                .compatForeground(.secondary)
                 .fixedSize()
         }
     }
@@ -232,7 +237,7 @@ struct MessageRowView: View {
             content
             if let t = row.translation, t.isVisible { translation(t) }
             if !row.showsHeader && message.edited && !message.deleted {
-                Text("Edited").font(AppFont.caption(scale)).foregroundStyle(.secondary)
+                Text("Edited").font(AppFont.caption(scale)).compatForeground(.secondary)
             }
             if row.bubble == .none { reactions }
         }
@@ -261,14 +266,26 @@ struct MessageRowView: View {
     /// this row (beside the bubble, in the header line, or a reserved
     /// strip). The slot is laid out whether or not the bar shows, so it
     /// never covers content and nothing moves when it appears.
+    @ViewBuilder
     private func lane(_ head: some View, slack: CGFloat) -> some View {
         let toolbar = actions != nil && HoverToolbarRules.isAvailable(row)
             ? HoverToolbarRules.size(scale: scale) : nil
-        return BubbleLane(ownTrailing: row.ownTrailing, hasHeader: row.showsHeader, toolbar: toolbar,
-                          slack: slack, topPadding: row.showsHeader ? 8 : 2) {
-            if row.showsHeader { head }
-            card
-            if let actions, toolbar != nil { HoverToolbarSlot(row: row, actions: actions) }
+        if #available(macOS 13, *) {
+            BubbleLane(ownTrailing: row.ownTrailing, hasHeader: row.showsHeader, toolbar: toolbar,
+                       slack: slack, topPadding: row.showsHeader ? 8 : 2) {
+                if row.showsHeader { head }
+                card
+                if let actions, toolbar != nil { HoverToolbarSlot(row: row, actions: actions) }
+            }
+        } else {
+            // macOS 12 has no Layout protocol. Stack the header, bubble and
+            // toolbar; the bar may sit under the bubble instead of beside it.
+            VStack(alignment: row.ownTrailing ? .trailing : .leading, spacing: 2) {
+                if row.showsHeader { head }
+                card
+                if let actions, toolbar != nil { HoverToolbarSlot(row: row, actions: actions) }
+            }
+            .frame(maxWidth: .infinity, alignment: row.ownTrailing ? .trailing : .leading)
         }
     }
 
@@ -290,8 +307,8 @@ struct MessageRowView: View {
         if message.deleted {
             Text("This message has been deleted.")
                 .font(AppFont.body(scale))
-                .italic()
-                .foregroundStyle(.secondary)
+                .compatItalic()
+                .compatForeground(.secondary)
         } else {
             let text = MessageRender.bubbleText(for: message)
             if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -335,7 +352,7 @@ struct MessageRowView: View {
                 HStack(spacing: 8) {
                     Text("This message can't be shown here.")
                         .font(AppFont.body(scale))
-                        .foregroundStyle(.secondary)
+                        .compatForeground(.secondary)
                     Button("Open in Teams") {
                         CardLinks.open(CardActions.fallbackURL(chatID: row.chatID, messageID: message.id).absoluteString)
                     }
@@ -350,18 +367,18 @@ struct MessageRowView: View {
         VStack(alignment: .leading, spacing: 2) {
             switch t.state {
             case .pending:
-                Text("Translating…").font(AppFont.caption(scale)).foregroundStyle(.secondary)
+                Text("Translating…").font(AppFont.caption(scale)).compatForeground(.secondary)
             case .failed:
                 Text("Couldn't translate this message.").font(AppFont.caption(scale))
-                    .foregroundStyle(.secondary)
+                    .compatForeground(.secondary)
             case .sameLanguage:
                 Text("Already in \(MessageTranslation.displayName(for: t.targetCode)).")
-                    .font(AppFont.caption(scale)).foregroundStyle(.secondary)
+                    .font(AppFont.caption(scale)).compatForeground(.secondary)
             case .translated:
                 Label("Translated from \(t.sourceCode.map(MessageTranslation.displayName(for:)) ?? "another language")",
                       systemImage: "translate")
                     .font(AppFont.caption(scale))
-                    .foregroundStyle(.secondary)
+                    .compatForeground(.secondary)
                 Text(t.text)
                     .font(AppFont.body(scale))
                     .textSelection(.enabled)
@@ -390,7 +407,7 @@ struct MessageRowView: View {
             }
         }
         .font(AppFont.caption(scale))
-        .foregroundStyle(.secondary)
+        .compatForeground(.secondary)
         .help(Self.readersHelp(row.receipt))
         .accessibilityElement(children: .combine)
         .accessibilityLabel(row.receipt.accessibilityLabel)
@@ -410,7 +427,7 @@ struct MessageRowView: View {
             HStack(spacing: 6) {
                 Label("Couldn't Delete", systemImage: "exclamationmark.circle")
                     .font(AppFont.caption(scale))
-                    .foregroundStyle(Palette.failed)
+                    .compatForeground(Palette.failed)
                 Button("Retry") { actions?.retryDelete(message) }
                     .buttonStyle(.link)
                     .font(AppFont.caption(scale))
@@ -428,7 +445,7 @@ struct MessageRowView: View {
         case .sending:
             Label("Sending…", systemImage: "clock")
                 .font(AppFont.caption(scale))
-                .foregroundStyle(.secondary)
+                .compatForeground(.secondary)
                 .help("Sending")
         case .failed:
             FailedSendStatus(retry: FailedSendStatus.retryAction(actions, message))
@@ -442,12 +459,6 @@ struct MessageRowView: View {
                 Rectangle().fill(Palette.messageHighlight)
             } else {
                 Rectangle().fill(Palette.messageHighlight)
-                    .keyframeAnimator(initialValue: 1.0, repeating: false) { v, opacity in
-                        v.opacity(opacity)
-                    } keyframes: { _ in
-                        LinearKeyframe(1.0, duration: 0.6)
-                        LinearKeyframe(0.0, duration: 0.9)
-                    }
             }
         }
     }
@@ -466,7 +477,7 @@ struct MessageRowView: View {
 
     /// Splits the semantic body into prose and code-block segments and
     /// maps runs to the palette: mentions tinted (own: tinted
-    /// background too), inline code monospaced on `.fill.quaternary`.
+    /// background too), inline code monospaced on `CompatFill.quaternary`.
     /// AppKit font for selectable text. `NSFont` is not `Sendable`, so
     /// the typed `appKit.font` setter (which requires a `Sendable` value)
     /// warns; the attribute-dictionary container sets the same `.font`
@@ -570,25 +581,19 @@ private struct MessageAccessibilityActions: ViewModifier {
     let actions: TimelineActions?
 
     func body(content: Content) -> some View {
-        if let a = actions {
-            let m = row.message
-            content
-                .accessibilityAction(named: "Reply") { a.reply(m) }
-                .accessibilityAction(named: "React") { a.moreReactions(m) }
-                .accessibilityAction(named: "Copy") { a.copy(m) }
-                .accessibilityAction(named: "Forward") { a.forward(m) }
-                .accessibilityAction(named: row.isSaved ? "Unsave" : "Save") { a.toggleSave(m) }
-                .accessibilityAction(named: row.isPinned ? "Unpin" : "Pin") { a.togglePin(m) }
-                .accessibilityActions {
-                    // The hover toolbar's quick reactions.
-                    if HoverToolbarRules.isAvailable(row) {
-                        ForEach(Indexed.wrap(HoverToolbarRules.quickReactions)) { r in
-                            Button("React \(r.value.name)") { a.toggleReaction(m, r.value.emoji) }
-                        }
-                    }
-                }
-        } else {
-            content
+        WithPerceptionTracking {
+            if let a = actions {
+                let m = row.message
+                content
+                    .accessibilityAction(named: "Reply") { a.reply(m) }
+                    .accessibilityAction(named: "React") { a.moreReactions(m) }
+                    .accessibilityAction(named: "Copy") { a.copy(m) }
+                    .accessibilityAction(named: "Forward") { a.forward(m) }
+                    .accessibilityAction(named: row.isSaved ? "Unsave" : "Save") { a.toggleSave(m) }
+                    .accessibilityAction(named: row.isPinned ? "Unpin" : "Pin") { a.togglePin(m) }
+            } else {
+                content
+            }
         }
     }
 }

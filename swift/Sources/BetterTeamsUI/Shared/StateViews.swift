@@ -5,6 +5,7 @@
 // title only (NoSelectionPane), in the same type and place as every
 // other pane title.
 import SwiftUI
+import Perception
 
 /// First load with nothing on hand: a centered spinner with its label
 /// ("Loading Shifts…") underneath, shown only after `delayMilliseconds`
@@ -33,16 +34,18 @@ struct LoadingPane: View {
     }
 
     var body: some View {
-        if rows && progress == nil {
-            SkeletonRows()
-                .opacity(visible || model?.options.evidence == true ? 1 : 0)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(Self.accessibilityLabel(label))
-                .onAppear { delay.schedule { visible = true } }
-                .onDisappear { delay.cancel() }
-        } else {
-            spinnerBody
+        WithPerceptionTracking {
+            if rows && progress == nil {
+                SkeletonRows()
+                    .opacity(visible || model?.options.evidence == true ? 1 : 0)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(Self.accessibilityLabel(label))
+                    .onAppear { delay.schedule { visible = true } }
+                    .onDisappear { delay.cancel() }
+            } else {
+                spinnerBody
+            }
         }
     }
 
@@ -51,7 +54,7 @@ struct LoadingPane: View {
             .overlay(alignment: .top) {
                 if let label {
                     Text(label)
-                        .foregroundStyle(.secondary)
+                        .compatForeground(.secondary)
                         .fixedSize()
                         .alignmentGuide(.top) { $0[.top] - 28 }
                 }
@@ -96,36 +99,38 @@ struct SkeletonRows: View {
     @State private var dim = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            ForEach((0 ..< count).map(SkeletonRow.init)) { row in
-                let i = row.id
-                HStack(spacing: 10) {
-                    Circle()
-                        .frame(width: 26, height: 26)
-                    VStack(alignment: .leading, spacing: 6) {
-                        RoundedRectangle(cornerRadius: 3)
-                            .frame(maxWidth: Self.titleWidths[i % Self.titleWidths.count], maxHeight: 10)
-                        RoundedRectangle(cornerRadius: 3)
-                            .frame(maxWidth: Self.detailWidths[i % Self.detailWidths.count], maxHeight: 8)
-                            .opacity(0.7)
+        WithPerceptionTracking {
+            VStack(alignment: .leading, spacing: 16) {
+                ForEach((0 ..< count).map(SkeletonRow.init)) { row in
+                    let i = row.id
+                    HStack(spacing: 10) {
+                        Circle()
+                            .frame(width: 26, height: 26)
+                        VStack(alignment: .leading, spacing: 6) {
+                            RoundedRectangle(cornerRadius: 3)
+                                .frame(maxWidth: Self.titleWidths[i % Self.titleWidths.count], maxHeight: 10)
+                            RoundedRectangle(cornerRadius: 3)
+                                .frame(maxWidth: Self.detailWidths[i % Self.detailWidths.count], maxHeight: 8)
+                                .opacity(0.7)
+                        }
+                        Spacer(minLength: 0)
                     }
-                    Spacer(minLength: 0)
+                    .frame(height: 30)
                 }
-                .frame(height: 30)
             }
+            .compatForeground(.quaternary)
+            .padding(.horizontal, 14)
+            .padding(.top, 14)
+            .opacity(dim ? 0.5 : 1)
+            .onAppear {
+                guard !reduceMotion else { return }
+                withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) { dim = true }
+            }
+            .onChange(of: reduceMotion) { now in
+                if now { dim = false }
+            }
+            .accessibilityHidden(true)
         }
-        .foregroundStyle(.quaternary)
-        .padding(.horizontal, 14)
-        .padding(.top, 14)
-        .opacity(dim ? 0.5 : 1)
-        .onAppear {
-            guard !reduceMotion else { return }
-            withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) { dim = true }
-        }
-        .onChange(of: reduceMotion) { _, now in
-            if now { dim = false }
-        }
-        .accessibilityHidden(true)
     }
 }
 
@@ -150,46 +155,54 @@ struct RefreshStatus: ViewModifier {
     }
 
     func body(content: Content) -> some View {
-        content
-            .overlay(alignment: alignment) {
-                Group {
-                    if refreshing {
-                        // Spinner + visible caption (R22.4: never a bare glyph).
-                        HStack(spacing: 6) {
-                            ProgressView()
-                                .controlSize(.small)
-                            Text(Self.caption(label))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .fixedSize()
+        WithPerceptionTracking {
+            content
+                .overlay(alignment: alignment) {
+                    Group {
+                        if refreshing {
+                            // Spinner + visible caption (R22.4: never a bare glyph).
+                            HStack(spacing: 6) {
+                                ProgressView()
+                                    .controlSize(.small)
+                                Text(Self.caption(label))
+                                    .font(.caption)
+                                    .compatForeground(.secondary)
+                                    .fixedSize()
+                            }
+                            .opacity(visible ? 1 : 0)
+                            .help(label)
+                            .accessibilityElement(children: .ignore)
+                            .accessibilityLabel(label)
+                            .accessibilityHidden(!visible)
+                        } else if let failure {
+                            Button {
+                                retry?()
+                            } label: {
+                                Image(systemName: "exclamationmark.triangle")
+                                    .compatForeground(.secondary)
+                            }
+                            .buttonStyle(.borderless)
+                            .help("Couldn\u{2019}t refresh: \(failure)")
+                            .accessibilityLabel("Couldn\u{2019}t Refresh")
                         }
-                        .opacity(visible ? 1 : 0)
-                        .help(label)
-                        .accessibilityElement(children: .ignore)
-                        .accessibilityLabel(label)
-                        .accessibilityHidden(!visible)
-                    } else if let failure {
-                        Button {
-                            retry?()
-                        } label: {
-                            Image(systemName: "exclamationmark.triangle")
-                                .foregroundStyle(.secondary)
-                        }
-                        .buttonStyle(.borderless)
-                        .help("Couldn\u{2019}t refresh: \(failure)")
-                        .accessibilityLabel("Couldn\u{2019}t Refresh")
+                    }
+                    .padding(10)
+                }
+                .onAppear { if refreshing {
+                        delay.schedule { visible = true }
+                    } else {
+                        delay.cancel()
+                        visible = false
+                    } }
+                .onChange(of: refreshing) { now in
+                    if now {
+                        delay.schedule { visible = true }
+                    } else {
+                        delay.cancel()
+                        visible = false
                     }
                 }
-                .padding(10)
-            }
-            .onChange(of: refreshing, initial: true) { _, now in
-                if now {
-                    delay.schedule { visible = true }
-                } else {
-                    delay.cancel()
-                    visible = false
-                }
-            }
+        }
     }
 }
 
@@ -208,8 +221,10 @@ struct ErrorPane: View {
     let retry: () -> Void
 
     var body: some View {
-        EmptyPane(title, systemImage: "exclamationmark.triangle", message: message) {
-            Button("Try Again", action: retry)
+        WithPerceptionTracking {
+            EmptyPane(title, systemImage: "exclamationmark.triangle", message: message) {
+                Button("Try Again", action: retry)
+            }
         }
     }
 }
@@ -236,20 +251,22 @@ struct EmptyPane<Actions: View>: View {
     }
 
     var body: some View {
-        PaneAnchorLayout {
-            ContentUnavailableView {
-                Label {
-                    Text(title).foregroundStyle(.primary)
-                } icon: {
-                    if let symbol {
-                        Image(systemName: symbol)
-                            .frame(height: PaneAnchorLayout.iconSlot)
+        WithPerceptionTracking {
+            CenteredPane {
+                ContentUnavailableView {
+                    Label {
+                        Text(title).compatForeground(.primary)
+                    } icon: {
+                        if let symbol {
+                            Image(systemName: symbol)
+                                .frame(height: PaneAnchorLayout.iconSlot)
+                        }
                     }
+                } description: {
+                    if let message { Text(message) }
+                } actions: {
+                    actions
                 }
-            } description: {
-                if let message { Text(message) }
-            } actions: {
-                actions
             }
         }
     }
@@ -266,7 +283,9 @@ struct NoSelectionPane: View {
     init(_ title: String) { self.title = title }
 
     var body: some View {
-        EmptyPane(title, systemImage: nil)
+        WithPerceptionTracking {
+            EmptyPane(title, systemImage: nil)
+        }
     }
 }
 
@@ -274,11 +293,19 @@ struct NoSelectionPane: View {
 /// the pane's center (clamped inside the pane): the point where
 /// `LoadingPane` puts its spinner. Both fill the same safe-area region
 /// (below the toolbar), so the two centers coincide.
-struct PaneAnchorLayout: Layout {
+struct PaneAnchorLayout {
     /// Icon slot height inside `EmptyPane` (fits every SF Symbol at the
     /// `ContentUnavailableView` icon size).
     static let iconSlot: CGFloat = 48
 
+    /// Top of a `height`-tall subview centered in `bounds`, kept inside.
+    static func top(for height: CGFloat, in bounds: CGRect) -> CGFloat {
+        max(bounds.minY, min(bounds.midY - height / 2, bounds.maxY - height))
+    }
+}
+
+@available(macOS 13, *)
+extension PaneAnchorLayout: Layout {
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         proposal.replacingUnspecifiedDimensions()
     }
@@ -290,10 +317,25 @@ struct PaneAnchorLayout: Layout {
         v.place(at: CGPoint(x: bounds.midX, y: top), anchor: .top,
                 proposal: ProposedViewSize(width: bounds.width, height: size.height))
     }
+}
 
-    /// Top of a `height`-tall subview centered in `bounds`, kept inside.
-    static func top(for height: CGFloat, in bounds: CGRect) -> CGFloat {
-        max(bounds.minY, min(bounds.midY - height / 2, bounds.maxY - height))
+/// `PaneAnchorLayout` on macOS 13+; a centered stack on macOS 12.
+struct CenteredPane<Content: View>: View {
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        WithPerceptionTracking {
+            if #available(macOS 13, *) {
+                PaneAnchorLayout { content() }
+            } else {
+                VStack(spacing: 0) {
+                    Spacer(minLength: 0)
+                    content()
+                    Spacer(minLength: 0)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
     }
 }
 

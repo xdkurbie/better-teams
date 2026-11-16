@@ -11,6 +11,7 @@ import OstMacCore
 import SwiftUI
 import UniformTypeIdentifiers
 import WebKit
+import Perception
 
 struct AdvancedPane: View {
     @ObservedObject var app: AppStateDiagnostics
@@ -33,73 +34,75 @@ struct AdvancedPane: View {
     static var mcpHelper: URL? { Bundle.main.url(forAuxiliaryExecutable: "ostmac-mcp") }
 
     var body: some View {
-        Form {
-            Section("Diagnostics") {
-                LabeledContent("Core", value: app.coreLine)
-                LabeledContent("Session", value: app.sessionLine)
-                LabeledContent("Realtime", value: app.feedWord)
-                LabeledContent("Health") {
-                    HStack {
-                        Text(healthText).foregroundStyle(.secondary)
-                        Button("Run Check") { Task { await health.run() } }
-                            .disabled(demo || health.running)
-                    }
-                }
-            }
-            Section("MCP") {
-                LabeledContent("Server", value: Self.mcpHelper == nil ? "Not included in this build" : "Installed")
-                if let url = Self.mcpHelper {
-                    LabeledContent("Location") {
-                        Text(url.path).foregroundStyle(.secondary).textSelection(.enabled)
-                    }
-                }
-            }
-            Section {
-                LabeledContent("Archive") {
-                    Button("Export Archive\u{2026}") { export() }
-                        .disabled(demo || app.store.conv.chatID == nil)
-                }
-            } header: {
-                InfoHeader(title: "Data", subject: "exporting an archive",
-                           text: "Saves the open conversation\u{2019}s loaded messages as a compressed archive.")
-            } footer: {
-                if let exportResult { Text(exportResult).font(.caption).foregroundStyle(.secondary) }
-            }
-            Section {
-                LabeledContent("Offline search") {
-                    if let p = rebuild.progress {
+        WithPerceptionTracking {
+            Form {
+                Section(header: Text("Diagnostics")) {
+                    LabeledContent("Core", value: app.coreLine)
+                    LabeledContent("Session", value: app.sessionLine)
+                    LabeledContent("Realtime", value: app.feedWord)
+                    LabeledContent("Health") {
                         HStack {
-                            ProgressView(value: Double(p.done), total: Double(max(p.total, 1)))
-                                .frame(width: 120)
-                                .accessibilityLabel("Rebuilding index")
-                            Button("Cancel") { rebuild.cancel() }
+                            Text(healthText).compatForeground(.secondary)
+                            Button("Run Check") { Task { await health.run() } }
+                                .disabled(demo || health.running)
                         }
-                    } else {
-                        Button("Rebuild Index\u{2026}") { rebuildIndex() }
+                    }
+                }
+                Section(header: Text("MCP")) {
+                    LabeledContent("Server", value: Self.mcpHelper == nil ? "Not included in this build" : "Installed")
+                    if let url = Self.mcpHelper {
+                        LabeledContent("Location") {
+                            Text(url.path).compatForeground(.secondary).textSelection(.enabled)
+                        }
+                    }
+                }
+                Section {
+                    LabeledContent("Archive") {
+                        Button("Export Archive\u{2026}") { export() }
+                            .disabled(demo || app.store.conv.chatID == nil)
+                    }
+                } header: {
+                    InfoHeader(title: "Data", subject: "exporting an archive",
+                               text: "Saves the open conversation\u{2019}s loaded messages as a compressed archive.")
+                } footer: {
+                    if let exportResult { Text(exportResult).font(.caption).compatForeground(.secondary) }
+                }
+                Section {
+                    LabeledContent("Offline search") {
+                        if let p = rebuild.progress {
+                            HStack {
+                                ProgressView(value: Double(p.done), total: Double(max(p.total, 1)))
+                                    .frame(width: 120)
+                                    .accessibilityLabel("Rebuilding index")
+                                Button("Cancel") { rebuild.cancel() }
+                            }
+                        } else {
+                            Button("Rebuild Index\u{2026}") { rebuildIndex() }
+                                .disabled(demo)
+                        }
+                    }
+                    LabeledContent("Caches") {
+                        Button("Reset Caches\u{2026}") { resetCaches() }
                             .disabled(demo)
                     }
-                }
-                LabeledContent("Caches") {
-                    Button("Reset Caches\u{2026}") { resetCaches() }
-                        .disabled(demo)
-                }
-                LabeledContent("Logs") {
-                    Button("Open Logs Folder") { LogsFolder.open() }
-                        .disabled(demo)
-                }
-            } header: {
-                InfoHeader(title: "Maintenance", subject: "maintenance",
-                           text: "Resetting caches keeps your sign-in and settings. Search keeps working while the index rebuilds.")
-            } footer: {
-                if let status = maintenanceFooter {
-                    Text(status).font(.caption).foregroundStyle(.secondary)
+                    LabeledContent("Logs") {
+                        Button("Open Logs Folder") { LogsFolder.open() }
+                            .disabled(demo)
+                    }
+                } header: {
+                    InfoHeader(title: "Maintenance", subject: "maintenance",
+                               text: "Resetting caches keeps your sign-in and settings. Search keeps working while the index rebuilds.")
+                } footer: {
+                    if let status = maintenanceFooter {
+                        Text(status).font(.caption).compatForeground(.secondary)
+                    }
                 }
             }
+            .compatFormStyleGrouped()
+            .compatScrollDisabled()
+            .frame(width: SettingsWindowController.paneWidth)
+            .fixedSize(horizontal: false, vertical: true)
         }
-        .formStyle(.grouped)
-        .scrollDisabled(true)
-        .frame(width: SettingsWindowController.paneWidth)
-        .fixedSize(horizontal: false, vertical: true)
     }
 
     private var maintenanceFooter: String? {

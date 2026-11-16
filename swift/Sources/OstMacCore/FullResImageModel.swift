@@ -115,17 +115,17 @@ public final class FullResImageModel: ObservableObject {
     /// is not cached yet. Gives up at `timeout` (default 300 ms) and on any
     /// failure with nil, so the caller falls back to its current sizing.
     /// Only https originals are probed (demo fixtures and others are not).
-    public func headPixelSize(maxBytes: Int = 131_072, timeout: Duration = .milliseconds(300)) async -> CGSize? {
+    public func headPixelSize(maxBytes: Int = 131_072, timeout: TimeInterval = 0.3) async -> CGSize? {
         guard fullURL.hasPrefix("https://") else { return nil }
         let url = fullURL, fetch = headFetcher
-        let ms = Int(timeout.components.seconds * 1000 + timeout.components.attoseconds / 1_000_000_000_000_000)
+        let ms = Int(timeout * 1000)
         return await withTaskGroup(of: CGSize?.self) { group in
             group.addTask {
                 guard let data = try? await fetch(url, maxBytes, ms) else { return nil }
                 return Self.headerSize(data)
             }
             group.addTask {
-                try? await Task.sleep(for: timeout)
+                try? await BTSleep.seconds(timeout)
                 return nil
             }
             let first = await group.next() ?? nil

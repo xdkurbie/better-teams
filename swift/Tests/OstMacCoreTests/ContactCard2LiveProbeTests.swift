@@ -185,7 +185,7 @@ final class ContactCard2LiveProbeTests: XCTestCase {
             let slot = reread.slot(for: ref)
             reread.request(ref)
             var opaque = 0
-            if let img = slot.image {
+            if let img = slot.image, #available(macOS 13, *) {
                 let renderer = ImageRenderer(content: Image(nsImage: img).resizable().frame(width: 40, height: 40)
                     .clipShape(Circle()))
                 renderer.scale = 2

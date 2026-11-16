@@ -12,6 +12,7 @@
 import AppKit
 import OstMacCore
 import SwiftUI
+import Perception
 
 enum ChatTabKey: Hashable {
     case builtin(ConversationTab)
@@ -149,17 +150,24 @@ struct ChatTabBar: View {
     }
 
     var body: some View {
-        ViewThatFits(in: .horizontal) {
-            ForEach(layout.folds(selected: selection, opened: temporary)) { fold in
-                row(fold, limit: ChatTabLayout.maxSegmentTitle)
+        WithPerceptionTracking {
+            Group {
+                if #available(macOS 13, *) {
+                    ViewThatFits(in: .horizontal) {
+                        ForEach(layout.folds(selected: selection, opened: temporary)) { fold in
+                            row(fold, limit: ChatTabLayout.maxSegmentTitle)
+                        }
+                        if let narrowest = layout.folds(selected: selection, opened: temporary).last {
+                            row(narrowest, limit: ChatTabLayout.compactSegmentTitle)
+                        }
+                    }
+                } else if let narrowest = layout.folds(selected: selection, opened: temporary).last {
+                    row(narrowest, limit: ChatTabLayout.compactSegmentTitle)
+                }
             }
-            // Last resort in a narrow pane: the selected tab alone, shorter.
-            if let narrowest = layout.folds(selected: selection, opened: temporary).last {
-                row(narrowest, limit: ChatTabLayout.compactSegmentTitle)
-            }
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("Tabs")
         }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Tabs")
     }
 
     private func name(of key: ChatTabKey?) -> String? {
@@ -189,7 +197,7 @@ struct ChatTabBar: View {
                 } label: {
                     Text("More")
                 }
-                .menuStyle(.button)
+                .compatMenuButton()
                 .fixedSize()
                 .help("More Tabs")
                 .accessibilityLabel(fold.more.isEmpty ? "More Tabs" : "\(fold.more.count) More Tabs")
@@ -258,9 +266,6 @@ struct ChatTabSegments: NSViewRepresentable {
         control.selectedSegment = selected ?? -1
     }
 
-    func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSSegmentedControl, context: Context) -> CGSize? {
-        nsView.intrinsicContentSize
-    }
 }
 
 /// One pinned tab's pane.
@@ -270,13 +275,15 @@ struct ChatPinnedTabPane: View {
     @Environment(\.windowModel) private var model
 
     var body: some View {
-        if let m = model {
-            let launch = Self.launch(tab, store: m.frameHost.library.store, chatID: chatID)
-            switch ChatTabCatalog.route(for: tab, hasManifest: launch != nil) {
-            case .hosted:
-                if let launch { hosted(launch, m) } else { placeholder }
-            case .web(let url): web(url, m)
-            case .placeholder: placeholder
+        WithPerceptionTracking {
+            if let m = model {
+                let launch = Self.launch(tab, store: m.frameHost.library.store, chatID: chatID)
+                switch ChatTabCatalog.route(for: tab, hasManifest: launch != nil) {
+                case .hosted:
+                    if let launch { hosted(launch, m) } else { placeholder }
+                case .web(let url): web(url, m)
+                case .placeholder: placeholder
+                }
             }
         }
     }
@@ -332,6 +339,8 @@ struct ChatTabPlaceholder: View {
     let message: String
 
     var body: some View {
-        EmptyPane(title, systemImage: symbol, message: message)
+        WithPerceptionTracking {
+            EmptyPane(title, systemImage: symbol, message: message)
+        }
     }
 }

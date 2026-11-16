@@ -89,10 +89,11 @@ final class NotificationRouter {
     /// The sender's monogram avatar (the one rows show, G6: no photos)
     /// as PNG for the banner.
     static func avatarPNG(_ name: String) -> Data? {
-        let r = ImageRenderer(content: Avatar(name: name, diameter: 64))
-        r.scale = 2
-        guard let cg = r.cgImage else { return nil }
-        return NSBitmapImageRep(cgImage: cg).representation(using: .png, properties: [:])
+        guard let image = Hosting.rasterize(Avatar(name: name, diameter: 64),
+                                            size: CGSize(width: 64, height: 64), scale: 2),
+              let tiff = image.tiffRepresentation,
+              let rep = NSBitmapImageRep(data: tiff) else { return nil }
+        return rep.representation(using: .png, properties: [:])
     }
 
     private func observe(_ name: Notification.Name, _ body: @escaping @MainActor ([AnyHashable: Any]) -> Void) {
@@ -109,7 +110,7 @@ final class NotificationRouter {
     }
 
     private func bringForward(_ wc: ShellWindowController) {
-        NSApp.activate()
+        activateApp()
         wc.window?.makeKeyAndOrderFront(nil)
     }
 

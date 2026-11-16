@@ -2,6 +2,7 @@
 // Recent; filter narrows. Selection binds through Navigator (R3, R21).
 import OstMacCore
 import SwiftUI
+import Perception
 
 struct ChatListPane: View {
     @ObservedObject var chats: ChatListViewModel
@@ -18,8 +19,10 @@ struct ChatListPane: View {
     @Environment(\.windowModel) private var model
 
     var body: some View {
-        if let model {
-            content(model)
+        WithPerceptionTracking {
+            if let model {
+                content(model)
+            }
         }
     }
 
@@ -50,7 +53,7 @@ struct ChatListPane: View {
                 .overlay {
                     if rows.isEmpty { filterEmpty }
                 }
-                .safeAreaInset(edge: .top, spacing: 0) {
+                .compatSafeAreaInset(edge: .top, spacing: 0) {
                     if state.filter != .all { filterBar(count: rows.count) }
                 }
                 .onExitCommand { if state.filter != .all { state.clear() } }
@@ -75,7 +78,7 @@ struct ChatListPane: View {
         HStack(spacing: 8) {
             Label("Filtered by \(folderName ?? state.filter.title)", systemImage: "line.3.horizontal.decrease")
                 .font(.callout)
-                .foregroundStyle(.secondary)
+                .compatForeground(.secondary)
                 .lineLimit(1)
                 .truncationMode(.tail)
             Button("Clear") { state.clear() }
@@ -87,7 +90,7 @@ struct ChatListPane: View {
             Spacer(minLength: 4)
             Text(count == 1 ? "1 chat" : "\(count) chats")
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .compatForeground(.secondary)
                 .monospacedDigit()
         }
         .padding(.horizontal, 12)
@@ -113,7 +116,7 @@ struct ChatListPane: View {
         case .searching:
             HStack(spacing: 6) {
                 ProgressView().controlSize(.small)
-                Text("Checking older chats\u{2026}").font(.caption).foregroundStyle(.secondary)
+                Text("Checking older chats\u{2026}").font(.caption).compatForeground(.secondary)
             }
             .accessibilityElement(children: .combine)
         case .finished where chats.hasMore:
@@ -135,8 +138,8 @@ struct ChatListPane: View {
             if chats.loadMoreFailed {
                 // FIXPACK F9: a timed-out / failed older-page read says so.
                 HStack(spacing: 6) {
-                    Image(systemName: "exclamationmark.triangle").foregroundStyle(.secondary)
-                    Text("Couldn\u{2019}t load older chats.").font(.caption).foregroundStyle(.secondary)
+                    Image(systemName: "exclamationmark.triangle").compatForeground(.secondary)
+                    Text("Couldn\u{2019}t load older chats.").font(.caption).compatForeground(.secondary)
                     Button("Try Again") { Task { await chats.retryLoadMore() } }
                         .buttonStyle(.link)
                         .font(.caption)
@@ -152,7 +155,7 @@ struct ChatListPane: View {
             Spacer()
         }
         .frame(height: 24)
-        .selectionDisabled()
+        .compatSelectionDisabled()
         .task(id: chats.nextPageLink) { await chats.loadMore() }
     }
 
@@ -189,17 +192,17 @@ struct ChatListPane: View {
         return ScrollViewReader { proxy in
         List(selection: selection) {
             if !pinned.isEmpty {
-                Section("Pinned") {
+                Section(header: Text("Pinned")) {
                     ForEach(pinned) { c in row(c, pinned: true, now: now) }
                 }
             }
             if !favorites.isEmpty {
-                Section("Favorites") {
+                Section(header: Text("Favorites")) {
                     ForEach(favorites) { c in row(c, pinned: false, now: now) }
                 }
             }
             if !recent.isEmpty {
-                Section("Recent") {
+                Section(header: Text("Recent")) {
                     ForEach(recent) { c in
                         row(c, pinned: false, now: now)
                             .onAppear {
@@ -219,11 +222,11 @@ struct ChatListPane: View {
                     Spacer()
                 }
                 .frame(height: 24)
-                .selectionDisabled()
+                .compatSelectionDisabled()
             }
         }
         .listStyle(.inset)
-        .contextMenu(forSelectionType: String.self) { ids in
+        .compatSelectionMenu(forSelectionType: String.self) { ids in
             if let id = ids.first {
                 ChatRowMenu(id: id, chats: chats, unread: unread, rules: rules, snooze: snooze,
                             folders: chats.folders, model: m)
@@ -231,8 +234,8 @@ struct ChatListPane: View {
         } primaryAction: { ids in
             Self.doubleClick(ids, m)
         }
-        .safeAreaInset(edge: .bottom, spacing: 0) { actionError }
-        .onChange(of: state.filter) { _, now in
+        .compatSafeAreaInset(edge: .bottom, spacing: 0) { actionError }
+        .onChange(of: state.filter) { now in
             // Back on the full list: return to the rows on screen when
             // the filter was entered.
             if now == .all, let anchor = state.returnAnchor { proxy.scrollTo(anchor, anchor: .top) }
@@ -255,8 +258,8 @@ struct ChatListPane: View {
             ?? manageOrReadError
         {
             HStack(spacing: 6) {
-                Image(systemName: "exclamationmark.circle").foregroundStyle(.secondary)
-                Text(text).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                Image(systemName: "exclamationmark.circle").compatForeground(.secondary)
+                Text(text).font(.caption).compatForeground(.secondary).lineLimit(2)
                 Spacer(minLength: 4)
                 Button {
                     rules.clearSyncError()

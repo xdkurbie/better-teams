@@ -118,7 +118,7 @@ public enum Palette {
     /// Code (inline + block) and reply-quote fill: tertiary, so it still
     /// separates from the others' gray bubble (quaternary on that gray
     /// all but vanished) and from the own lavender bubble.
-    public static let inlineCodeBackgroundNS = NSColor.tertiarySystemFill
+    public static let inlineCodeBackgroundNS = NSColor.quaternaryLabelColor
     public static let blockFill = Color(nsColor: inlineCodeBackgroundNS)
     /// Reply-quote preview text: secondary label on the gray bubble was
     /// under 4.5:1; 75% label reads ≥ 7:1 on the quote fill in both
@@ -139,7 +139,7 @@ public enum Palette {
     /// divider, `separatorColor` vanished on the dark timeline.
     public static let dayRule = Color(nsColor: .tertiaryLabelColor)
     /// Edge of in-message panels (code blocks, link cards): their
-    /// `.fill.quaternary` alone barely separates from the dark background.
+    /// `CompatFill.quaternary` alone barely separates from the dark background.
     public static let panelEdge = Color(nsColor: .separatorColor)
     /// Image viewer window + letterbox: the app's window background, so
     /// the viewer follows light/dark live like every other window.

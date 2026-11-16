@@ -2,6 +2,7 @@
 // §6.7, R18 pane states).
 import OstMacCore
 import SwiftUI
+import Perception
 
 /// The week schedule: pane state, else the people × days `Table`.
 struct ShiftsWeekPane: View {
@@ -9,48 +10,50 @@ struct ShiftsWeekPane: View {
     @Environment(\.windowModel) private var model
 
     var body: some View {
-        if let model {
-            let state = ShiftsPaneState.resolve(store.state, hasTeams: !store.teams.isEmpty,
-                                                forced: model.forced(.native(.shifts)),
-                                                offline: model.connection == .offline)
-            switch state {
-            case .loading:
-                LoadingPane(ShiftsPaneState.loadingLabel(store.loadProgress),
-                            progress: ShiftsPaneState.loadingFraction(store.loadProgress))
-            case .notSetUp:
-                EmptyPane(ShiftsPaneState.notSetUpTitle, systemImage: NativeAppID.shifts.symbol,
-                          message: ShiftsPaneState.notSetUpMessage)
-            case .emptyWeek: emptyWeek
-            case .error(let title, let message):
-                ErrorPane(title: title, message: message) { store.refresh() }
-            case .week:
-                if let week = store.week {
-                    let rows = ShiftsRow.rows(week: week, reasons: store.reasons, names: store.memberNames)
-                    VStack(spacing: 0) {
-                        if let error = store.weekError {
-                            // A week that failed behind the grid (the grid stays).
-                            Label(error, systemImage: "exclamationmark.triangle")
-                                .font(.callout)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(2)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 6)
+        WithPerceptionTracking {
+            if let model {
+                let state = ShiftsPaneState.resolve(store.state, hasTeams: !store.teams.isEmpty,
+                                                    forced: model.forced(.native(.shifts)),
+                                                    offline: model.connection == .offline)
+                switch state {
+                case .loading:
+                    LoadingPane(ShiftsPaneState.loadingLabel(store.loadProgress),
+                                progress: ShiftsPaneState.loadingFraction(store.loadProgress))
+                case .notSetUp:
+                    EmptyPane(ShiftsPaneState.notSetUpTitle, systemImage: NativeAppID.shifts.symbol,
+                              message: ShiftsPaneState.notSetUpMessage)
+                case .emptyWeek: emptyWeek
+                case .error(let title, let message):
+                    ErrorPane(title: title, message: message) { store.refresh() }
+                case .week:
+                    if let week = store.week {
+                        let rows = ShiftsRow.rows(week: week, reasons: store.reasons, names: store.memberNames)
+                        VStack(spacing: 0) {
+                            if let error = store.weekError {
+                                // A week that failed behind the grid (the grid stays).
+                                Label(error, systemImage: "exclamationmark.triangle")
+                                    .font(.callout)
+                                    .compatForeground(.secondary)
+                                    .lineLimit(2)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 6)
+                            }
+                            if rows.isEmpty { emptyWeek } else { table(week, rows, model) }
                         }
-                        if rows.isEmpty { emptyWeek } else { table(week, rows, model) }
-                    }
-                    // A week loading behind the grid on screen: a small
-                    // spinner at the header's trailing end, never a
-                    // loading pane.
-                    .overlay(alignment: .topTrailing) {
-                        ProgressView()
-                            .controlSize(.small)
-                            .padding(.top, 5)
-                            .padding(.trailing, 8)
-                            .opacity(store.isLoadingWeek ? 1 : 0)
-                            .help(store.isLoadingWeek ? "Updating Week" : "")
-                            .accessibilityLabel("Updating Week")
-                            .accessibilityHidden(!store.isLoadingWeek)
+                        // A week loading behind the grid on screen: a small
+                        // spinner at the header's trailing end, never a
+                        // loading pane.
+                        .overlay(alignment: .topTrailing) {
+                            ProgressView()
+                                .controlSize(.small)
+                                .padding(.top, 5)
+                                .padding(.trailing, 8)
+                                .opacity(store.isLoadingWeek ? 1 : 0)
+                                .help(store.isLoadingWeek ? "Updating Week" : "")
+                                .accessibilityLabel("Updating Week")
+                                .accessibilityHidden(!store.isLoadingWeek)
+                        }
                     }
                 }
             }
@@ -62,12 +65,28 @@ struct ShiftsWeekPane: View {
                   message: ShiftsSection.weekRange(store.weekStart))
     }
 
+    @ViewBuilder
     private func table(_ week: ShiftWeek, _ rows: [ShiftsRow], _ m: WindowModel) -> some View {
         let days = ShiftsDay.week(week.weekStart)
         let selection = Binding<String?>(
             get: { ShiftsSection.selectedRowID(m) },
             set: { ShiftsSection.select($0, m) })
-        return Table(rows, selection: selection) {
+        // `TableColumnBuilder` availability checks exist only on macOS 14.4+.
+        if #available(macOS 14.4, *) {
+            weekTable(rows, selection: selection, days: days, model: m)
+        } else {
+            weekTableLegacy(rows, selection: selection, days: days, model: m)
+        }
+    }
+
+    @available(macOS 14.4, *)
+    private func weekTable(
+        _ rows: [ShiftsRow],
+        selection: Binding<String?>,
+        days: [ShiftsDay],
+        model: WindowModel
+    ) -> some View {
+        Table(rows, selection: selection) {
             TableColumn("Member") { row in ShiftsPersonCell(row: row) }
                 .width(min: 140, ideal: 180)
             TableColumnForEach(days) { day in
@@ -75,14 +94,53 @@ struct ShiftsWeekPane: View {
                     .width(min: 96, ideal: 130)
             }
         }
-        // Plain rows: alternating stripes also paint empty filler rows
-        // below the last member.
-        .alternatingRowBackgrounds(.disabled)
-        .contextMenu(forSelectionType: String.self) { _ in
-            EmptyView()
-        } primaryAction: { ids in
-            if let id = ids.first { ShiftsSection.open(id, m) }
+        .modifier(ShiftsTableChrome(model: model))
+    }
+
+    private func weekTableLegacy(
+        _ rows: [ShiftsRow],
+        selection: Binding<String?>,
+        days: [ShiftsDay],
+        model: WindowModel
+    ) -> some View {
+        // A week is always seven columns. Conditionals inside `Table` need
+        // `TableColumnBuilder.buildIf`, which is macOS 14.4+.
+        let c0 = days[0], c1 = days[1], c2 = days[2], c3 = days[3]
+        let c4 = days[4], c5 = days[5], c6 = days[6]
+        return Table(rows, selection: selection) {
+            TableColumn("Member") { row in ShiftsPersonCell(row: row) }
+                .width(min: 140, ideal: 180)
+            TableColumn(c0.title) { row in ShiftsDayCell(cells: row.days[c0.id]) }
+                .width(min: 96, ideal: 130)
+            TableColumn(c1.title) { row in ShiftsDayCell(cells: row.days[c1.id]) }
+                .width(min: 96, ideal: 130)
+            TableColumn(c2.title) { row in ShiftsDayCell(cells: row.days[c2.id]) }
+                .width(min: 96, ideal: 130)
+            TableColumn(c3.title) { row in ShiftsDayCell(cells: row.days[c3.id]) }
+                .width(min: 96, ideal: 130)
+            TableColumn(c4.title) { row in ShiftsDayCell(cells: row.days[c4.id]) }
+                .width(min: 96, ideal: 130)
+            TableColumn(c5.title) { row in ShiftsDayCell(cells: row.days[c5.id]) }
+                .width(min: 96, ideal: 130)
+            TableColumn(c6.title) { row in ShiftsDayCell(cells: row.days[c6.id]) }
+                .width(min: 96, ideal: 130)
         }
+        .modifier(ShiftsTableChrome(model: model))
+    }
+}
+
+/// Plain rows: alternating stripes also paint empty filler rows below the last member.
+private struct ShiftsTableChrome: ViewModifier {
+    let model: WindowModel
+
+    func body(content: Content) -> some View {
+        content
+            .compatAlternatingRowsDisabled()
+            .compatSelectionMenu(forSelectionType: String.self) { _ in
+                EmptyView()
+            } primaryAction: { ids in
+                if let id = ids.first { ShiftsSection.open(id, model) }
+            }
     }
 }
 
@@ -105,13 +163,15 @@ struct ShiftsPersonCell: View {
     @Environment(\.contentTextScale) private var scale
 
     var body: some View {
-        HStack(spacing: 8) {
-            Avatar(name: row.name, isGroup: row.name == ShiftsRow.openShiftsName)
-            Text(row.name)
-                .font(AppFont.body(scale))
-                .lineLimit(1)
+        WithPerceptionTracking {
+            HStack(spacing: 8) {
+                Avatar(name: row.name, isGroup: row.name == ShiftsRow.openShiftsName)
+                Text(row.name)
+                    .font(AppFont.body(scale))
+                    .lineLimit(1)
+            }
+            .padding(.vertical, 2)
         }
-        .padding(.vertical, 2)
     }
 }
 
@@ -121,28 +181,30 @@ struct ShiftsDayCell: View {
     @Environment(\.contentTextScale) private var scale
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            ForEach(cells) { cell in
-                HStack(alignment: .firstTextBaseline, spacing: 5) {
-                    Circle()
-                        .fill(ShiftsTheme.color(cell.theme))
-                        .frame(width: 8, height: 8)
-                        .accessibilityHidden(true)
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(cell.time)
-                            .font(AppFont.subheadline(scale))
-                            .monospacedDigit()
-                            .lineLimit(1)
-                        Text(cell.isDraft ? "\(cell.label) (Draft)" : cell.label)
-                            .font(AppFont.caption(scale))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
+        WithPerceptionTracking {
+            VStack(alignment: .leading, spacing: 4) {
+                ForEach(cells) { cell in
+                    HStack(alignment: .firstTextBaseline, spacing: 5) {
+                        Circle()
+                            .fill(ShiftsTheme.color(cell.theme))
+                            .frame(width: 8, height: 8)
+                            .accessibilityHidden(true)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(cell.time)
+                                .font(AppFont.subheadline(scale))
+                                .monospacedDigit()
+                                .lineLimit(1)
+                            Text(cell.isDraft ? "\(cell.label) (Draft)" : cell.label)
+                                .font(AppFont.caption(scale))
+                                .compatForeground(.secondary)
+                                .lineLimit(1)
+                        }
                     }
+                    .accessibilityElement(children: .combine)
                 }
-                .accessibilityElement(children: .combine)
             }
+            .padding(.vertical, 2)
         }
-        .padding(.vertical, 2)
     }
 }
 
@@ -153,12 +215,14 @@ struct ShiftsInspectorPane: View {
     @Environment(\.contentTextScale) private var scale
 
     var body: some View {
-        if let model, let id = ShiftsSection.selectedRowID(model), let week = store.week,
-           let row = ShiftsRow.rows(week: week, reasons: store.reasons, names: store.memberNames)
-               .first(where: { $0.id == id }) {
-            detail(row, days: ShiftsDay.week(week.weekStart))
-        } else {
-            NoSelectionPane("No Shift Selected")
+        WithPerceptionTracking {
+            if let model, let id = ShiftsSection.selectedRowID(model), let week = store.week,
+               let row = ShiftsRow.rows(week: week, reasons: store.reasons, names: store.memberNames)
+                   .first(where: { $0.id == id }) {
+                detail(row, days: ShiftsDay.week(week.weekStart))
+            } else {
+                NoSelectionPane("No Shift Selected")
+            }
         }
     }
 
@@ -171,39 +235,48 @@ struct ShiftsInspectorPane: View {
                         Text(row.name).font(AppFont.title3(scale))
                         Text(ShiftsSection.weekRange(store.weekStart))
                             .font(AppFont.subheadline(scale))
-                            .foregroundStyle(.secondary)
+                            .compatForeground(.secondary)
                     }
                 }
                 .padding(.vertical, 4)
             }
             ForEach(days) { day in
                 if !row.days[day.id].isEmpty {
-                    Section(day.date.formatted(.dateTime.weekday(.wide).month(.abbreviated).day())) {
+                    Section(header: Text(day.date.formatted(.dateTime.weekday(.wide).month(.abbreviated).day()))) {
                         ForEach(row.days[day.id]) { cell in
-                            LabeledContent {
-                                Text(cell.time).monospacedDigit()
-                            } label: {
-                                Label {
-                                    Text(cell.label)
-                                } icon: {
-                                    Circle().fill(ShiftsTheme.color(cell.theme)).frame(width: 8, height: 8)
-                                }
-                            }
-                            if cell.isDraft {
-                                LabeledContent("Status", value: "Draft (not shared)")
-                            }
-                            if let notes = cell.notes, !notes.isEmpty {
-                                Text(notes)
-                                    .font(AppFont.body(scale))
-                                    .foregroundStyle(.secondary)
-                                    .textSelection(.enabled)
-                            }
+                            ShiftInspectorEntry(cell: cell)
                         }
                     }
                 }
             }
         }
-        .formStyle(.grouped)
+        .compatFormStyleGrouped()
+    }
+}
+
+private struct ShiftInspectorEntry: View {
+    let cell: ShiftsCell
+    @Environment(\.contentTextScale) private var scale
+
+    var body: some View {
+        LabeledContent {
+            Text(cell.time).monospacedDigit()
+        } label: {
+            Label {
+                Text(cell.label)
+            } icon: {
+                Circle().fill(ShiftsTheme.color(cell.theme)).frame(width: 8, height: 8)
+            }
+        }
+        if cell.isDraft {
+            LabeledContent("Status", value: "Draft (not shared)")
+        }
+        if let notes = cell.notes, !notes.isEmpty {
+            Text(notes)
+                .font(AppFont.body(scale))
+                .compatForeground(.secondary)
+                .textSelection(.enabled)
+        }
     }
 }
 

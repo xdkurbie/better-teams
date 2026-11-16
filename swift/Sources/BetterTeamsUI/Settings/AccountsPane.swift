@@ -9,6 +9,7 @@ import AppKit
 import OstMacCore
 import SwiftUI
 import WebKit
+import Perception
 
 struct AccountsPane: View {
     @ObservedObject var accounts: AccountStore
@@ -25,60 +26,62 @@ struct AccountsPane: View {
     private var demo: Bool { model?.options.demo != false }
 
     var body: some View {
-        Form {
-            Section("Accounts") {
-                if accounts.accounts.isEmpty {
-                    Text(demo ? "The demo doesn\u{2019}t store accounts." : "No accounts.")
-                        .foregroundStyle(.secondary)
-                } else {
-                    List(selection: $selection) {
-                        ForEach(accounts.accounts) { a in
-                            HStack {
-                                Image(systemName: a.id == accounts.activeID ? "checkmark" : "person.crop.circle")
-                                    .foregroundStyle(a.id == accounts.activeID ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
-                                    .accessibilityHidden(true)
-                                VStack(alignment: .leading) {
-                                    Text(a.displayName)
-                                    if let upn = a.upn { Text(upn).font(.caption).foregroundStyle(.secondary) }
+        WithPerceptionTracking {
+            Form {
+                Section(header: Text("Accounts")) {
+                    if accounts.accounts.isEmpty {
+                        Text(demo ? "The demo doesn\u{2019}t store accounts." : "No accounts.")
+                            .compatForeground(.secondary)
+                    } else {
+                        List(selection: $selection) {
+                            ForEach(accounts.accounts) { a in
+                                HStack {
+                                    Image(systemName: a.id == accounts.activeID ? "checkmark" : "person.crop.circle")
+                                        .compatForeground(a.id == accounts.activeID ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+                                        .accessibilityHidden(true)
+                                    VStack(alignment: .leading) {
+                                        Text(a.displayName)
+                                        if let upn = a.upn { Text(upn).font(.caption).compatForeground(.secondary) }
+                                    }
                                 }
+                                .accessibilityLabel(a.id == accounts.activeID ? "\(a.displayName), active" : a.displayName)
+                                .tag(a.id)
                             }
-                            .accessibilityLabel(a.id == accounts.activeID ? "\(a.displayName), active" : a.displayName)
-                            .tag(a.id)
+                            .onMove { accounts.move(fromOffsets: $0, toOffset: $1) }
                         }
-                        .onMove { accounts.move(fromOffsets: $0, toOffset: $1) }
+                        .frame(height: 120)
                     }
-                    .frame(height: 120)
+                    HStack {
+                        Button("Add Account\u{2026}") { shell(arg: "add") }
+                            .disabled(demo)
+                        Button("Open in New Window") { openWindow() }
+                            .disabled(demo || model == nil || accounts.accounts.count < 2 || (selection ?? accounts.activeID) == nil)
+                        Button("Sign Out\u{2026}") { signOut() }
+                            .disabled(demo || accounts.activeID == nil)
+                        Button("Remove\u{2026}") { remove() }
+                            .disabled(demo || selection == nil || selection == accounts.activeID)
+                    }
                 }
-                HStack {
-                    Button("Add Account\u{2026}") { shell(arg: "add") }
-                        .disabled(demo)
-                    Button("Open in New Window") { openWindow() }
-                        .disabled(demo || model == nil || accounts.accounts.count < 2 || (selection ?? accounts.activeID) == nil)
-                    Button("Sign Out\u{2026}") { signOut() }
-                        .disabled(demo || accounts.activeID == nil)
-                    Button("Remove\u{2026}") { remove() }
-                        .disabled(demo || selection == nil || selection == accounts.activeID)
+                Section {
+                    LabeledContent("Sign-in") {
+                        Button("Sign In to Web Apps\u{2026}") { shell(arg: "webSignIn") }
+                            .disabled(demo || model == nil)
+                    }
+                    LabeledContent("Website data") {
+                        Button("Clear Website Data\u{2026}") { clearWebData() }
+                            .disabled(demo || model == nil)
+                    }
+                } header: {
+                    InfoHeader(title: "Web Apps", subject: "web app sign-in",
+                               text: "Sign in once and every web app in this account uses that sign-in. Clearing website data signs them out.")
+                } footer: {
+                    if cleared { Text("Website data cleared.").font(.caption).compatForeground(.secondary) }
                 }
             }
-            Section {
-                LabeledContent("Sign-in") {
-                    Button("Sign In to Web Apps\u{2026}") { shell(arg: "webSignIn") }
-                        .disabled(demo || model == nil)
-                }
-                LabeledContent("Website data") {
-                    Button("Clear Website Data\u{2026}") { clearWebData() }
-                        .disabled(demo || model == nil)
-                }
-            } header: {
-                InfoHeader(title: "Web Apps", subject: "web app sign-in",
-                           text: "Sign in once and every web app in this account uses that sign-in. Clearing website data signs them out.")
-            } footer: {
-                if cleared { Text("Website data cleared.").font(.caption).foregroundStyle(.secondary) }
-            }
+            .compatFormStyleGrouped()
+            .frame(width: SettingsWindowController.paneWidth)
+            .fixedSize(horizontal: false, vertical: true)
         }
-        .formStyle(.grouped)
-        .frame(width: SettingsWindowController.paneWidth)
-        .fixedSize(horizontal: false, vertical: true)
     }
 
     /// Account menu actions (Add Account…, Sign In to Web Apps…) run on
@@ -129,11 +132,13 @@ struct SettingsUnavailable: View {
     let text: String
 
     var body: some View {
-        Form {
-            Text(text).foregroundStyle(.secondary)
+        WithPerceptionTracking {
+            Form {
+                Text(text).compatForeground(.secondary)
+            }
+            .compatFormStyleGrouped()
+            .frame(width: SettingsWindowController.paneWidth)
+            .fixedSize(horizontal: false, vertical: true)
         }
-        .formStyle(.grouped)
-        .frame(width: SettingsWindowController.paneWidth)
-        .fixedSize(horizontal: false, vertical: true)
     }
 }

@@ -8,6 +8,7 @@
 import AppKit
 import OstMacCore
 import SwiftUI
+import Perception
 
 struct EventTracking: View {
     let meeting: MeetingItem
@@ -17,66 +18,68 @@ struct EventTracking: View {
     private var groups: [CalendarEventInfo.AttendeeGroup] { CalendarEventInfo.groups(meeting.invitees) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 6) {
-                Text("Tracking").font(AppFont.headline(scale))
-                Spacer()
-                Menu {
-                    Button("Copy Attendee Emails") { copyEmails() }
-                        .disabled(meeting.invitees.allSatisfy(\.email.isEmpty))
-                    Button("Expand All Groups") { collapsed = [] }
-                    Button("Collapse All Groups") { collapsed = Set(groups.map(\.id)) }
-                } label: {
-                    Image(systemName: "ellipsis")
+        WithPerceptionTracking {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 6) {
+                    Text("Tracking").font(AppFont.headline(scale))
+                    Spacer()
+                    Menu {
+                        Button("Copy Attendee Emails") { copyEmails() }
+                            .disabled(meeting.invitees.allSatisfy(\.email.isEmpty))
+                        Button("Expand All Groups") { collapsed = [] }
+                        Button("Collapse All Groups") { collapsed = Set(groups.map(\.id)) }
+                    } label: {
+                        Image(systemName: "ellipsis")
+                    }
+                    .menuStyle(.borderlessButton)
+                    .menuIndicator(.hidden)
+                    .fixedSize()
+                    .help("More options")
+                    .accessibilityLabel("More options")
                 }
-                .menuStyle(.borderlessButton)
-                .menuIndicator(.hidden)
-                .fixedSize()
-                .help("More options")
-                .accessibilityLabel("More options")
-            }
-            if let org = meeting.organizerDisplay {
-                sectionHeader("Organizer")
-                HStack(alignment: .top, spacing: 8) {
-                    Avatar(name: org, diameter: 28, person: ContactRef(name: org, email: meeting.organizerEmail))
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(CalendarDetailsText.organizerLabel(meeting) ?? org).font(AppFont.bodyEmphasized(scale))
-                            .lineLimit(1)
-                            .contactHover(name: org, email: meeting.organizerEmail)
-                        if let sent = CalendarDetailsText.sentOn(meeting) {
-                            Text(sent).font(AppFont.caption(scale)).foregroundStyle(.secondary)
+                if let org = meeting.organizerDisplay {
+                    sectionHeader("Organizer")
+                    HStack(alignment: .top, spacing: 8) {
+                        Avatar(name: org, diameter: 28, person: ContactRef(name: org, email: meeting.organizerEmail))
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(CalendarDetailsText.organizerLabel(meeting) ?? org).font(AppFont.bodyEmphasized(scale))
+                                .lineLimit(1)
+                                .contactHover(name: org, email: meeting.organizerEmail)
+                            if let sent = CalendarDetailsText.sentOn(meeting) {
+                                Text(sent).font(AppFont.caption(scale)).compatForeground(.secondary)
+                            }
                         }
                     }
+                    Divider()
                 }
-                Divider()
-            }
-            sectionHeader("Attendees")
-            if meeting.isOrganizer {
-                Text("You organized this meeting.").foregroundStyle(.secondary)
-            } else if let r = meeting.info?.myResponse {
-                Text(CalendarDetailsText.youResponded(r)).foregroundStyle(.secondary)
-            }
-            ForEach(groups) { g in
-                DisclosureGroup(isExpanded: Binding(
-                    get: { !collapsed.contains(g.id) },
-                    set: { open in if open { collapsed.remove(g.id) } else { collapsed.insert(g.id) } })) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        ForEach(g.people) { p in attendeeRow(p) }
+                sectionHeader("Attendees")
+                if meeting.isOrganizer {
+                    Text("You organized this meeting.").compatForeground(.secondary)
+                } else if let r = meeting.info?.myResponse {
+                    Text(CalendarDetailsText.youResponded(r)).compatForeground(.secondary)
+                }
+                ForEach(groups) { g in
+                    DisclosureGroup(isExpanded: Binding(
+                        get: { !collapsed.contains(g.id) },
+                        set: { open in if open { collapsed.remove(g.id) } else { collapsed.insert(g.id) } })) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            ForEach(g.people) { p in attendeeRow(p) }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.top, 4)
+                    } label: {
+                        Text(g.header).font(AppFont.subheadline(scale).compatWeight(.semibold))
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.top, 4)
-                } label: {
-                    Text(g.header).font(AppFont.subheadline(scale).weight(.semibold))
                 }
-            }
-            if groups.isEmpty {
-                Text("No attendees").foregroundStyle(.secondary)
+                if groups.isEmpty {
+                    Text("No attendees").compatForeground(.secondary)
+                }
             }
         }
     }
 
     private func sectionHeader(_ s: String) -> some View {
-        Text(s).font(AppFont.caption(scale).weight(.semibold)).foregroundStyle(.secondary)
+        Text(s).font(AppFont.caption(scale).compatWeight(.semibold)).compatForeground(.secondary)
     }
 
     private func attendeeRow(_ p: EventAttendee) -> some View {
@@ -86,7 +89,7 @@ struct EventTracking: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text(p.label).lineLimit(1).truncationMode(.tail)
                     .contactHover(name: p.displayName, email: p.email.isEmpty ? nil : p.email)
-                Text(p.typeLabel).font(AppFont.caption(scale)).foregroundStyle(.secondary)
+                Text(p.typeLabel).font(AppFont.caption(scale)).compatForeground(.secondary)
             }
             Spacer(minLength: 0)
         }

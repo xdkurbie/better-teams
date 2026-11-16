@@ -16,6 +16,7 @@
 import AppKit
 import OstMacCore
 import SwiftUI
+import Perception
 
 /// Return-key policy (pure, unit-tested).
 enum ComposerKeyPolicy {
@@ -89,51 +90,53 @@ struct Composer: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-          VStack(alignment: .leading, spacing: 6) {
-            if let editing = composer.editing {
-                chip(symbol: "pencil", title: "Editing Message", detail: ConversationStore.quotePreview(editing.content),
-                     cancel: "Cancel Editing") { composer.endEdit(chatID: chatID) }
-            } else if let reply = conv.replyTarget {
-                chip(symbol: "arrowshape.turn.up.left", title: "Replying to \(reply.isOwn ? "yourself" : reply.sender)",
-                     detail: ConversationStore.quotePreview(MessageRender.bubbleText(for: reply)),
-                     cancel: "Cancel Reply") { conv.cancelReply() }
+        WithPerceptionTracking {
+            VStack(alignment: .leading, spacing: 0) {
+              VStack(alignment: .leading, spacing: 6) {
+                if let editing = composer.editing {
+                    chip(symbol: "pencil", title: "Editing Message", detail: ConversationStore.quotePreview(editing.content),
+                         cancel: "Cancel Editing") { composer.endEdit(chatID: chatID) }
+                } else if let reply = conv.replyTarget {
+                    chip(symbol: "arrowshape.turn.up.left", title: "Replying to \(reply.isOwn ? "yourself" : reply.sender)",
+                         detail: ConversationStore.quotePreview(MessageRender.bubbleText(for: reply)),
+                         cancel: "Cancel Reply") { conv.cancelReply() }
+                }
+                if !attachments.attachments.isEmpty {
+                    AttachmentChips(store: attachments)
+                }
+                // Reaction More… opens at its message (the timeline owns it).
+                // Both accessory groups center on the field's last text line
+                // (its center while single-line), whatever their heights.
+                HStack(alignment: .composerLine, spacing: 8) {
+                    leadingButtons
+                        .alignmentGuide(.composerLine) { $0[VerticalAlignment.center] }
+                    field
+                        .alignmentGuide(.composerLine) { [line = ComposerTextView.lineHeight(scale)] d in
+                            d[.bottom] - Self.fieldInset - line / 2
+                        }
+                    sendButton
+                        .alignmentGuide(.composerLine) { $0[VerticalAlignment.center] }
+                }
+              }
+                statusLine
             }
-            if !attachments.attachments.isEmpty {
-                AttachmentChips(store: attachments)
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
+            .padding(.bottom, 10)
+            .onAppear {
+                // Evidence captures leave the field unfocused: a focused
+                // field draws the system input-source bubble at its caret,
+                // over the accessory buttons.
+                if !(model?.options.evidence ?? false) { composer.focusRequest += 1 }
+                applyEvidencePopover()
             }
-            // Reaction More… opens at its message (the timeline owns it).
-            // Both accessory groups center on the field's last text line
-            // (its center while single-line), whatever their heights.
-            HStack(alignment: .composerLine, spacing: 8) {
-                leadingButtons
-                    .alignmentGuide(.composerLine) { $0[VerticalAlignment.center] }
-                field
-                    .alignmentGuide(.composerLine) { [line = ComposerTextView.lineHeight(scale)] d in
-                        d[.bottom] - Self.fieldInset - line / 2
-                    }
-                sendButton
-                    .alignmentGuide(.composerLine) { $0[VerticalAlignment.center] }
+            .onChange(of: chatID) {
+                _ in composer.popover = nil
+                composer.editing = nil
+                // Same evidence guard as onAppear: a route that lands on a
+                // chat after launch must not focus the field either.
+                if !(model?.options.evidence ?? false) { composer.focusRequest += 1 }
             }
-          }
-            statusLine
-        }
-        .padding(.horizontal, 16)
-        .padding(.top, 8)
-        .padding(.bottom, 10)
-        .onAppear {
-            // Evidence captures leave the field unfocused: a focused
-            // field draws the system input-source bubble at its caret,
-            // over the accessory buttons.
-            if !(model?.options.evidence ?? false) { composer.focusRequest += 1 }
-            applyEvidencePopover()
-        }
-        .onChange(of: chatID) {
-            composer.popover = nil
-            composer.editing = nil
-            // Same evidence guard as onAppear: a route that lands on a
-            // chat after launch must not focus the field either.
-            if !(model?.options.evidence ?? false) { composer.focusRequest += 1 }
         }
     }
 
@@ -142,21 +145,21 @@ struct Composer: View {
     private func chip(symbol: String, title: String, detail: String, cancel: String,
                       action: @escaping () -> Void) -> some View {
         HStack(spacing: 8) {
-            Image(systemName: symbol).foregroundStyle(.tint)
+            Image(systemName: symbol).compatForeground(.tint)
             VStack(alignment: .leading, spacing: 0) {
-                Text(title).font(AppFont.caption(scale).weight(.semibold))
-                Text(detail).font(AppFont.caption(scale)).foregroundStyle(.secondary).lineLimit(1)
+                Text(title).font(AppFont.caption(scale).compatWeight(.semibold))
+                Text(detail).font(AppFont.caption(scale)).compatForeground(.secondary).lineLimit(1)
             }
             Spacer(minLength: 8)
             Button(action: action) { Image(systemName: "xmark.circle.fill") }
                 .buttonStyle(.borderless)
-                .foregroundStyle(.secondary)
+                .compatForeground(.secondary)
                 .help(cancel)
                 .accessibilityLabel(cancel)
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 5)
-        .background(.fill.quaternary, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .background(CompatFill.quaternary, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 
     /// Toolbar-like icon row: 24 pt targets, 6 pt apart (HIG spacing).
@@ -201,7 +204,7 @@ struct Composer: View {
                 if composer.draft(chatID).isEmpty {
                     Text(composer.editing != nil ? "Edit message" : placeholder)
                         .font(AppFont.body(scale))
-                        .foregroundStyle(.tertiary)
+                        .compatForeground(.tertiary)
                         .lineLimit(1)
                         .allowsHitTesting(false)
                         .accessibilityHidden(true)
@@ -211,7 +214,7 @@ struct Composer: View {
             .padding(.vertical, Self.fieldInset)
             .chromeBackground(.composerField, in: RoundedRectangle(cornerRadius: 8, style: .continuous)) {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(.fill.quinary)
+                    .fill(CompatFill.quinary)
                     .overlay {
                         RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(.separator, lineWidth: 1)
                     }
@@ -254,7 +257,7 @@ struct Composer: View {
         } primaryAction: {
             submit()
         }
-        .menuStyle(.button)
+        .compatMenuButton()
         .buttonStyle(.borderless)
         .menuIndicator(.visible)
         .controlSize(.large)
@@ -295,7 +298,7 @@ struct Composer: View {
             if let ghost = model?.app?.ghost { GhostGlyph(store: ghost) }
         }
         .font(AppFont.caption(scale))
-        .foregroundStyle(.secondary)
+        .compatForeground(.secondary)
     }
 
     // MARK: popovers (one state value, so never two at once — R17)
@@ -420,8 +423,10 @@ private struct TypingLine: View {
     let chatID: String
 
     var body: some View {
-        if let line = store.line(chatID: chatID) {
-            Text(line).lineLimit(1).truncationMode(.tail).padding(.top, 4)
+        WithPerceptionTracking {
+            if let line = store.line(chatID: chatID) {
+                Text(line).lineLimit(1).truncationMode(.tail).padding(.top, 4)
+            }
         }
     }
 }
@@ -432,16 +437,18 @@ private struct ScheduledButton: View {
     let open: () -> Void
 
     var body: some View {
-        let n = store.pending(for: chatID).count
-        if n > 0 {
-            // A real button (§6.2.2 "2 scheduled" button), not a caption.
-            Button(action: open) {
-                Label("\(n) Scheduled", systemImage: "clock")
+        WithPerceptionTracking {
+            let n = store.pending(for: chatID).count
+            if n > 0 {
+                // A real button (§6.2.2 "2 scheduled" button), not a caption.
+                Button(action: open) {
+                    Label("\(n) Scheduled", systemImage: "clock")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .help("Show Scheduled Messages")
+                .padding(.top, 4)
             }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-            .help("Show Scheduled Messages")
-            .padding(.top, 4)
         }
     }
 }
@@ -450,11 +457,13 @@ private struct GhostGlyph: View {
     @ObservedObject var store: GhostStore
 
     var body: some View {
-        if store.master {
-            Image(systemName: "eye.slash")
-                .help("Ghost mode is on: read receipts and presence are hidden")
-                .accessibilityLabel("Ghost mode on")
-                .padding(.top, 4)
+        WithPerceptionTracking {
+            if store.master {
+                Image(systemName: "eye.slash")
+                    .help("Ghost mode is on: read receipts and presence are hidden")
+                    .accessibilityLabel("Ghost mode on")
+                    .padding(.top, 4)
+            }
         }
     }
 }
@@ -466,13 +475,15 @@ private struct TemplatesMenu: View {
     let insert: (String) -> Void
 
     var body: some View {
-        Button(action: showMenu) {
-            Image(systemName: "text.badge.plus").frame(width: 24, height: 24)
+        WithPerceptionTracking {
+            Button(action: showMenu) {
+                Image(systemName: "text.badge.plus").frame(width: 24, height: 24)
+            }
+            .buttonStyle(.borderless)
+            .controlSize(.large)
+            .help("Insert Template")
+            .accessibilityLabel("Insert Template")
         }
-        .buttonStyle(.borderless)
-        .controlSize(.large)
-        .help("Insert Template")
-        .accessibilityLabel("Insert Template")
     }
 
     private func showMenu() {
@@ -511,12 +522,14 @@ private struct AttachmentChips: View {
     @Environment(\.contentTextScale) private var scale
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            LazyHStack(spacing: 6) {
-                ForEach(store.attachments) { a in chip(a) }
+        WithPerceptionTracking {
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(spacing: 6) {
+                    ForEach(store.attachments) { a in chip(a) }
+                }
             }
+            .frame(height: 34)
         }
-        .frame(height: 34)
     }
 
     private func chip(_ a: ComposeAttachment) -> some View {
@@ -526,7 +539,7 @@ private struct AttachmentChips: View {
                 .frame(width: 18, height: 18)
             VStack(alignment: .leading, spacing: 0) {
                 Text(a.name).font(AppFont.caption(scale)).lineLimit(1).truncationMode(.middle)
-                Text(status(a)).font(AppFont.caption(scale)).foregroundStyle(statusStyle(a))
+                Text(status(a)).font(AppFont.caption(scale)).compatForeground(statusStyle(a))
             }
             .frame(maxWidth: 160, alignment: .leading)
             switch a.state {
@@ -539,14 +552,14 @@ private struct AttachmentChips: View {
             }
             Button { store.remove(id: a.id) } label: { Image(systemName: "xmark.circle.fill") }
                 .buttonStyle(.borderless)
-                .foregroundStyle(.secondary)
+                .compatForeground(.secondary)
                 .help("Remove \(a.name)")
                 .accessibilityLabel("Remove \(a.name)")
                 .disabled(a.state == .uploading)
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 3)
-        .background(.fill.quaternary, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+        .background(CompatFill.quaternary, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
     }
 
     private func status(_ a: ComposeAttachment) -> String {
@@ -643,6 +656,7 @@ final class ComposerNSTextView: NSTextView {
 
     /// The accessory's own placement hook (kept: some macOS versions
     /// honor it for the Caps Lock glyph).
+    @available(macOS 14, *)
     override func preferredTextAccessoryPlacement() -> NSTextCursorAccessoryPlacement {
         .invisible
     }

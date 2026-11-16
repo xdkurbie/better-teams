@@ -10,6 +10,7 @@
 import AppKit
 import OstMacCore
 import SwiftUI
+import Perception
 
 /// Sheet host: the commands as bordered control groups above the card.
 struct EventDetailsToolbar: View {
@@ -20,19 +21,21 @@ struct EventDetailsToolbar: View {
     let close: () -> Void
 
     var body: some View {
-        HStack(spacing: 8) {
-            EventRespondControl(meeting: meeting, week: week)
-            EventActionsGroup(meeting: meeting, week: week, close: close)
-            EventPersonalGroup(meeting: meeting, week: week)
-            EventFilesGroup(meeting: meeting, detail: detail, info: meeting.info)
-            Spacer(minLength: 8)
-            EventJoinChat(meeting: meeting, close: close)
-            EventTrackingToggle(shown: $trackingShown)
+        WithPerceptionTracking {
+            HStack(spacing: 8) {
+                EventRespondControl(meeting: meeting, week: week)
+                EventActionsGroup(meeting: meeting, week: week, close: close)
+                EventPersonalGroup(meeting: meeting, week: week)
+                EventFilesGroup(meeting: meeting, detail: detail, info: meeting.info)
+                Spacer(minLength: 8)
+                EventJoinChat(meeting: meeting, close: close)
+                EventTrackingToggle(shown: $trackingShown)
+            }
+            .buttonStyle(.bordered)
+            .compatMenuButton()
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
         }
-        .buttonStyle(.bordered)
-        .menuStyle(.button)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
     }
 }
 
@@ -64,13 +67,15 @@ struct EventTrackingToggle: View {
     @Binding var shown: Bool
 
     var body: some View {
-        Toggle(isOn: $shown) {
-            Label("Tracking", systemImage: "sidebar.trailing")
+        WithPerceptionTracking {
+            Toggle(isOn: $shown) {
+                Label("Tracking", systemImage: "sidebar.trailing")
+            }
+            .toggleStyle(.button)
+            .labelStyle(.iconOnly)
+            .help(shown ? "Hide Tracking" : "Show Tracking")
+            .accessibilityLabel(shown ? "Hide Tracking" : "Show Tracking")
         }
-        .toggleStyle(.button)
-        .labelStyle(.iconOnly)
-        .help(shown ? "Hide Tracking" : "Show Tracking")
-        .accessibilityLabel(shown ? "Hide Tracking" : "Show Tracking")
     }
 }
 
@@ -84,42 +89,44 @@ struct EventRespondControl: View {
     @Environment(\.windowModel) private var model
 
     var body: some View {
-        if meeting.isOrganizer {
-            if let model {
-                Button { CalendarSection.edit(meeting, model) } label: { Label("Edit", systemImage: "pencil") }
-                    .labelStyle(.titleAndIcon)
-                    .help("Edit")
-            }
-        } else if let info = meeting.info {
-            HStack(spacing: 4) {
-                Menu {
-                    ForEach(RSVPAction.allCases, id: \.rawValue) { action in
-                        if meeting.isSeries {
-                            Menu(action.title) {
-                                Button("This Event") { week.respond(to: meeting, action) }
-                                Button("All Events in the Series") { week.respond(to: meeting, action, series: true) }
-                            }
-                        } else {
-                            Button { week.respond(to: meeting, action) } label: {
-                                if info.myResponse == action.response {
-                                    Label(action.title, systemImage: "checkmark")
-                                } else {
-                                    Text(action.title)
+        WithPerceptionTracking {
+            if meeting.isOrganizer {
+                if let model {
+                    Button { CalendarSection.edit(meeting, model) } label: { Label("Edit", systemImage: "pencil") }
+                        .labelStyle(.titleAndIcon)
+                        .help("Edit")
+                }
+            } else if let info = meeting.info {
+                HStack(spacing: 4) {
+                    Menu {
+                        ForEach(RSVPAction.allCases, id: \.rawValue) { action in
+                            if meeting.isSeries {
+                                Menu(action.title) {
+                                    Button("This Event") { week.respond(to: meeting, action) }
+                                    Button("All Events in the Series") { week.respond(to: meeting, action, series: true) }
+                                }
+                            } else {
+                                Button { week.respond(to: meeting, action) } label: {
+                                    if info.myResponse == action.response {
+                                        Label(action.title, systemImage: "checkmark")
+                                    } else {
+                                        Text(action.title)
+                                    }
                                 }
                             }
                         }
+                    } label: {
+                        Label(Self.title(info.myResponse), systemImage: CalendarDetailsText.responseSymbol(info.myResponse))
                     }
-                } label: {
-                    Label(Self.title(info.myResponse), systemImage: CalendarDetailsText.responseSymbol(info.myResponse))
-                }
-                // Applied to the Menu itself (as on Edit): an NSToolbar item keeps the title only then.
-                .labelStyle(.titleAndIcon)
-                .fixedSize()
-                .disabled(week.respondingID != nil)
-                .help("Respond")
-                if week.respondingID != nil { ProgressView().controlSize(.mini) }
-                if let error = week.rsvpError {
-                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Palette.failed).help(error)
+                    // Applied to the Menu itself (as on Edit): an NSToolbar item keeps the title only then.
+                    .labelStyle(.titleAndIcon)
+                    .fixedSize()
+                    .disabled(week.respondingID != nil)
+                    .help("Respond")
+                    if week.respondingID != nil { ProgressView().controlSize(.mini) }
+                    if let error = week.rsvpError {
+                        Image(systemName: "exclamationmark.triangle.fill").compatForeground(Palette.failed).help(error)
+                    }
                 }
             }
         }
@@ -139,20 +146,22 @@ struct EventActionsGroup: View {
     @State private var forwardShown = false
 
     var body: some View {
-        ControlGroup {
-            deleteMenu
-            Button { forwardShown = true } label: { Label("Forward", systemImage: "arrowshape.turn.up.right") }
-                .help("Forward")
-                .popover(isPresented: $forwardShown, arrowEdge: .bottom) {
-                    ForwardEventPopover(meeting: meeting, week: week) { forwardShown = false }
-                }
-            Button {
-                if let model { CalendarSection.duplicate(meeting, model) }
-            } label: { Label("Duplicate", systemImage: "plus.square.on.square") }
-                .help("Duplicate event")
+        WithPerceptionTracking {
+            ControlGroup {
+                deleteMenu
+                Button { forwardShown = true } label: { Label("Forward", systemImage: "arrowshape.turn.up.right") }
+                    .help("Forward")
+                    .popover(isPresented: $forwardShown, arrowEdge: .bottom) {
+                        ForwardEventPopover(meeting: meeting, week: week) { forwardShown = false }
+                    }
+                Button {
+                    if let model { CalendarSection.duplicate(meeting, model) }
+                } label: { Label("Duplicate", systemImage: "plus.square.on.square") }
+                    .help("Duplicate event")
+            }
+            .labelStyle(.iconOnly)
+            .fixedSize()
         }
-        .labelStyle(.iconOnly)
-        .fixedSize()
     }
 
     private var deleteMenu: some View {
@@ -191,18 +200,20 @@ struct EventPersonalGroup: View {
     var info: CalendarEventInfo? { meeting.info }
 
     var body: some View {
-        ControlGroup {
-            showAsMenu
-            reminderMenu
-            categorizeMenu
-            Toggle(isOn: privateBinding) {
-                Label("Private", systemImage: "lock")
+        WithPerceptionTracking {
+            ControlGroup {
+                showAsMenu
+                reminderMenu
+                categorizeMenu
+                Toggle(isOn: privateBinding) {
+                    Label("Private", systemImage: "lock")
+                }
+                .toggleStyle(.button)
+                .labelStyle(.iconOnly)
+                .help(info?.sensitivity == "private" ? "Private (on)" : "Private")
             }
-            .toggleStyle(.button)
-            .labelStyle(.iconOnly)
-            .help(info?.sensitivity == "private" ? "Private (on)" : "Private")
+            .fixedSize()
         }
-        .fixedSize()
     }
 
     var privateBinding: Binding<Bool> {
@@ -300,17 +311,19 @@ struct EventFilesGroup: View {
     let info: CalendarEventInfo?
 
     var body: some View {
-        ControlGroup {
-            appsMenu
-            Button { CalendarPrinting.print(meeting, detail: detail) } label: { Label("Print", systemImage: "printer") }
-                .help("Print")
-            Button { CalendarICSSave.save(meeting, detail: detail) } label: {
-                Label("Download", systemImage: "arrow.down.circle")
+        WithPerceptionTracking {
+            ControlGroup {
+                appsMenu
+                Button { CalendarPrinting.print(meeting, detail: detail) } label: { Label("Print", systemImage: "printer") }
+                    .help("Print")
+                Button { CalendarICSSave.save(meeting, detail: detail) } label: {
+                    Label("Download", systemImage: "arrow.down.circle")
+                }
+                .help("Download (.ics)")
             }
-            .help("Download (.ics)")
+            .labelStyle(.iconOnly)
+            .fixedSize()
         }
-        .labelStyle(.iconOnly)
-        .fixedSize()
     }
 
     /// Outlook add-ins run in Outlook on the web: the event opens there.
@@ -342,22 +355,24 @@ struct EventMoreMenu: View {
     @ObservedObject var week: CalendarWeekStore
 
     var body: some View {
-        let personal = EventPersonalGroup(meeting: meeting, week: week)
-        let files = EventFilesGroup(meeting: meeting, detail: detail, info: meeting.info)
-        Menu {
-            Menu("Show As") { personal.showAsItems }
-            Menu("Reminder") { personal.reminderItems }
-            Menu("Categorize") { personal.categorizeItems }
-            Toggle("Private", isOn: personal.privateBinding)
-            Divider()
-            Menu("Apps") { files.appsItems }
-            Button("Print\u{2026}") { CalendarPrinting.print(meeting, detail: detail) }
-            Button("Download (.ics)\u{2026}") { CalendarICSSave.save(meeting, detail: detail) }
-        } label: {
-            Label("More", systemImage: "ellipsis.circle")
+        WithPerceptionTracking {
+            let personal = EventPersonalGroup(meeting: meeting, week: week)
+            let files = EventFilesGroup(meeting: meeting, detail: detail, info: meeting.info)
+            Menu {
+                Menu("Show As") { personal.showAsItems }
+                Menu("Reminder") { personal.reminderItems }
+                Menu("Categorize") { personal.categorizeItems }
+                Toggle("Private", isOn: personal.privateBinding)
+                Divider()
+                Menu("Apps") { files.appsItems }
+                Button("Print\u{2026}") { CalendarPrinting.print(meeting, detail: detail) }
+                Button("Download (.ics)\u{2026}") { CalendarICSSave.save(meeting, detail: detail) }
+            } label: {
+                Label("More", systemImage: "ellipsis.circle")
+            }
+            .help("More: show as, reminder, categories, private, apps, print, download")
+            .accessibilityLabel("More")
         }
-        .help("More: show as, reminder, categories, private, apps, print, download")
-        .accessibilityLabel("More")
     }
 }
 
@@ -369,20 +384,22 @@ struct EventJoinChat: View {
     @Environment(\.windowModel) private var model
 
     var body: some View {
-        if meeting.joinURL?.isEmpty == false, let model {
-            Button {
-                close()
-                CalendarSection.join(meeting, model)
-            } label: { Label("Join", systemImage: "video.fill") }
-                .labelStyle(.titleAndIcon)
-                .buttonStyle(.borderedProminent)
-        }
-        if meeting.chatThreadID != nil, let model {
-            Button { CalendarSection.openChat(meeting, model) } label: {
-                Label("Chat", systemImage: "bubble.left.and.bubble.right")
+        WithPerceptionTracking {
+            if meeting.joinURL?.isEmpty == false, let model {
+                Button {
+                    close()
+                    CalendarSection.join(meeting, model)
+                } label: { Label("Join", systemImage: "video.fill") }
+                    .labelStyle(.titleAndIcon)
+                    .buttonStyle(.borderedProminent)
             }
-            .labelStyle(.titleAndIcon)
-            .help("Chat with participants")
+            if meeting.chatThreadID != nil, let model {
+                Button { CalendarSection.openChat(meeting, model) } label: {
+                    Label("Chat", systemImage: "bubble.left.and.bubble.right")
+                }
+                .labelStyle(.titleAndIcon)
+                .help("Chat with participants")
+            }
         }
     }
 }
@@ -394,14 +411,16 @@ struct CategoryChips: View {
     @Environment(\.contentTextScale) private var scale
 
     var body: some View {
-        HStack(spacing: 12) {
-            ForEach(names.map(NamedItem.init)) { item in
-                let name = item.id
-                HStack(spacing: 4) {
-                    Circle().fill(CalendarDetailsText.categoryColor(name, list: list)).frame(width: 8, height: 8)
-                    Text(name)
+        WithPerceptionTracking {
+            HStack(spacing: 12) {
+                ForEach(names.map(NamedItem.init)) { item in
+                    let name = item.id
+                    HStack(spacing: 4) {
+                        Circle().fill(CalendarDetailsText.categoryColor(name, list: list)).frame(width: 8, height: 8)
+                        Text(name)
+                    }
+                    .font(AppFont.caption(scale))
                 }
-                .font(AppFont.caption(scale))
             }
         }
     }
@@ -416,32 +435,34 @@ struct ForwardEventPopover: View {
     @State private var note = ""
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Forward \u{201C}\(meeting.subject)\u{201D}").font(.headline).lineLimit(1)
-            TextField("To", text: $to, prompt: Text("name@example.com; \u{2026}"))
-            TextField("Message", text: $note, prompt: Text("Add a note (optional)"), axis: .vertical)
-                .lineLimit(2 ... 4)
-            HStack {
-                if week.forwarding { ProgressView().controlSize(.small) }
-                if let error = week.forwardError {
-                    Text(error).foregroundStyle(Palette.failed).font(.caption).lineLimit(2)
-                }
-                Spacer()
-                Button("Cancel", role: .cancel) {
-                    week.clearForwardError()
-                    done()
-                }
-                Button("Forward") {
-                    Task {
-                        if await week.forward(meeting, to: CalendarWeekStore.recipients(to), comment: note) { done() }
+        WithPerceptionTracking {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Forward \u{201C}\(meeting.subject)\u{201D}").font(.headline).lineLimit(1)
+                TextField("To", text: $to, prompt: Text("name@example.com; \u{2026}"))
+                TextField("Message", text: $note, prompt: Text("Add a note (optional)"))
+                    .lineLimit(4)
+                HStack {
+                    if week.forwarding { ProgressView().controlSize(.small) }
+                    if let error = week.forwardError {
+                        Text(error).compatForeground(Palette.failed).font(.caption).lineLimit(2)
                     }
+                    Spacer()
+                    Button("Cancel", role: .cancel) {
+                        week.clearForwardError()
+                        done()
+                    }
+                    Button("Forward") {
+                        Task {
+                            if await week.forward(meeting, to: CalendarWeekStore.recipients(to), comment: note) { done() }
+                        }
+                    }
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(CalendarWeekStore.recipients(to).isEmpty || week.forwarding)
                 }
-                .keyboardShortcut(.defaultAction)
-                .disabled(CalendarWeekStore.recipients(to).isEmpty || week.forwarding)
             }
+            .padding(16)
+            .frame(width: 360)
         }
-        .padding(16)
-        .frame(width: 360)
     }
 }
 
@@ -456,29 +477,31 @@ struct AddRoomPopover: View {
     @State private var address = ""
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Add a room").font(.headline)
-            TextField("Room", text: $name, prompt: Text("Room name"))
-            TextField("Room address", text: $address, prompt: Text("room@example.com (optional)"))
-            HStack {
-                if week.updating { ProgressView().controlSize(.small) }
-                if let error = week.updateError {
-                    Text(error).foregroundStyle(Palette.failed).font(.caption).lineLimit(2)
+        WithPerceptionTracking {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Add a room").font(.headline)
+                TextField("Room", text: $name, prompt: Text("Room name"))
+                TextField("Room address", text: $address, prompt: Text("room@example.com (optional)"))
+                HStack {
+                    if week.updating { ProgressView().controlSize(.small) }
+                    if let error = week.updateError {
+                        Text(error).compatForeground(Palette.failed).font(.caption).lineLimit(2)
+                    }
+                    Spacer()
+                    Button("Cancel", role: .cancel) {
+                        week.clearUpdateError()
+                        done()
+                    }
+                    Button("Add") {
+                        let patch = CalendarDetailsText.roomPatch(meeting, name: name, address: address)
+                        Task { if await week.update(meeting, patch: patch) { done() } }
+                    }
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty || week.updating)
                 }
-                Spacer()
-                Button("Cancel", role: .cancel) {
-                    week.clearUpdateError()
-                    done()
-                }
-                Button("Add") {
-                    let patch = CalendarDetailsText.roomPatch(meeting, name: name, address: address)
-                    Task { if await week.update(meeting, patch: patch) { done() } }
-                }
-                .keyboardShortcut(.defaultAction)
-                .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty || week.updating)
             }
+            .padding(16)
+            .frame(width: 340)
         }
-        .padding(16)
-        .frame(width: 340)
     }
 }

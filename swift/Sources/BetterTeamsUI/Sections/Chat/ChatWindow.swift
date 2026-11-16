@@ -9,7 +9,7 @@ import AppKit
 import Combine
 import OstMacCore
 import SwiftUI
-import Translation
+import Perception
 
 @MainActor
 final class ChatWindowController: NSWindowController, NSWindowDelegate {
@@ -168,7 +168,9 @@ final class PopoutToolbar: NSObject, NSToolbarDelegate, NSToolbarItemValidation 
         toolbar.delegate = self
         toolbar.displayMode = .iconOnly
         toolbar.allowsUserCustomization = false
-        toolbar.centeredItemIdentifiers = [Self.tabsItem]
+        if #available(macOS 13, *) {
+            toolbar.centeredItemIdentifiers = [Self.tabsItem]
+        }
         chromeToken = Chrome.observe { [weak toolbar] glass in
             Chrome.apply(.toolbarItems, glass: glass, to: toolbar?.items ?? [])
         }
@@ -250,34 +252,36 @@ struct PopoutContactView: View {
     @Environment(\.windowModel) private var model
 
     var body: some View {
-        if let model {
-            let row = chats.chat(id: chatID)
-            let name = row?.name ?? model.app?.popoutName(for: chatID) ?? "Chat"
-            let isGroup = row?.is_group ?? false
-            RosterBound(chatID: chatID, roster: model.app?.chatRoster) { count in
-                let subtitle = isGroup
-                    ? ConversationDetail.subtitle(isGroup: true, messages: [], rosterCount: count)
-                    : PresenceLine(presence: model.app?.presence, chatID: chatID).text
-                HStack(spacing: 8) {
-                    Avatar(name: name, isGroup: isGroup, diameter: 24)
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text(name).font(.headline).lineLimit(1).truncationMode(.tail)
-                        if !subtitle.isEmpty {
-                            Text(subtitle).font(.caption).foregroundStyle(.secondary)
-                                .lineLimit(1).truncationMode(.tail)
+        WithPerceptionTracking {
+            if let model {
+                let row = chats.chat(id: chatID)
+                let name = row?.name ?? model.app?.popoutName(for: chatID) ?? "Chat"
+                let isGroup = row?.is_group ?? false
+                RosterBound(chatID: chatID, roster: model.app?.chatRoster) { count in
+                    let subtitle = isGroup
+                        ? ConversationDetail.subtitle(isGroup: true, messages: [], rosterCount: count)
+                        : PresenceLine(presence: model.app?.presence, chatID: chatID).text
+                    HStack(spacing: 8) {
+                        Avatar(name: name, isGroup: isGroup, diameter: 24)
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text(name).font(.headline).lineLimit(1).truncationMode(.tail)
+                            if !subtitle.isEmpty {
+                                Text(subtitle).font(.caption).compatForeground(.secondary)
+                                    .lineLimit(1).truncationMode(.tail)
+                            }
                         }
+                        // Long names end in "…", never clipped.
+                        .frame(maxWidth: 120, alignment: .leading)
                     }
-                    // Long names end in "…", never clipped.
-                    .frame(maxWidth: 120, alignment: .leading)
+                    .padding(.horizontal, 6)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .frame(height: Self.size.height, alignment: .leading)
+                    // R8: re-fit when the content changes (name, roster count),
+                    // never from a geometry read: width only ever moves with
+                    // those two strings.
+                    .onChange(of: name + "\0" + subtitle) { _ in onWidth() }
+                    .accessibilityElement(children: .combine)
                 }
-                .padding(.horizontal, 6)
-                .fixedSize(horizontal: true, vertical: false)
-                .frame(height: Self.size.height, alignment: .leading)
-                // R8: re-fit when the content changes (name, roster count),
-                // never from a geometry read: width only ever moves with
-                // those two strings.
-                .onChange(of: name + "\0" + subtitle) { _, _ in onWidth() }
-                .accessibilityElement(children: .combine)
             }
         }
     }
@@ -293,15 +297,17 @@ struct ChatPopoutView: View {
     @Environment(\.windowModel) private var model
 
     var body: some View {
-        if let model {
-            let row = chats.chat(id: chatID)
-            let name = row?.name ?? (conv.chatID == chatID ? conv.headerTitle : model.app?.popoutName(for: chatID) ?? "Chat")
-            ChatTabBody(selected: .builtin(chrome.tab), chatID: chatID, name: name, pinned: [], app: model.app) {
-                content(name: name, model)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .onChange(of: name) { _, new in
-                ChatWindowController.window(for: chatID)?.title = new
+        WithPerceptionTracking {
+            if let model {
+                let row = chats.chat(id: chatID)
+                let name = row?.name ?? (conv.chatID == chatID ? conv.headerTitle : model.app?.popoutName(for: chatID) ?? "Chat")
+                ChatTabBody(selected: .builtin(chrome.tab), chatID: chatID, name: name, pinned: [], app: model.app) {
+                    content(name: name, model)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .onChange(of: name) { new in
+                    ChatWindowController.window(for: chatID)?.title = new
+                }
             }
         }
     }
@@ -329,15 +335,13 @@ struct ChatPopoutView: View {
                 Composer(chatID: chatID, chatName: name, placeholder: "Message \(name)", conv: conv,
                          composer: services.composer, attachments: services.attachments, services: services)
             }
-            .dropDestination(for: URL.self) { urls, _ in
+            .compatDropFiles { urls, _ in
                 let files = urls.filter(\.isFileURL)
                 guard !files.isEmpty else { return false }
                 services.attachments.stage(urls: files)
                 return true
             }
-            .translationTask(TranslationSession.Configuration(target: services.translation.sessionTarget)) { session in
-                services.translation.attached(session)
-            }
+            .compatTranslationTask(services.translation)
         }
     }
 }

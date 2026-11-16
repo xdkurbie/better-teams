@@ -47,6 +47,7 @@ enum SyncBridge {
     }
 
     /// Task executor on a concurrent GCD queue (threads outside the pool).
+    @available(macOS 15, *)
     final class QueueExecutor: TaskExecutor, @unchecked Sendable {
         private let queue = DispatchQueue(
             label: "dev.ostmac.syncbridge", qos: .userInitiated, attributes: .concurrent)
@@ -58,6 +59,7 @@ enum SyncBridge {
         }
     }
 
+    @available(macOS 15, *)
     static let executor = QueueExecutor()
 
     static func run<T: Sendable>(
@@ -65,13 +67,24 @@ enum SyncBridge {
     ) throws -> T {
         let box = Box<T>()
         let sem = DispatchSemaphore(value: 0)
-        Task(executorPreference: executor) {
-            do {
-                box.value = .success(try await op())
-            } catch {
-                box.value = .failure(error)
+        if #available(macOS 15, *) {
+            Task(executorPreference: executor) {
+                do {
+                    box.value = .success(try await op())
+                } catch {
+                    box.value = .failure(error)
+                }
+                sem.signal()
             }
-            sem.signal()
+        } else {
+            Task.detached(priority: .userInitiated) {
+                do {
+                    box.value = .success(try await op())
+                } catch {
+                    box.value = .failure(error)
+                }
+                sem.signal()
+            }
         }
         sem.wait()
         return try box.value!.get()

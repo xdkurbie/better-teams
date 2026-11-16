@@ -2,7 +2,7 @@
 // person chooses in Settings ▸ Calls ▸ Show calls; the choice applies
 // from the next call (a running call keeps its host).
 import Foundation
-import Observation
+import Perception
 import OstMacCore
 
 public enum CallPresentation: String, CaseIterable, Sendable {
@@ -26,7 +26,7 @@ public enum CallPresentation: String, CaseIterable, Sendable {
 /// defaults; demo mode installs in-memory defaults (`MemoryDefaults`)
 /// before the first read, so demo and evidence runs never read or
 /// write the person's preference.
-@Observable
+@Perceptible
 @MainActor
 public final class CallSettings {
     /// Created on first use: `.standard`, or the demo's in-memory
@@ -46,7 +46,7 @@ public final class CallSettings {
         installed = CallSettings(defaults: MemoryDefaults())
     }
 
-    @ObservationIgnored private var defaults: UserDefaults?
+    @PerceptionIgnored private var defaults: UserDefaults?
 
     public var presentation: CallPresentation {
         didSet {

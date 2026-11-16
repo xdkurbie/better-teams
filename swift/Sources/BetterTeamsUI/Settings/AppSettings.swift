@@ -7,10 +7,10 @@
 // so demo and evidence runs never read or write the person's settings.
 import Combine
 import Foundation
-import Observation
+import Perception
 import OstMacCore
 
-@Observable
+@Perceptible
 @MainActor
 final class AppSettings {
     static var shared: AppSettings {
@@ -41,12 +41,12 @@ final class AppSettings {
         static let glassFree = "bt.settings.glassFree"
     }
 
-    @ObservationIgnored let defaults: UserDefaults
-    @ObservationIgnored let isMemory: Bool
-    @ObservationIgnored private let subject = PassthroughSubject<Void, Never>()
+    @PerceptionIgnored let defaults: UserDefaults
+    @PerceptionIgnored let isMemory: Bool
+    @PerceptionIgnored private let subject = PassthroughSubject<Void, Never>()
     /// Fires after any setting changes (AppKit observers: Dock badge,
     /// menu bar extra, foreground banner rule, hotkey).
-    @ObservationIgnored var changes: AnyPublisher<Void, Never> { subject.eraseToAnyPublisher() }
+    @PerceptionIgnored var changes: AnyPublisher<Void, Never> { subject.eraseToAnyPublisher() }
 
     /// General ▸ Show in menu bar (off by default, §9.2).
     var showInMenuBar: Bool { didSet { save(showInMenuBar, Key.menuBar, oldValue) } }

@@ -6,6 +6,7 @@
 // the full list.
 import OstMacCore
 import SwiftUI
+import Perception
 
 struct PinnedMessageBar: View {
     @ObservedObject var store: PinnedMessageStore
@@ -13,45 +14,51 @@ struct PinnedMessageBar: View {
     let chatID: String
 
     var body: some View {
-        // Cheap early-out first: chats with no pins never index the messages.
-        if !store.pins(for: chatID).isEmpty {
-            let rows = store.rows(for: chatID, messages: conv.chatID == chatID ? conv.messages : [])
-            if let newest = rows.last {
-                VStack(spacing: 0) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "pin.fill")
-                            .foregroundStyle(.secondary)
-                            .accessibilityHidden(true)
-                        Button { jump(newest) } label: {
-                            (Text(sender(newest)).fontWeight(.medium) + Text("  ") + Text(newest.preview)
-                                .foregroundStyle(.secondary))
+        WithPerceptionTracking {
+            // Cheap early-out first: chats with no pins never index the messages.
+            if !store.pins(for: chatID).isEmpty {
+                let rows = store.rows(for: chatID, messages: conv.chatID == chatID ? conv.messages : [])
+                if let newest = rows.last {
+                    VStack(spacing: 0) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "pin.fill")
+                                .compatForeground(.secondary)
+                                .accessibilityHidden(true)
+                            Button { jump(newest) } label: {
+                                HStack(spacing: 6) {
+                                    Text(sender(newest)).compatWeight(.medium)
+                                    Text(newest.preview)
+                                        .compatForeground(.secondary)
+                                        .lineLimit(1)
+                                }
                                 .lineLimit(1)
                                 .truncationMode(.tail)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .help(newest.isAvailable ? "Show in Conversation" : "Not in loaded history")
-                        .accessibilityLabel("Pinned message from \(sender(newest))")
-                        .accessibilityHint("Shows the message in the conversation")
-                        .contextMenu {
-                            Button("Unpin") { store.unpin(chatID: chatID, messageID: newest.messageID) }
-                        }
-                        if rows.count > 1 {
-                            Menu("\(rows.count) Pinned") {
-                                ForEach(rows.reversed()) { r in
-                                    Button("\(sender(r)): \(r.preview)") { jump(r) }
-                                        .disabled(!r.isAvailable)
-                                }
                             }
-                            .menuStyle(.borderlessButton)
-                            .fixedSize()
+                            .buttonStyle(.plain)
+                            .help(newest.isAvailable ? "Show in Conversation" : "Not in loaded history")
+                            .accessibilityLabel("Pinned message from \(sender(newest))")
+                            .accessibilityHint("Shows the message in the conversation")
+                            .contextMenu {
+                                Button("Unpin") { store.unpin(chatID: chatID, messageID: newest.messageID) }
+                            }
+                            if rows.count > 1 {
+                                Menu("\(rows.count) Pinned") {
+                                    ForEach(rows.reversed()) { r in
+                                        Button("\(sender(r)): \(r.preview)") { jump(r) }
+                                            .disabled(!r.isAvailable)
+                                    }
+                                }
+                                .menuStyle(.borderlessButton)
+                                .fixedSize()
+                            }
                         }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
+                    .chromeBar(.pinnedMessageBar)
                 }
-                .chromeBar(.pinnedMessageBar)
             }
         }
     }

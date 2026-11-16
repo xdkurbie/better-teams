@@ -6,6 +6,7 @@
 // `WeekGridLanes`. Selecting a meeting shows it in the inspector.
 import OstMacCore
 import SwiftUI
+import Perception
 
 struct WeekGrid: View {
     @ObservedObject var week: CalendarWeekStore
@@ -16,7 +17,6 @@ struct WeekGrid: View {
     /// Day-header click (a day in the Day view); nil = not clickable.
     var openDay: ((String) -> Void)?
     @Environment(\.contentTextScale) private var scale
-    @State private var position = ScrollPosition(edge: .top)
 
     static let hourHeight: CGFloat = 56
     static let gutter: CGFloat = 56
@@ -42,52 +42,50 @@ struct WeekGrid: View {
     }
 
     var body: some View {
-        let now = RelativeClock.shared.now
-        let nowMinute = Calendar.current.component(.hour, from: now) * 60
-            + Calendar.current.component(.minute, from: now)
-        // The day header is a pinned section header inside the scroll
-        // view, so it and the columns share one width (a header outside
-        // spans the legacy scroller too and drifts right, ~14 pt by Sat).
-        ScrollView(.vertical) {
-            LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
-                Section {
-                    HStack(alignment: .top, spacing: 0) {
-                        gutter
-                        ForEach(days) { day in
-                            let today = Self.isToday(day.id, now)
-                            WeekDayColumn(meetings: day.meetings, selectedID: selectedID,
-                                          nowMinute: today ? nowMinute : nil, select: select)
-                                .frame(maxWidth: .infinity)
-                                .background(today ? AnyShapeStyle(.tint.opacity(0.05)) : AnyShapeStyle(Color.clear))
-                                .overlay(alignment: .leading) { Divider() }
+        WithPerceptionTracking {
+            let now = RelativeClock.shared.now
+            let nowMinute = Calendar.current.component(.hour, from: now) * 60
+                + Calendar.current.component(.minute, from: now)
+            // The day header is a pinned section header inside the scroll
+            // view, so it and the columns share one width (a header outside
+            // spans the legacy scroller too and drifts right, ~14 pt by Sat).
+            ScrollView(.vertical) {
+                LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
+                    Section {
+                        HStack(alignment: .top, spacing: 0) {
+                            gutter
+                            ForEach(days) { day in
+                                let today = Self.isToday(day.id, now)
+                                WeekDayColumn(meetings: day.meetings, selectedID: selectedID,
+                                              nowMinute: today ? nowMinute : nil, select: select)
+                                    .frame(maxWidth: .infinity)
+                                    .background(today ? AnyShapeStyle(.tint.opacity(0.05)) : AnyShapeStyle(Color.clear))
+                                    .overlay(alignment: .leading) { Divider() }
+                            }
                         }
-                    }
-                    .frame(height: 24 * Self.hourHeight)
-                    .background { HourLines(hourHeight: Self.hourHeight, leading: Self.gutter) }
-                } header: {
-                    VStack(spacing: 0) {
-                        header(now)
-                        if days.contains(where: { !$0.allDay.isEmpty }) {
+                        .frame(height: 24 * Self.hourHeight)
+                        .background { HourLines(hourHeight: Self.hourHeight, leading: Self.gutter) }
+                    } header: {
+                        VStack(spacing: 0) {
+                            header(now)
+                            if days.contains(where: { !$0.allDay.isEmpty }) {
+                                Divider()
+                                allDayStrip
+                            }
                             Divider()
-                            allDayStrip
                         }
-                        Divider()
+                        .background(Color(nsColor: .controlBackgroundColor))
                     }
-                    .background(Color(nsColor: .controlBackgroundColor))
                 }
             }
+            // Opens on working hours (macOS 14+ scroll position). macOS 12
+            // starts at the top of the day.
+            .modifier(WeekInitialScroll(
+                id: days.first?.id,
+                y: max(0, CGFloat(max(0, Self.initialHour(days: days, now: now) - 1)) * Self.hourHeight - 8)
+            ))
+            .background(Color(nsColor: .controlBackgroundColor))
         }
-        // Opens on working hours (or an hour before now in the
-        // current week), not at the top of the day.
-        // An explicit offset: scrolling to a lazy row's identity landed
-        // short before the rows had measured (opened near 1 AM).
-        .scrollPosition($position)
-        .task(id: days.first?.id) {
-            let hour = Self.initialHour(days: days, now: now)
-            // 8 pt up so the hour label above the line is not under the header.
-            position.scrollTo(y: max(0, CGFloat(max(0, hour - 1)) * Self.hourHeight - 8))
-        }
-        .background(Color(nsColor: .controlBackgroundColor))
     }
 
     static func isToday(_ dayKey: String, _ now: Date) -> Bool {
@@ -112,12 +110,12 @@ struct WeekGrid: View {
                 let label = VStack(spacing: 1) {
                     Text(CalendarFormat.day(day.id)?.formatted(.dateTime.weekday(.abbreviated)) ?? "")
                         .font(AppFont.caption(scale))
-                        .foregroundStyle(today ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+                        .compatForeground(today ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
                     // Today: the date in a filled accent circle (Calendar.app).
                     Text(CalendarFormat.day(day.id)?.formatted(.dateTime.day()) ?? day.id)
                         .font(today ? AppFont.headline(scale) : AppFont.body(scale))
                         .monospacedDigit()
-                        .foregroundStyle(today ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
+                        .compatForeground(today ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
                         .padding(.horizontal, 5)
                         .background { if today { Capsule().fill(.tint) } }
                 }
@@ -142,7 +140,7 @@ struct WeekGrid: View {
         HStack(alignment: .top, spacing: 0) {
             Text("All day")
                 .font(AppFont.caption(scale))
-                .foregroundStyle(.secondary)
+                .compatForeground(.secondary)
                 .frame(width: Self.gutter - 8, alignment: .trailing)
                 .padding(.trailing, 8)
                 .padding(.top, 4)
@@ -165,7 +163,7 @@ struct WeekGrid: View {
                 Text(h.id == 0 ? "" : Self.hourLabel(h.id))
                     .font(AppFont.caption(scale))
                     .monospacedDigit()
-                    .foregroundStyle(.secondary)
+                    .compatForeground(.secondary)
                     .frame(width: Self.gutter - 8, height: Self.hourHeight, alignment: .topTrailing)
                     .offset(y: -6)
             }
@@ -186,16 +184,18 @@ private struct HourLines: View {
     let leading: CGFloat
 
     var body: some View {
-        Canvas { ctx, size in
-            var p = Path()
-            for h in 1 ..< 24 {
-                let y = CGFloat(h) * hourHeight
-                p.move(to: CGPoint(x: leading, y: y))
-                p.addLine(to: CGPoint(x: size.width, y: y))
+        WithPerceptionTracking {
+            Canvas { ctx, size in
+                var p = Path()
+                for h in 1 ..< 24 {
+                    let y = CGFloat(h) * hourHeight
+                    p.move(to: CGPoint(x: leading, y: y))
+                    p.addLine(to: CGPoint(x: size.width, y: y))
+                }
+                ctx.stroke(p, with: .color(Color(nsColor: .separatorColor)), lineWidth: 0.5)
             }
-            ctx.stroke(p, with: .color(Color(nsColor: .separatorColor)), lineWidth: 0.5)
+            .accessibilityHidden(true)
         }
-        .accessibilityHidden(true)
     }
 }
 
@@ -209,6 +209,24 @@ private struct WeekDayColumn: View {
     @Environment(\.contentTextScale) private var scale
 
     var body: some View {
+        WithPerceptionTracking {
+            if #available(macOS 13, *) {
+                timedColumn
+            } else {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(meetings) { m in
+                        WeekEventBlock(meeting: m, selected: m.id == selectedID) { select(m.id) }
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            }
+        }
+    }
+
+    /// Hour-scale placement. `Layout` is macOS 13+.
+    @available(macOS 13, *)
+    @ViewBuilder
+    private var timedColumn: some View {
         let spans = meetings.map { m -> (Int, Int) in
             let s = CalendarFormat.minutes(m.start) ?? 0
             let e = CalendarFormat.minutes(m.end).map { $0 > s ? $0 : 24 * 60 } ?? s + 30
@@ -229,20 +247,21 @@ private struct WeekDayColumn: View {
             }
         }
         .overlay(alignment: .topLeading) {
-            if let nowMinute {
-                // Current-time line (Calendar.app): red rule + dot.
-                HStack(spacing: 0) {
-                    Circle().fill(.red).frame(width: 7, height: 7)
-                    Rectangle().fill(.red).frame(height: 1.5)
+                if let nowMinute {
+                    // Current-time line (Calendar.app): red rule + dot.
+                    HStack(spacing: 0) {
+                        Circle().fill(.red).frame(width: 7, height: 7)
+                        Rectangle().fill(.red).frame(height: 1.5)
+                    }
+                    .offset(x: -3.5, y: CGFloat(nowMinute) * WeekGrid.hourHeight / 60 - 3.5)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
                 }
-                .offset(x: -3.5, y: CGFloat(nowMinute) * WeekGrid.hourHeight / 60 - 3.5)
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
-            }
         }
     }
 }
 
+@available(macOS 13, *)
 struct WeekGridSpan: LayoutValueKey {
     struct Value: Equatable {
         var start: Int
@@ -256,6 +275,7 @@ struct WeekGridSpan: LayoutValueKey {
 }
 
 /// Places each meeting at its minutes (y) and lane (x) inside the day.
+@available(macOS 13, *)
 struct WeekGridLayout: Layout {
     var minuteHeight: CGFloat
     var minimumHeight: CGFloat = 13
@@ -303,67 +323,100 @@ private struct WeekEventBlock: View {
     }
 
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: 0) {
-                Rectangle().fill(color).frame(width: 3)
-                Group {
-                    if isShort {
-                        // 30 minutes or less: one line, so the chip stays inside its slot.
-                        // Title and start time when both fit; in a narrow lane
-                        // the title alone, never a clipped time.
-                        ViewThatFits(in: .horizontal) {
-                            HStack(spacing: 4) {
-                                Text(meeting.subject)
-                                    .font(AppFont.caption(scale).weight(.semibold))
-                                    .lineLimit(1)
-                                Text(CalendarFormat.date(meeting.start).map(CalendarFormat.time) ?? "")
-                                    .font(AppFont.caption(scale))
-                                    .monospacedDigit()
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                            }
-                            // Narrow lane: a 30-minute block has room for two lines
-                            // of title; a 15-minute one keeps one and truncates.
-                            Text(meeting.subject)
-                                .font(AppFont.caption(scale).weight(.semibold))
-                                .lineLimit(isTiny ? 1 : 2)
-                                // Wrap onto the second line rather than cutting the first
-                                // with an ellipsis; the block's edge trims any overflow.
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    } else {
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(meeting.subject)
-                                .font(AppFont.caption(scale).weight(.semibold))
-                                .lineLimit(4)
-                            // Narrow lanes: start time only, never a clipped range.
-                            ViewThatFits(in: .horizontal) {
-                                Text(CalendarFormat.range(meeting))
-                                Text(CalendarFormat.date(meeting.start).map(CalendarFormat.time) ?? "")
-                            }
-                            .font(AppFont.caption(scale))
-                            .monospacedDigit()
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                        }
-                    }
+        WithPerceptionTracking {
+            Button(action: action) {
+                HStack(spacing: 0) {
+                    Rectangle().fill(color).frame(width: 3)
+                    WeekEventText(meeting: meeting, isShort: isShort, isTiny: isTiny)
+                    .padding(.horizontal, 3)
+                    .padding(.top, isTiny ? 0 : (isShort ? 1 : 2))
+                    .padding(.bottom, isTiny || isShort ? 0 : 2)
+                    Spacer(minLength: 0)
                 }
-                .padding(.horizontal, 3)
-                .padding(.top, isTiny ? 0 : (isShort ? 1 : 2))
-                .padding(.bottom, isTiny || isShort ? 0 : 2)
-                Spacer(minLength: 0)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: isTiny ? .leading : .topLeading)
+                .background(RoundedRectangle(cornerRadius: 4).fill(color.opacity(selected ? 0.32 : 0.14)))
+                .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(color, lineWidth: selected ? 1.5 : 0))
+                .clipShape(RoundedRectangle(cornerRadius: 4))
+                .contentShape(Rectangle())
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: isTiny ? .leading : .topLeading)
-            .background(RoundedRectangle(cornerRadius: 4).fill(color.opacity(selected ? 0.32 : 0.14)))
-            .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(color, lineWidth: selected ? 1.5 : 0))
-            .clipShape(RoundedRectangle(cornerRadius: 4))
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+            // Hover shows the whole title and time when the block truncates it.
+            .help("\(meeting.subject)\n\(CalendarFormat.range(meeting))")
+            .accessibilityLabel("\(meeting.subject), \(CalendarFormat.range(meeting))")
+            .accessibilityAddTraits(selected ? .isSelected : [])
         }
-        .buttonStyle(.plain)
-        // Hover shows the whole title and time when the block truncates it.
-        .help("\(meeting.subject)\n\(CalendarFormat.range(meeting))")
-        .accessibilityLabel("\(meeting.subject), \(CalendarFormat.range(meeting))")
-        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+}
+
+/// Title and time inside a week block. Split out so the chip button stays type-checkable.
+private struct WeekEventText: View {
+    let meeting: MeetingItem
+    let isShort: Bool
+    let isTiny: Bool
+    @Environment(\.contentTextScale) private var scale
+
+    var body: some View {
+        if isShort {
+            shortTitle
+        } else {
+            tallTitle
+        }
+    }
+
+    private var titleFont: Font { AppFont.caption(scale).compatWeight(.semibold) }
+
+    @ViewBuilder
+    private var shortTitle: some View {
+        if #available(macOS 13, *) {
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 4) {
+                    Text(meeting.subject).font(titleFont).lineLimit(1)
+                    Text(startTime)
+                        .font(AppFont.caption(scale))
+                        .monospacedDigit()
+                        .compatForeground(.secondary)
+                        .lineLimit(1)
+                }
+                Text(meeting.subject)
+                    .font(titleFont)
+                    .lineLimit(isTiny ? 1 : 2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        } else {
+            Text(meeting.subject)
+                .font(titleFont)
+                .lineLimit(isTiny ? 1 : 2)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var tallTitle: some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(meeting.subject)
+                .font(titleFont)
+                .lineLimit(4)
+            timeLine
+                .font(AppFont.caption(scale))
+                .monospacedDigit()
+                .compatForeground(.secondary)
+                .lineLimit(1)
+        }
+    }
+
+    @ViewBuilder
+    private var timeLine: some View {
+        if #available(macOS 13, *) {
+            ViewThatFits(in: .horizontal) {
+                Text(CalendarFormat.range(meeting))
+                Text(startTime)
+            }
+        } else {
+            Text(startTime)
+        }
+    }
+
+    private var startTime: String {
+        CalendarFormat.date(meeting.start).map(CalendarFormat.time) ?? ""
     }
 }
 
@@ -379,5 +432,35 @@ enum WeekEventColor {
             ("gray", .gray), ("grey", .gray),
         ]
         return table.first { n.contains($0.0) }?.1
+    }
+}
+
+/// Scrolls a week grid to working hours. `ScrollPosition` is macOS 14+.
+private struct WeekInitialScroll: ViewModifier {
+    let id: String?
+    let y: CGFloat
+
+    func body(content: Content) -> some View {
+        if #available(macOS 15, *) {
+            WeekScrollOffset(content: content, id: id, y: y)
+        } else {
+            content
+        }
+    }
+}
+
+@available(macOS 15, *)
+private struct WeekScrollOffset<V: View>: View {
+    let content: V
+    let id: String?
+    let y: CGFloat
+    @State private var position = ScrollPosition(edge: .top)
+
+    var body: some View {
+        content
+            .scrollPosition($position)
+            .task(id: id) {
+                position.scrollTo(y: y)
+            }
     }
 }

@@ -6,6 +6,7 @@
 import AppKit
 import SwiftUI
 import OstMacCore
+import Perception
 
 // MARK: - Home
 
@@ -18,16 +19,18 @@ struct AppStoreHome: View {
     private var store: AppStoreModel { library.store }
 
     var body: some View {
-        if let m = model {
-            if store.apps.isEmpty, store.allManifests.isEmpty {
-                if store.loading || (!store.demo && store.error == nil) {
-                    LoadingPane("Loading Apps\u{2026}")
+        WithPerceptionTracking {
+            if let m = model {
+                if store.apps.isEmpty, store.allManifests.isEmpty {
+                    if store.loading || (!store.demo && store.error == nil) {
+                        LoadingPane("Loading Apps\u{2026}")
+                    } else {
+                        ErrorPane(title: m.connection == .offline ? "You're Offline" : "Couldn't Load Apps",
+                                  message: store.error ?? "The app store is unavailable.") { store.refresh() }
+                    }
                 } else {
-                    ErrorPane(title: m.connection == .offline ? "You're Offline" : "Couldn't Load Apps",
-                              message: store.error ?? "The app store is unavailable.") { store.refresh() }
+                    content(m)
                 }
-            } else {
-                content(m)
             }
         }
     }
@@ -48,16 +51,16 @@ struct AppStoreHome: View {
             .padding(.vertical, 20)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .onChange(of: query) { _, q in store.search(q) }
+        .onChange(of: query) { q in store.search(q) }
     }
 
     private var header: some View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(category ?? "Apps").font(.largeTitle.weight(.semibold))
+                Text(category ?? "Apps").font(.largeTitle.compatWeight(.semibold))
                 Text(category == nil ? "Apps for you and your team, running right in Better Teams."
                                      : "Apps in \(category ?? "")")
-                    .foregroundStyle(.secondary)
+                    .compatForeground(.secondary)
             }
             Spacer(minLength: 12)
             if store.searching || (store.loading && !store.apps.isEmpty) {
@@ -73,7 +76,7 @@ struct AppStoreHome: View {
     @ViewBuilder
     private func shelf(_ title: String?, _ apps: [TeamsAppManifest], _ m: WindowModel) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            if let title { Text(title).font(.title3.weight(.semibold)) }
+            if let title { Text(title).font(.title3.compatWeight(.semibold)) }
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 260, maximum: 420), spacing: 12)], spacing: 12) {
                 ForEach(apps) { a in
                     Button {
@@ -93,31 +96,33 @@ private struct AppStoreCard: View {
     let installed: Bool
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            AppIconTile(app: app, size: 44)
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Text(app.name).font(.headline).lineLimit(1)
-                    if installed {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .accessibilityLabel("Installed")
+        WithPerceptionTracking {
+            HStack(alignment: .top, spacing: 12) {
+                AppIconTile(app: app, size: 44)
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text(app.name).font(.headline).lineLimit(1)
+                        if installed {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.caption)
+                                .compatForeground(.secondary)
+                                .accessibilityLabel("Installed")
+                        }
                     }
+                    Text(app.developer ?? "").font(.caption).compatForeground(.secondary).lineLimit(1)
+                    Text(app.shortDescription ?? "").font(.callout).compatForeground(.secondary)
+                        .lineLimit(2)
+                        .padding(.top, 2)
                 }
-                Text(app.developer ?? "").font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                Text(app.shortDescription ?? "").font(.callout).foregroundStyle(.secondary)
-                    .lineLimit(2, reservesSpace: true)
-                    .padding(.top, 2)
+                Spacer(minLength: 0)
             }
-            Spacer(minLength: 0)
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.quaternary.opacity(0.55), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .help(app.name)
+            .accessibilityElement(children: .combine)
         }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.quaternary.opacity(0.55), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .help(app.name)
-        .accessibilityElement(children: .combine)
     }
 }
 
@@ -129,23 +134,25 @@ struct AppIconTile: View {
     let size: CGFloat
 
     var body: some View {
-        let shape = RoundedRectangle(cornerRadius: size * 0.22, style: .continuous)
-        ZStack {
-            shape.fill(Palette.manifestAccent(app.accentColor) ?? Color.accentColor)
-            if let url = AppIconCache.iconURL(app) {
-                AppIconImage(url: url, size: size * 0.76, rounded: false) { symbol }
-            } else {
-                symbol
+        WithPerceptionTracking {
+            let shape = RoundedRectangle(cornerRadius: size * 0.22, style: .continuous)
+            ZStack {
+                shape.fill(Palette.manifestAccent(app.accentColor) ?? Color.accentColor)
+                if let url = AppIconCache.iconURL(app) {
+                    AppIconImage(url: url, size: size * 0.76, rounded: false) { symbol }
+                } else {
+                    symbol
+                }
             }
+            .frame(width: size, height: size)
+            .accessibilityHidden(true)
         }
-        .frame(width: size, height: size)
-        .accessibilityHidden(true)
     }
 
     private var symbol: some View {
         Image(systemName: DemoAppStore.symbols[app.id] ?? "square.grid.2x2")
             .font(AppFont.appTileGlyph(size))
-            .foregroundStyle(.white)
+            .compatForeground(.white)
     }
 }
 
@@ -168,15 +175,17 @@ struct AppStoreDetail: View {
     private var store: AppStoreModel { library.store }
 
     var body: some View {
-        if let m = model {
-            if let app = store.manifest(appID) {
-                page(app, m)
-            } else if store.loading {
-                LoadingPane("Loading App\u{2026}", rows: false)
-            } else {
-                EmptyPane("App Not Found", systemImage: "questionmark.app",
-                          message: "This app isn't in your organization's app store.") {
-                    Button("Browse Apps") { m.navigator?.select(nil, in: .apps) }
+        WithPerceptionTracking {
+            if let m = model {
+                if let app = store.manifest(appID) {
+                    page(app, m)
+                } else if store.loading {
+                    LoadingPane("Loading App\u{2026}", rows: false)
+                } else {
+                    EmptyPane("App Not Found", systemImage: "questionmark.app",
+                              message: "This app isn't in your organization's app store.") {
+                        Button("Browse Apps") { m.navigator?.select(nil, in: .apps) }
+                    }
                 }
             }
         }
@@ -194,7 +203,7 @@ struct AppStoreDetail: View {
                 header(app, m)
                 if let e = store.installError {
                     Label(e, systemImage: "exclamationmark.triangle.fill")
-                        .foregroundStyle(Palette.failed)
+                        .compatForeground(Palette.failed)
                         .font(.callout)
                 }
                 section("About") {
@@ -212,14 +221,14 @@ struct AppStoreDetail: View {
                 section("Permissions") {
                     VStack(alignment: .leading, spacing: 6) {
                         let perms = (app.permissions ?? []).map(NamedItem.init)
-                        if perms.isEmpty { Text("No special permissions.").foregroundStyle(.secondary) }
+                        if perms.isEmpty { Text("No special permissions.").compatForeground(.secondary) }
                         ForEach(perms) { p in
                             Label(Self.permission(p.id), systemImage: "lock.shield")
                         }
                         if !app.validDomains.isEmpty {
                             Text("Loads content from \(app.validDomains.joined(separator: ", "))")
                                 .font(.callout)
-                                .foregroundStyle(.secondary)
+                                .compatForeground(.secondary)
                                 .textSelection(.enabled)
                         }
                     }
@@ -231,7 +240,7 @@ struct AppStoreDetail: View {
                         }
                         .pickerStyle(.segmented)
                         .fixedSize()
-                        .onChange(of: hostMode) { _, mode in
+                        .onChange(of: hostMode) { mode in
                             TeamsJSTransportChoice.setMode(mode, app: app.id, demo: store.demo)
                             m.frameHost.hostModeChanged(appID: app.id)
                         }
@@ -264,7 +273,7 @@ struct AppStoreDetail: View {
         }
         Text(text)
             .font(.callout)
-            .foregroundStyle(.secondary)
+            .compatForeground(.secondary)
             .fixedSize(horizontal: false, vertical: true)
         if failure != nil {
             Button("Try Again") {
@@ -283,10 +292,10 @@ struct AppStoreDetail: View {
         return HStack(alignment: .top, spacing: 16) {
             AppIconTile(app: app, size: 72)
             VStack(alignment: .leading, spacing: 4) {
-                Text(app.name).font(.title.weight(.semibold))
-                Text(app.developer ?? "Unknown publisher").foregroundStyle(.secondary)
+                Text(app.name).font(.title.compatWeight(.semibold))
+                Text(app.developer ?? "Unknown publisher").compatForeground(.secondary)
                 if let cats = app.categories, !cats.isEmpty {
-                    Text(cats.joined(separator: " · ")).font(.caption).foregroundStyle(.tertiary)
+                    Text(cats.joined(separator: " · ")).font(.caption).compatForeground(.tertiary)
                 }
                 HStack(spacing: 8) {
                     if let hostedApp {
@@ -296,10 +305,10 @@ struct AppStoreDetail: View {
                         Button(pinned ? "Unpin" : "Pin to Tab Bar") { AppActions.togglePin(LibraryItem(hostedApp), m) }
                     } else if installed {
                         Label("Installed", systemImage: "checkmark.circle")
-                            .foregroundStyle(.secondary)
+                            .compatForeground(.secondary)
                     } else if store.installing.contains(app.id) {
                         ProgressView().controlSize(.small)
-                        Text("Adding\u{2026}").foregroundStyle(.secondary)
+                        Text("Adding\u{2026}").compatForeground(.secondary)
                     } else {
                         Button("Add to Teams") { confirmInstall(app, m) }
                             .buttonStyle(.borderedProminent)
@@ -309,7 +318,7 @@ struct AppStoreDetail: View {
                 if installed, hostedApp == nil {
                     Text("Use \(app.name) in chats and channels.")
                         .font(.callout)
-                        .foregroundStyle(.secondary)
+                        .compatForeground(.secondary)
                 }
             }
         }

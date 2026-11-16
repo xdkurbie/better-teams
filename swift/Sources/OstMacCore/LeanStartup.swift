@@ -123,14 +123,21 @@ public struct SMLoginItemService: LoginItemService {
     public init() {}
 
     public func isRegistered() -> Bool {
-        SMAppService.mainApp.status == .enabled
+        guard #available(macOS 13, *) else { return false }
+        return SMAppService.mainApp.status == .enabled
     }
 
     public func register() throws {
+        guard #available(macOS 13, *) else {
+            throw CocoaError(.featureUnsupported, userInfo: [
+                NSLocalizedDescriptionKey: "Open at login requires macOS 13 or later.",
+            ])
+        }
         try SMAppService.mainApp.register()
     }
 
     public func unregister() throws {
+        guard #available(macOS 13, *) else { return }
         try SMAppService.mainApp.unregister()
     }
 }

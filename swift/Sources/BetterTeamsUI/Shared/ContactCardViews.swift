@@ -9,6 +9,7 @@
 import AppKit
 import OstMacCore
 import SwiftUI
+import Perception
 
 // MARK: - Actions
 
@@ -188,50 +189,52 @@ private struct ContactHeader: View {
     private var large: Bool { diameter > 60 }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Avatar(name: name, diameter: diameter, person: card?.ref ?? ref)
-                .overlay(alignment: .bottomTrailing) {
-                    if let status = presence?.status {
-                        PresenceBadge(status: status, size: diameter * 0.26)
+        WithPerceptionTracking {
+            HStack(alignment: .top, spacing: 12) {
+                Avatar(name: name, diameter: diameter, person: card?.ref ?? ref)
+                    .overlay(alignment: .bottomTrailing) {
+                        if let status = presence?.status {
+                            PresenceBadge(status: status, size: diameter * 0.26)
+                        }
+                    }
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(name)
+                        .font(large ? AppFont.title(scale) : AppFont.title3(scale))
+                        .textSelection(.enabled)
+                        .lineLimit(2)
+                    let title = card?.profile.jobTitle?.nonEmpty
+                    let department = card?.profile.department?.nonEmpty
+                    if large {
+                        if let line = [title, department].compactMap({ $0 }).joined(separator: " • ").nonEmpty {
+                            secondary(line)
+                        }
+                    } else {
+                        if let title { secondary(title) }
+                        if let department { secondary(department) }
+                    }
+                    if let note = presence?.statusMessage {
+                        Label(note, systemImage: "text.bubble")
+                            .font(AppFont.subheadline(scale))
+                            .compatForeground(.secondary)
+                            .lineLimit(3)
+                    }
+                    if let reply = presence?.outOfOfficeNote {
+                        Label(reply, systemImage: "airplane")
+                            .font(AppFont.subheadline(scale))
+                            .compatForeground(.secondary)
+                            .lineLimit(3)
+                            .help(reply)
                     }
                 }
-            VStack(alignment: .leading, spacing: 3) {
-                Text(name)
-                    .font(large ? AppFont.title(scale) : AppFont.title3(scale))
-                    .textSelection(.enabled)
-                    .lineLimit(2)
-                let title = card?.profile.jobTitle?.nonEmpty
-                let department = card?.profile.department?.nonEmpty
-                if large {
-                    if let line = [title, department].compactMap({ $0 }).joined(separator: " • ").nonEmpty {
-                        secondary(line)
-                    }
-                } else {
-                    if let title { secondary(title) }
-                    if let department { secondary(department) }
-                }
-                if let note = presence?.statusMessage {
-                    Label(note, systemImage: "text.bubble")
-                        .font(AppFont.subheadline(scale))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(3)
-                }
-                if let reply = presence?.outOfOfficeNote {
-                    Label(reply, systemImage: "airplane")
-                        .font(AppFont.subheadline(scale))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(3)
-                        .help(reply)
-                }
+                Spacer(minLength: 0)
             }
-            Spacer(minLength: 0)
         }
     }
 
     private func secondary(_ text: String) -> some View {
         Text(text)
             .font(AppFont.subheadline(scale))
-            .foregroundStyle(.secondary)
+            .compatForeground(.secondary)
             .lineLimit(2)
     }
 }
@@ -250,27 +253,29 @@ private struct ContactActionBar: View {
     @Environment(\.contentTextScale) private var scale
 
     var body: some View {
-        HStack(spacing: 6) {
-            if !own {
-                action("Chat", "bubble.left") { if let m = model { ContactActions.chat(ref, m) } }
+        WithPerceptionTracking {
+            HStack(spacing: 6) {
+                if !own {
+                    action("Chat", "bubble.left") { if let m = model { ContactActions.chat(ref, m) } }
+                }
+                action("Organization", "flowchart") {
+                    if let orgChart { orgChart() } else if let m = model { ContactActions.openCard(ref, m, tab: .organization) }
+                }
+                .disabled(orgChart == nil && model?.sheet != nil)
+                if !own {
+                    action("Video call", "video") { if let m = model { ContactActions.call(ref, m, video: true) } }
+                    action("Audio call", "phone") { if let m = model { ContactActions.call(ref, m, video: false) } }
+                }
+                Button { ContactActions.linkedIn(ref, card) } label: {
+                    Text("in")
+                        .font(AppFont.headline(scale))
+                        .frame(width: 18, height: 18)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.regular)
+                .help(card?.linkedIn?.profileURL != nil ? "LinkedIn profile" : "Find on LinkedIn")
+                .accessibilityLabel("LinkedIn")
             }
-            action("Organization", "flowchart") {
-                if let orgChart { orgChart() } else if let m = model { ContactActions.openCard(ref, m, tab: .organization) }
-            }
-            .disabled(orgChart == nil && model?.sheet != nil)
-            if !own {
-                action("Video call", "video") { if let m = model { ContactActions.call(ref, m, video: true) } }
-                action("Audio call", "phone") { if let m = model { ContactActions.call(ref, m, video: false) } }
-            }
-            Button { ContactActions.linkedIn(ref, card) } label: {
-                Text("in")
-                    .font(AppFont.headline(scale))
-                    .frame(width: 18, height: 18)
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.regular)
-            .help(card?.linkedIn?.profileURL != nil ? "LinkedIn profile" : "Find on LinkedIn")
-            .accessibilityLabel("LinkedIn")
         }
     }
 
@@ -305,32 +310,34 @@ private struct QuickMessageField: View {
     @Environment(\.contentTextScale) private var scale
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 6) {
-                TextField("Send a quick message", text: $draft.text)
-                    .textFieldStyle(.roundedBorder)
-                    .disabled(draft.sending)
-                    .onSubmit(send)
-                    .onChange(of: draft.text) { _, next in if !next.isEmpty { draft.result = nil } }
-                    .accessibilityLabel("Send a quick message")
-                Button(action: send) {
-                    Image(systemName: "paperplane")
-                        .frame(width: 18, height: 18)
-                }
-                .buttonStyle(.borderless)
-                .disabled(draft.sending || !canSend)
-                .help("Send")
-                .accessibilityLabel("Send")
-            }
-            if let result = draft.result {
+        WithPerceptionTracking {
+            VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
-                    Text(result ? "Message sent" : "Couldn't send the message")
-                        .font(AppFont.caption(scale))
-                        .foregroundStyle(.secondary)
-                    if result {
-                        Button("Go to chat") { if let m = model { ContactActions.chat(ref, m) } }
-                            .buttonStyle(.link)
+                    TextField("Send a quick message", text: $draft.text)
+                        .textFieldStyle(.roundedBorder)
+                        .disabled(draft.sending)
+                        .onSubmit(send)
+                        .onChange(of: draft.text) { next in if !next.isEmpty { draft.result = nil } }
+                        .accessibilityLabel("Send a quick message")
+                    Button(action: send) {
+                        Image(systemName: "paperplane")
+                            .frame(width: 18, height: 18)
+                    }
+                    .buttonStyle(.borderless)
+                    .disabled(draft.sending || !canSend)
+                    .help("Send")
+                    .accessibilityLabel("Send")
+                }
+                if let result = draft.result {
+                    HStack(spacing: 6) {
+                        Text(result ? "Message sent" : "Couldn't send the message")
                             .font(AppFont.caption(scale))
+                            .compatForeground(.secondary)
+                        if result {
+                            Button("Go to chat") { if let m = model { ContactActions.chat(ref, m) } }
+                                .buttonStyle(.link)
+                                .font(AppFont.caption(scale))
+                        }
                     }
                 }
             }
@@ -362,40 +369,42 @@ private struct ContactStatusLines: View {
     @Environment(\.contentTextScale) private var scale
 
     var body: some View {
-        let line = ContactActions.statusLine(presence: presence, card: card)
-        let hours = ContactActions.workingHours(for: card)
-        let time = ContactActions.localTime(for: card)
-        if line != nil || hours != nil || time != nil {
-            GroupBox {
-            VStack(alignment: .leading, spacing: 8) {
-                if line != nil || hours != nil {
-                    VStack(alignment: .leading, spacing: 4) {
-                        if let line {
-                            HStack(spacing: 6) {
-                                if let status = presence?.status {
-                                    PresenceBadge(status: status, size: 11)
-                                } else {
-                                    Image(systemName: "calendar").foregroundStyle(.secondary)
+        WithPerceptionTracking {
+            let line = ContactActions.statusLine(presence: presence, card: card)
+            let hours = ContactActions.workingHours(for: card)
+            let time = ContactActions.localTime(for: card)
+            if line != nil || hours != nil || time != nil {
+                GroupBox {
+                VStack(alignment: .leading, spacing: 8) {
+                    if line != nil || hours != nil {
+                        VStack(alignment: .leading, spacing: 4) {
+                            if let line {
+                                HStack(spacing: 6) {
+                                    if let status = presence?.status {
+                                        PresenceBadge(status: status, size: 11)
+                                    } else {
+                                        Image(systemName: "calendar").compatForeground(.secondary)
+                                    }
+                                    Text(line)
+                                        .font(AppFont.subheadline(scale).compatWeight(.semibold))
+                                        .compatForeground(.primary)
                                 }
-                                Text(line)
-                                    .font(AppFont.subheadline(scale).weight(.semibold))
-                                    .foregroundStyle(.primary)
+                            }
+                            if let hours {
+                                Text("Work hours: " + hours).compatForeground(.secondary)
                             }
                         }
-                        if let hours {
-                            Text("Work hours: " + hours).foregroundStyle(.secondary)
-                        }
+                    }
+                    if let time {
+                        if line != nil || hours != nil { Divider() }
+                        Label(time, systemImage: "clock").compatForeground(.secondary)
                     }
                 }
-                if let time {
-                    if line != nil || hours != nil { Divider() }
-                    Label(time, systemImage: "clock").foregroundStyle(.secondary)
+                .font(AppFont.subheadline(scale))
+                .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                .accessibilityElement(children: .combine)
             }
-            .font(AppFont.subheadline(scale))
-            .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .accessibilityElement(children: .combine)
         }
     }
 }
@@ -409,15 +418,17 @@ struct CappedScroll<Content: View>: View {
     @ViewBuilder let content: () -> Content
 
     var body: some View {
-        content()
-            .fixedSize(horizontal: false, vertical: true)
-            .hidden()
-            .frame(maxHeight: maxHeight, alignment: .top)
-            .overlay(alignment: .top) {
-                ScrollView { content() }
-                    .scrollBounceBehavior(.basedOnSize)
-            }
-            .fixedSize(horizontal: false, vertical: true)
+        WithPerceptionTracking {
+            content()
+                .fixedSize(horizontal: false, vertical: true)
+                .hidden()
+                .frame(maxHeight: maxHeight, alignment: .top)
+                .overlay(alignment: .top) {
+                    ScrollView { content() }
+                        .compatScrollBounceBasedOnSize()
+                }
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 }
 
@@ -432,14 +443,16 @@ struct ContactHoverCard: View {
     @StateObject private var draft = QuickMessageDraft()
 
     var body: some View {
-        if let store = model?.app?.contactCards {
-            // Teams' card scrolls once it is taller than the cap.
-            CappedScroll(maxHeight: 480) {
-                Content(ref: ref, store: store, draft: draft)
-                    .padding(14)
-                    .frame(width: 320, alignment: .leading)
+        WithPerceptionTracking {
+            if let store = model?.app?.contactCards {
+                // Teams' card scrolls once it is taller than the cap.
+                CappedScroll(maxHeight: 480) {
+                    Content(ref: ref, store: store, draft: draft)
+                        .padding(14)
+                        .frame(width: 320, alignment: .leading)
+                }
+                .background { CardWindowReporter(hover: hover) }
             }
-            .background { CardWindowReporter(hover: hover) }
         }
     }
 
@@ -451,24 +464,26 @@ struct ContactHoverCard: View {
         @Environment(\.contentTextScale) private var scale
 
         var body: some View {
-            let card = store.card(for: ref)
-            let target = card?.ref ?? store.directory.enrich(ref)
-            let own = ContactActions.isOwn(target, model)
-            let presence = store.presence(for: ref)
-            VStack(alignment: .leading, spacing: 10) {
-                ContactHeader(ref: ref, card: card, presence: presence)
-                ContactActionBar(ref: target, card: card, own: own)
-                Divider()
-                if card == nil, case .failed(let why) = store.phase(for: ref) {
-                    Text(why).font(AppFont.caption(scale)).foregroundStyle(.secondary)
-                } else if card == nil {
-                    ProgressView().controlSize(.small)
+            WithPerceptionTracking {
+                let card = store.card(for: ref)
+                let target = card?.ref ?? store.directory.enrich(ref)
+                let own = ContactActions.isOwn(target, model)
+                let presence = store.presence(for: ref)
+                VStack(alignment: .leading, spacing: 10) {
+                    ContactHeader(ref: ref, card: card, presence: presence)
+                    ContactActionBar(ref: target, card: card, own: own)
+                    Divider()
+                    if card == nil, case .failed(let why) = store.phase(for: ref) {
+                        Text(why).font(AppFont.caption(scale)).compatForeground(.secondary)
+                    } else if card == nil {
+                        ProgressView().controlSize(.small)
+                    }
+                    if !own { QuickMessageField(ref: target, draft: draft) }
+                    ContactStatusLines(card: card, presence: presence)
+                    contact(card, target: target)
                 }
-                if !own { QuickMessageField(ref: target, draft: draft) }
-                ContactStatusLines(card: card, presence: presence)
-                contact(card, target: target)
+                .onAppear { store.load(ref) }
             }
-            .onAppear { store.load(ref) }
         }
 
         /// "Contact >" (drills into the full card), then email and work
@@ -523,23 +538,25 @@ struct ContactCardSheet: View {
     private var current: ContactRef { history.last ?? initial }
 
     var body: some View {
-        ZStack(alignment: .topTrailing) {
-            if let store = model?.app?.contactCards {
-                CardBody(ref: current, store: store, initialTab: Self.tab(fromArg: model?.sheet?.arg),
-                         back: history.isEmpty ? nil : { history.removeLast() }) { next in history.append(next) }
+        WithPerceptionTracking {
+            ZStack(alignment: .topTrailing) {
+                if let store = model?.app?.contactCards {
+                    CardBody(ref: current, store: store, initialTab: Self.tab(fromArg: model?.sheet?.arg),
+                             back: history.isEmpty ? nil : { history.removeLast() }) { next in history.append(next) }
+                }
+                Button { model?.dismissSheet() } label: {
+                    Image(systemName: "xmark")
+                        .frame(width: 18, height: 18)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.borderless)
+                .keyboardShortcut(.cancelAction)
+                .help("Close")
+                .accessibilityLabel("Close")
+                .padding(12)
             }
-            Button { model?.dismissSheet() } label: {
-                Image(systemName: "xmark")
-                    .frame(width: 18, height: 18)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.borderless)
-            .keyboardShortcut(.cancelAction)
-            .help("Close")
-            .accessibilityLabel("Close")
-            .padding(12)
+            .frame(width: 560, height: 640)
         }
-        .frame(width: 560, height: 640)
     }
 
     enum Tab: String, CaseIterable, Identifiable {
@@ -574,16 +591,18 @@ struct ContactCardSheet: View {
         @Binding var selection: Tab
 
         var body: some View {
-            HStack(spacing: 0) {
-                Picker("Section", selection: $selection) {
-                    ForEach(tabs) { tab in
-                        Text(tab.rawValue).tag(tab)
+            WithPerceptionTracking {
+                HStack(spacing: 0) {
+                    Picker("Section", selection: $selection) {
+                        ForEach(tabs) { tab in
+                            Text(tab.rawValue).tag(tab)
+                        }
                     }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .fixedSize()
+                    Spacer(minLength: 0)
                 }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .fixedSize()
-                Spacer(minLength: 0)
             }
         }
     }
@@ -610,51 +629,53 @@ struct ContactCardSheet: View {
         }
 
         var body: some View {
-            let card = store.card(for: ref)
-            let target = card?.ref ?? store.directory.enrich(ref)
-            let own = ContactActions.isOwn(target, model)
-            let tabs = ContactCardSheet.tabs(for: card)
-            let shown = tabs.contains(tab) ? tab : .overview
-            VStack(alignment: .leading, spacing: 0) {
-                // Fixed: header, actions and tabs; only the tab content scrolls.
-                VStack(alignment: .leading, spacing: 14) {
-                    if let back {
-                        Button(action: back) { Label("Back", systemImage: "chevron.left") }
-                            .buttonStyle(.borderless)
-                            .help("Back to the previous contact card")
+            WithPerceptionTracking {
+                let card = store.card(for: ref)
+                let target = card?.ref ?? store.directory.enrich(ref)
+                let own = ContactActions.isOwn(target, model)
+                let tabs = ContactCardSheet.tabs(for: card)
+                let shown = tabs.contains(tab) ? tab : .overview
+                VStack(alignment: .leading, spacing: 0) {
+                    // Fixed: header, actions and tabs; only the tab content scrolls.
+                    VStack(alignment: .leading, spacing: 14) {
+                        if let back {
+                            Button(action: back) { Label("Back", systemImage: "chevron.left") }
+                                .buttonStyle(.borderless)
+                                .help("Back to the previous contact card")
+                        }
+                        ContactHeader(ref: ref, card: card, presence: store.presence(for: ref), diameter: 88)
+                            .padding(.trailing, 28)
+                        ContactActionBar(ref: target, card: card, own: own) { tab = .organization }
+                        SectionPicker(tabs: tabs, selection: Binding(get: { shown }, set: { tab = $0 }))
                     }
-                    ContactHeader(ref: ref, card: card, presence: store.presence(for: ref), diameter: 88)
-                        .padding(.trailing, 28)
-                    ContactActionBar(ref: target, card: card, own: own) { tab = .organization }
-                    SectionPicker(tabs: tabs, selection: Binding(get: { shown }, set: { tab = $0 }))
-                }
-                .padding([.horizontal, .top], 20)
-                Divider()
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 18) {
-                        if card == nil {
-                            if case .failed(let why) = store.phase(for: ref) {
-                                Text(why).font(AppFont.body(scale)).foregroundStyle(.secondary)
-                            } else {
-                                ProgressView().controlSize(.small)
+                    .padding([.horizontal, .top], 20)
+                    Divider()
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 18) {
+                            if card == nil {
+                                if case .failed(let why) = store.phase(for: ref) {
+                                    Text(why).font(AppFont.body(scale)).compatForeground(.secondary)
+                                } else {
+                                    ProgressView().controlSize(.small)
+                                }
+                            }
+                            switch shown {
+                            case .overview: overview(card, target: target, own: own)
+                            case .profile: if let card { profile(card, target: target) }
+                            case .organization: if let card { org(card) }
+                            case .linkedIn: linkedIn(card)
                             }
                         }
-                        switch shown {
-                        case .overview: overview(card, target: target, own: own)
-                        case .profile: if let card { profile(card, target: target) }
-                        case .organization: if let card { org(card) }
-                        case .linkedIn: linkedIn(card)
-                        }
+                        .padding(20)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    .padding(20)
-                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-            }
-            .onAppear { store.load(ref, org: true) }
-            .onChange(of: ref) { _, next in
-                tab = .overview
-                moreContact = false
-                store.load(next, org: true)
+                .onAppear { store.load(ref, org: true) }
+                .onChange(of: ref) { next in
+                    tab = .overview
+                    moreContact = false
+                    store.load(next, org: true)
+                }
             }
         }
 
@@ -716,12 +737,23 @@ struct ContactCardSheet: View {
             }
         }
 
+        @ViewBuilder
         private func fieldGrid(_ rows: [Field], target: ContactRef) -> some View {
-            Grid(alignment: .topLeading, horizontalSpacing: 16, verticalSpacing: 12) {
-                let lines = stride(from: 0, to: rows.count, by: 3).map { Array(rows[$0..<min($0 + 3, rows.count)]) }
-                ForEach(lines, id: \.first?.label) { line in
-                    GridRow {
-                        ForEach(line, id: \.label) { field($0, target: target) }
+            let lines = stride(from: 0, to: rows.count, by: 3).map { Array(rows[$0..<min($0 + 3, rows.count)]) }
+            if #available(macOS 13, *) {
+                Grid(alignment: .topLeading, horizontalSpacing: 16, verticalSpacing: 12) {
+                    ForEach(lines, id: \.first?.label) { line in
+                        GridRow {
+                            ForEach(line, id: \.label) { field($0, target: target) }
+                        }
+                    }
+                }
+            } else {
+                VStack(alignment: .leading, spacing: 12) {
+                    ForEach(lines, id: \.first?.label) { line in
+                        HStack(alignment: .top, spacing: 16) {
+                            ForEach(line, id: \.label) { field($0, target: target) }
+                        }
                     }
                 }
             }
@@ -730,11 +762,11 @@ struct ContactCardSheet: View {
         private func field(_ f: Field, target: ContactRef) -> some View {
             HStack(alignment: .top, spacing: 8) {
                 Image(systemName: f.symbol)
-                    .foregroundStyle(.secondary)
+                    .compatForeground(.secondary)
                     .frame(width: 16)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(f.label).font(AppFont.caption(scale)).foregroundStyle(.secondary)
+                    Text(f.label).font(AppFont.caption(scale)).compatForeground(.secondary)
                     switch f.label {
                     case "Email":
                         link(f.value, help: "Email \(f.value)") { ContactActions.email(f.value) }
@@ -776,7 +808,7 @@ struct ContactCardSheet: View {
             } else if let manager = card.managers.first {
                 Divider()
                 section("Organization") {
-                    Text("Manager").font(AppFont.caption(scale)).foregroundStyle(.secondary)
+                    Text("Manager").font(AppFont.caption(scale)).compatForeground(.secondary)
                     personRow(manager, indent: 0)
                     Button("Show organization") { tab = .organization }
                         .buttonStyle(.link)
@@ -814,7 +846,7 @@ struct ContactCardSheet: View {
             VStack(alignment: .leading, spacing: 12) {
                 ForEach(rows.compactMap { k, v in v.map { (k, $0) } }, id: \.0) { row in
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(row.0).font(AppFont.caption(scale)).foregroundStyle(.secondary)
+                        Text(row.0).font(AppFont.caption(scale)).compatForeground(.secondary)
                         Text(row.1).font(AppFont.body(scale)).textSelection(.enabled)
                     }
                 }
@@ -838,7 +870,7 @@ struct ContactCardSheet: View {
                     selfRow(card, indent: CGFloat(card.managers.count))
                     if !card.reports.isEmpty {
                         Text("Direct reports (\(card.reports.count))")
-                            .font(AppFont.caption(scale)).foregroundStyle(.secondary)
+                            .font(AppFont.caption(scale)).compatForeground(.secondary)
                             .padding(.top, 6)
                         ForEach(card.reports) { person in personRow(person, indent: 0) }
                     }
@@ -853,11 +885,11 @@ struct ContactCardSheet: View {
             VStack(alignment: .leading, spacing: 10) {
                 if card?.linkedIn?.profileURL != nil {
                     Text("LinkedIn profile matched from the directory.")
-                        .font(AppFont.body(scale)).foregroundStyle(.secondary)
+                        .font(AppFont.body(scale)).compatForeground(.secondary)
                     Button("View LinkedIn profile") { ContactActions.linkedIn(ref, card) }
                 } else {
                     Text("No LinkedIn profile is matched to \(name).")
-                        .font(AppFont.body(scale)).foregroundStyle(.secondary)
+                        .font(AppFont.body(scale)).compatForeground(.secondary)
                     Button("Find \(name) on LinkedIn") { ContactActions.linkedIn(ref, card) }
                     if let li = card?.linkedIn, !li.bound, let bind = li.bindURL {
                         Button("Connect your LinkedIn account") { TeamsLinkRouter.open(bind) }
@@ -887,18 +919,18 @@ struct ContactCardSheet: View {
             } label: {
                 HStack(spacing: 8) {
                     Image(systemName: ContactActions.fileSymbol(file.type))
-                        .foregroundStyle(.secondary)
+                        .compatForeground(.secondary)
                         .frame(width: 18)
                     VStack(alignment: .leading, spacing: 0) {
                         Text(file.title).font(AppFont.body(scale)).lineLimit(1)
                         if let at = file.sharedAt {
                             Text("Shared \(at.formatted(date: .abbreviated, time: .omitted))")
-                                .font(AppFont.caption(scale)).foregroundStyle(.secondary)
+                                .font(AppFont.caption(scale)).compatForeground(.secondary)
                         }
                     }
                     Spacer(minLength: 0)
                     if file.webURL != nil {
-                        Image(systemName: "arrow.up.forward.square").foregroundStyle(.tertiary)
+                        Image(systemName: "arrow.up.forward.square").compatForeground(.tertiary)
                     }
                 }
                 .contentShape(Rectangle())
@@ -924,11 +956,11 @@ struct ContactCardSheet: View {
                     VStack(alignment: .leading, spacing: 0) {
                         Text(person.displayName).font(AppFont.body(scale))
                         if let title = person.jobTitle {
-                            Text(title).font(AppFont.caption(scale)).foregroundStyle(.secondary)
+                            Text(title).font(AppFont.caption(scale)).compatForeground(.secondary)
                         }
                     }
                     Spacer(minLength: 0)
-                    Image(systemName: "chevron.right").foregroundStyle(.tertiary)
+                    Image(systemName: "chevron.right").compatForeground(.tertiary)
                 }
                 .contentShape(Rectangle())
             }
@@ -969,8 +1001,8 @@ struct ContactCardSheet: View {
             VStack(alignment: .leading, spacing: 4) {
                 if let title { Text(title).font(AppFont.headline(scale)) }
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Image(systemName: "exclamationmark.triangle").foregroundStyle(.secondary)
-                    Text(why).font(AppFont.body(scale)).foregroundStyle(.secondary)
+                    Image(systemName: "exclamationmark.triangle").compatForeground(.secondary)
+                    Text(why).font(AppFont.body(scale)).compatForeground(.secondary)
                     Spacer(minLength: 0)
                     if store.isRetrying(ref) {
                         ProgressView().controlSize(.small)

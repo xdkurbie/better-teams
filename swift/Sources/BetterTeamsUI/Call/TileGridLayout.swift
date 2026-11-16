@@ -4,7 +4,7 @@
 // function of the proposal (no geometry readers, no feedback loop).
 import SwiftUI
 
-struct TileGridLayout: Layout {
+struct TileGridLayout {
     var spacing: CGFloat = 8
     var aspect: CGFloat = 16.0 / 9.0
 
@@ -34,7 +34,10 @@ struct TileGridLayout: Layout {
         }
         return best
     }
+}
 
+@available(macOS 13, *)
+extension TileGridLayout: Layout {
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         proposal.replacingUnspecifiedDimensions(by: CGSize(width: 640, height: 360))
     }

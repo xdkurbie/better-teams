@@ -9,18 +9,21 @@ import AppKit
 import OstMacCore
 import Quartz
 import SwiftUI
+import Perception
 
 struct SearchDetailPane: View {
     @Environment(\.windowModel) private var model
 
     var body: some View {
-        if let model, let app = model.app {
-            SearchDetailContent(search: model.search, conv: model.graph.conv, chats: model.graph.chats,
-                                messages: app.messageSearch, local: app.localSearch,
-                                filePeople: app.filePeople, presence: app.presence)
-        } else if let model {
-            SearchDetailContent(search: model.search, conv: model.graph.conv, chats: model.graph.chats,
-                                messages: nil, local: nil, filePeople: nil, presence: nil)
+        WithPerceptionTracking {
+            if let model, let app = model.app {
+                SearchDetailContent(search: model.search, conv: model.graph.conv, chats: model.graph.chats,
+                                    messages: app.messageSearch, local: app.localSearch,
+                                    filePeople: app.filePeople, presence: app.presence)
+            } else if let model {
+                SearchDetailContent(search: model.search, conv: model.graph.conv, chats: model.graph.chats,
+                                    messages: nil, local: nil, filePeople: nil, presence: nil)
+            }
         }
     }
 }
@@ -36,11 +39,13 @@ private struct SearchDetailContent: View {
     let presence: PresenceStore?
 
     var body: some View {
-        if let messages, let local, let filePeople, let presence {
-            ObservedDetail(search: search, conv: conv, chats: chats, messages: messages, local: local,
-                           filePeople: filePeople, presence: presence)
-        } else {
-            NoSelectionPane("No Result Selected")
+        WithPerceptionTracking {
+            if let messages, let local, let filePeople, let presence {
+                ObservedDetail(search: search, conv: conv, chats: chats, messages: messages, local: local,
+                               filePeople: filePeople, presence: presence)
+            } else {
+                NoSelectionPane("No Result Selected")
+            }
         }
     }
 }
@@ -56,19 +61,21 @@ private struct ObservedDetail: View {
     @Environment(\.windowModel) private var model
 
     var body: some View {
-        if search.orderedResults().isEmpty {
-            if search.isSearching {
-                // The first results are on their way (the list spins).
-                Color.clear
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .accessibilityHidden(true)
+        WithPerceptionTracking {
+            if search.orderedResults().isEmpty {
+                if search.isSearching {
+                    // The first results are on their way (the list spins).
+                    Color.clear
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .accessibilityHidden(true)
+                } else {
+                    // Spec §6 pane-states table: the finished-empty search
+                    // pane is the stock search variant, echoing the query.
+                    ContentUnavailableView.search(text: search.query)
+                }
             } else {
-                // Spec §6 pane-states table: the finished-empty search
-                // pane is the stock search variant, echoing the query.
-                ContentUnavailableView.search(text: search.query)
+                selected
             }
-        } else {
-            selected
         }
     }
 
@@ -158,41 +165,43 @@ struct PersonCard<Actions: View>: View {
     @Environment(\.contentTextScale) private var scale
 
     var body: some View {
-        PaneAnchorLayout {
-            VStack(spacing: 10) {
-                Avatar(name: name, diameter: 64)
-                    .overlay(alignment: .bottomTrailing) {
-                        if let presence { PresenceBadge(status: presence, size: 16) }
-                    }
-                VStack(spacing: 4) {
-                    Text(name).font(AppFont.title3(scale))
-                    if let presence {
-                        Text(PeerPresence.label(presence))
-                            .font(AppFont.subheadline(scale))
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                if !detail.isEmpty {
-                    if let detailSymbol {
-                        Label {
-                            Text(detail).foregroundStyle(.secondary)
-                        } icon: {
-                            // Missed call: red symbol + the word (§10).
-                            Image(systemName: detailSymbol).foregroundStyle(Palette.failed)
+        WithPerceptionTracking {
+            CenteredPane {
+                VStack(spacing: 10) {
+                    Avatar(name: name, diameter: 64)
+                        .overlay(alignment: .bottomTrailing) {
+                            if let presence { PresenceBadge(status: presence, size: 16) }
                         }
-                        .font(AppFont.body(scale))
-                    } else {
-                        Text(detail).font(AppFont.body(scale)).foregroundStyle(.secondary)
+                    VStack(spacing: 4) {
+                        Text(name).font(AppFont.title3(scale))
+                        if let presence {
+                            Text(PeerPresence.label(presence))
+                                .font(AppFont.subheadline(scale))
+                                .compatForeground(.secondary)
+                        }
                     }
+                    if !detail.isEmpty {
+                        if let detailSymbol {
+                            Label {
+                                Text(detail).compatForeground(.secondary)
+                            } icon: {
+                                // Missed call: red symbol + the word (§10).
+                                Image(systemName: detailSymbol).compatForeground(Palette.failed)
+                            }
+                            .font(AppFont.body(scale))
+                        } else {
+                            Text(detail).font(AppFont.body(scale)).compatForeground(.secondary)
+                        }
+                    }
+                    if let note {
+                        Text(note).font(AppFont.subheadline(scale)).compatForeground(.secondary)
+                    }
+                    HStack(spacing: 8) { actions() }
+                        .controlSize(.large)
+                        .padding(.top, 6)
                 }
-                if let note {
-                    Text(note).font(AppFont.subheadline(scale)).foregroundStyle(.secondary)
-                }
-                HStack(spacing: 8) { actions() }
-                    .controlSize(.large)
-                    .padding(.top, 6)
+                .padding(.horizontal, 20)
             }
-            .padding(.horizontal, 20)
         }
     }
 }
@@ -211,54 +220,56 @@ struct FileCard: View {
     @State private var pending: (dest: String, quickLook: Bool)?
 
     var body: some View {
-        PaneAnchorLayout {
-            VStack(spacing: 10) {
-                FileIcon(file: file, size: 64)
-                Text(file.name)
-                    .font(AppFont.title3(scale))
-                    .lineLimit(2)
-                    .multilineTextAlignment(.center)
-                VStack(spacing: 4) {
-                    if let shared = SearchFileRow.sharedLine(file) {
-                        Text(shared).font(AppFont.body(scale)).foregroundStyle(.secondary)
+        WithPerceptionTracking {
+            CenteredPane {
+                VStack(spacing: 10) {
+                    FileIcon(file: file, size: 64)
+                    Text(file.name)
+                        .font(AppFont.title3(scale))
+                        .lineLimit(2)
+                        .multilineTextAlignment(.center)
+                    VStack(spacing: 4) {
+                        if let shared = SearchFileRow.sharedLine(file) {
+                            Text(shared).font(AppFont.body(scale)).compatForeground(.secondary)
+                        }
+                        Text(SearchFileRow.dateAndSize(file, now: RelativeClock.shared.now))
+                            .font(AppFont.subheadline(scale)).compatForeground(.secondary)
                     }
-                    Text(SearchFileRow.dateAndSize(file, now: RelativeClock.shared.now))
-                        .font(AppFont.subheadline(scale)).foregroundStyle(.secondary)
-                }
-                .multilineTextAlignment(.center)
-                HStack(spacing: 8) {
-                    Button("Open") { fetch(quickLook: false) }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(!canFetch)
-                    Button("Quick Look") { fetch(quickLook: true) }
-                        .disabled(!canFetch)
-                    Button("Download", action: download)
-                        .disabled((file.drive_id == nil && file.download_url == nil)
-                                  || shared.savingIDs.contains(file.id))
-                }
-                .controlSize(.large)
-                .padding(.top, 6)
-                HStack(spacing: 8) {
-                    Button("Show in Chat", action: showInChat)
-                        .disabled(file.source_id?.isEmpty ?? true)
-                    if let url = file.web_url.flatMap(URL.init(string:)) {
-                        // Demo copy-only (§9.4): the browser never opens in demo.
-                        if model?.options.demo == true {
-                            Button("Copy Link") { CardLinks.copy(url.absoluteString) }
-                        } else {
-                            Button("Open in Browser") { TeamsLinkRouter.openInBrowser(url) }
+                    .multilineTextAlignment(.center)
+                    HStack(spacing: 8) {
+                        Button("Open") { fetch(quickLook: false) }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(!canFetch)
+                        Button("Quick Look") { fetch(quickLook: true) }
+                            .disabled(!canFetch)
+                        Button("Download", action: download)
+                            .disabled((file.drive_id == nil && file.download_url == nil)
+                                      || shared.savingIDs.contains(file.id))
+                    }
+                    .controlSize(.large)
+                    .padding(.top, 6)
+                    HStack(spacing: 8) {
+                        Button("Show in Chat", action: showInChat)
+                            .disabled(file.source_id?.isEmpty ?? true)
+                        if let url = file.web_url.flatMap(URL.init(string:)) {
+                            // Demo copy-only (§9.4): the browser never opens in demo.
+                            if model?.options.demo == true {
+                                Button("Copy Link") { CardLinks.copy(url.absoluteString) }
+                            } else {
+                                Button("Open in Browser") { TeamsLinkRouter.openInBrowser(url) }
+                            }
                         }
                     }
+                    .controlSize(.large)
                 }
-                .controlSize(.large)
+                .padding(.horizontal, 20)
             }
-            .padding(.horizontal, 20)
-        }
-        .onChange(of: shared.savedPath) { _, path in
-            guard let p = pending, path == p.dest else { return }
-            pending = nil
-            let url = URL(fileURLWithPath: p.dest)
-            if p.quickLook { FileQuickLook.shared.show(url) } else { TeamsLinkRouter.open(url) }
+            .onChange(of: shared.savedPath) { path in
+                guard let p = pending, path == p.dest else { return }
+                pending = nil
+                let url = URL(fileURLWithPath: p.dest)
+                if p.quickLook { FileQuickLook.shared.show(url) } else { TeamsLinkRouter.open(url) }
+            }
         }
     }
 

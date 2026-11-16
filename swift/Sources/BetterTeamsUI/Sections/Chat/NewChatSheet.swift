@@ -6,6 +6,7 @@
 // (`presentAsSheet`), never an overlay.
 import OstMacCore
 import SwiftUI
+import Perception
 
 struct NewChatSheet: View {
     @ObservedObject var chats: ChatListViewModel
@@ -41,38 +42,40 @@ struct NewChatSheet: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("New Chat").font(.headline)
-            SearchField(text: $query, placeholder: "Search People")
-                .frame(height: 24)
-            if !people.isEmpty {
-                PickedPeople(people: $people)
+        WithPerceptionTracking {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("New Chat").font(.headline)
+                SearchField(text: $query, placeholder: "Search People")
+                    .frame(height: 24)
+                if !people.isEmpty {
+                    PickedPeople(people: $people)
+                }
+                if people.count > 1 {
+                    TextField("Group Name", text: $topic, prompt: Text("Optional"))
+                }
+                if let contacts, !query.trimmingCharacters(in: .whitespaces).isEmpty {
+                    DirectoryResults(contacts: contacts, people: $people)
+                } else {
+                    recentContacts
+                }
+                if let failure {
+                    Text(failure).font(.caption).compatForeground(Palette.failed)
+                }
+                HStack {
+                    Spacer()
+                    Button("Cancel", role: .cancel) { model?.dismissSheet() }
+                        .keyboardShortcut(.cancelAction)
+                    Button(people.count > 1 ? "Start Group Chat" : "Open Chat") { primary() }
+                        .keyboardShortcut(.defaultAction)
+                        .disabled(starting || (people.isEmpty && picked == nil))
+                }
             }
-            if people.count > 1 {
-                TextField("Group Name", text: $topic, prompt: Text("Optional"))
+            .padding(20)
+            .frame(width: 420)
+            .onChange(of: query) { q in
+                guard let contacts else { return }
+                debounce.schedule { Task { await contacts.search(query: q) } }
             }
-            if let contacts, !query.trimmingCharacters(in: .whitespaces).isEmpty {
-                DirectoryResults(contacts: contacts, people: $people)
-            } else {
-                recentContacts
-            }
-            if let failure {
-                Text(failure).font(.caption).foregroundStyle(Palette.failed)
-            }
-            HStack {
-                Spacer()
-                Button("Cancel", role: .cancel) { model?.dismissSheet() }
-                    .keyboardShortcut(.cancelAction)
-                Button(people.count > 1 ? "Start Group Chat" : "Open Chat") { primary() }
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(starting || (people.isEmpty && picked == nil))
-            }
-        }
-        .padding(20)
-        .frame(width: 420)
-        .onChange(of: query) { _, q in
-            guard let contacts else { return }
-            debounce.schedule { Task { await contacts.search(query: q) } }
         }
     }
 
@@ -81,8 +84,8 @@ struct NewChatSheet: View {
     private var recentContacts: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Recent Contacts")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.secondary)
+                .font(.subheadline.compatWeight(.semibold))
+                .compatForeground(.secondary)
             List(selection: $picked) {
                 ForEach(candidates) { c in
                     HStack(spacing: 8) {
@@ -99,7 +102,7 @@ struct NewChatSheet: View {
                     .tag(c.id)
                 }
             }
-            .listStyle(.bordered(alternatesRowBackgrounds: false))
+            .compatBorderedList(alternates: false)
             .frame(height: 200)
             .overlay {
                 if candidates.isEmpty {
@@ -144,22 +147,24 @@ struct PickedPeople: View {
     @Binding var people: [TeamMember]
 
     var body: some View {
-        HStack(spacing: 6) {
-            Text("To:").foregroundStyle(.secondary)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 4) {
-                    ForEach(people) { p in
-                        Button {
-                            people.removeAll { $0.id == p.id }
-                        } label: {
-                            Label(p.displayName, systemImage: "xmark.circle.fill")
-                                .labelStyle(TrailingIconLabel())
-                                .contactHover(ContactRef(p), arrowEdge: .bottom)
+        WithPerceptionTracking {
+            HStack(spacing: 6) {
+                Text("To:").compatForeground(.secondary)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 4) {
+                        ForEach(people) { p in
+                            Button {
+                                people.removeAll { $0.id == p.id }
+                            } label: {
+                                Label(p.displayName, systemImage: "xmark.circle.fill")
+                                    .labelStyle(TrailingIconLabel())
+                                    .contactHover(ContactRef(p), arrowEdge: .bottom)
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                            .help("Remove \(p.displayName)")
+                            .accessibilityLabel("Remove \(p.displayName)")
                         }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
-                        .help("Remove \(p.displayName)")
-                        .accessibilityLabel("Remove \(p.displayName)")
                     }
                 }
             }
@@ -171,7 +176,7 @@ private struct TrailingIconLabel: LabelStyle {
     func makeBody(configuration: Configuration) -> some View {
         HStack(spacing: 4) {
             configuration.title
-            configuration.icon.foregroundStyle(.secondary)
+            configuration.icon.compatForeground(.secondary)
         }
     }
 }
@@ -189,47 +194,49 @@ struct DirectoryResults: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("People")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.secondary)
-            List {
-                ForEach(rows) { p in
-                    let added = people.contains { $0.id == p.id }
-                    Button {
-                        if added { people.removeAll { $0.id == p.id } } else { people.append(p) }
-                    } label: {
-                        HStack(spacing: 8) {
-                            Avatar(name: p.displayName, person: ContactRef(p))
-                            VStack(alignment: .leading, spacing: 0) {
-                                Text(p.displayName)
-                                if let email = p.email, !email.isEmpty {
-                                    Text(email).font(.caption).foregroundStyle(.secondary)
+        WithPerceptionTracking {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("People")
+                    .font(.subheadline.compatWeight(.semibold))
+                    .compatForeground(.secondary)
+                List {
+                    ForEach(rows) { p in
+                        let added = people.contains { $0.id == p.id }
+                        Button {
+                            if added { people.removeAll { $0.id == p.id } } else { people.append(p) }
+                        } label: {
+                            HStack(spacing: 8) {
+                                Avatar(name: p.displayName, person: ContactRef(p))
+                                VStack(alignment: .leading, spacing: 0) {
+                                    Text(p.displayName)
+                                    if let email = p.email, !email.isEmpty {
+                                        Text(email).font(.caption).compatForeground(.secondary)
+                                    }
                                 }
+                                Spacer(minLength: 8)
+                                Image(systemName: added ? "checkmark.circle.fill" : "plus.circle")
+                                    .compatForeground(added ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
                             }
-                            Spacer(minLength: 8)
-                            Image(systemName: added ? "checkmark.circle.fill" : "plus.circle")
-                                .foregroundStyle(added ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+                            .contactHover(ContactRef(p))
+                            .contentShape(Rectangle())
                         }
-                        .contactHover(ContactRef(p))
-                        .contentShape(Rectangle())
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(added ? "Remove \(p.displayName)" : "Add \(p.displayName)")
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(added ? "Remove \(p.displayName)" : "Add \(p.displayName)")
                 }
-            }
-            .listStyle(.bordered(alternatesRowBackgrounds: false))
-            .frame(height: 200)
-            .overlay {
-                if contacts.isSearching && contacts.results.isEmpty {
-                    ProgressView().controlSize(.small)
-                } else if let error = contacts.error, contacts.results.isEmpty {
-                    ContentUnavailableView("Couldn't Search People", systemImage: "exclamationmark.triangle",
-                                           description: Text(error))
-                } else if rows.isEmpty, contacts.lastQuery.isEmpty {
-                    ContentUnavailableView("Search for People", systemImage: "magnifyingglass")
-                } else if rows.isEmpty {
-                    ContentUnavailableView.search(text: contacts.lastQuery)
+                .compatBorderedList(alternates: false)
+                .frame(height: 200)
+                .overlay {
+                    if contacts.isSearching && contacts.results.isEmpty {
+                        ProgressView().controlSize(.small)
+                    } else if let error = contacts.error, contacts.results.isEmpty {
+                        ContentUnavailableView("Couldn't Search People", systemImage: "exclamationmark.triangle",
+                                               description: Text(error))
+                    } else if rows.isEmpty, contacts.lastQuery.isEmpty {
+                        ContentUnavailableView("Search for People", systemImage: "magnifyingglass")
+                    } else if rows.isEmpty {
+                        ContentUnavailableView.search(text: contacts.lastQuery)
+                    }
                 }
             }
         }

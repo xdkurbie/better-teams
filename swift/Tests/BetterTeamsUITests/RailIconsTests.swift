@@ -32,7 +32,7 @@ final class RailIconsTests: XCTestCase {
     /// this inactive process draws gray even with `.key`, and the check
     /// above would flag it.
     func testTintLabelControlIsCaught() {
-        let tint = labelInk(Text("Apps").font(.subheadline).foregroundStyle(.tint)
+        let tint = labelInk(Text("Apps").font(.subheadline).compatForeground(.tint)
             .frame(maxHeight: .infinity, alignment: .bottom).padding(.bottom, 6), selected: true, key: true)
         let unsel = labelInk(RailButtonLabel(title: "Files", symbol: "folder", badge: nil), selected: false, key: true)
         XCTAssertGreaterThan(tint, unsel + 0.1, "harness sees the unemphasized tint: \(tint) vs \(unsel)")
@@ -67,12 +67,12 @@ final class RailIconsTests: XCTestCase {
     /// symbol measures lighter than its label, so the check above flags it.
     func testSymbolInkControls() {
         let clear = inks(VStack(spacing: 3) {
-            Image(systemName: "folder").font(.title2).foregroundStyle(.clear).frame(height: 24)
+            Image(systemName: "folder").font(.title2).compatForeground(.clear).frame(height: 24)
             Text("Files").font(.subheadline)
         }, appearance: .aqua)
         XCTAssertGreaterThan(clear.symbol, 0.95, "invisible symbol: \(clear)")
         let old = inks(VStack(spacing: 3) {
-            Image(systemName: "folder").font(.title2).foregroundStyle(.secondary).frame(height: 24)
+            Image(systemName: "folder").font(.title2).compatForeground(.secondary).frame(height: 24)
             Text("Files").font(.subheadline)
         }, appearance: .aqua)
         XCTAssertGreaterThan(old.symbol, old.text + 0.05, "old .secondary symbol: \(old)")

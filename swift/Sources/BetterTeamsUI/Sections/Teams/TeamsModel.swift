@@ -6,7 +6,7 @@
 // `TeamsSelection` is the one parser/serializer (pure, unit-tested).
 import Combine
 import Foundation
-import Observation
+import Perception
 import OstMacCore
 
 /// A channel detail tab (§6.3: Posts | Files | Notes | web tabs).
@@ -156,7 +156,7 @@ struct ChannelTabEntry: Identifiable, Equatable {
 
 /// UI-only Teams state (collapse, per-thread reply drafts). Never
 /// mirrors a store field (R3).
-@Observable
+@Perceptible
 @MainActor
 final class TeamsSectionState {
     /// Collapsed team ids (§6.3 "collapse state persisted").
@@ -164,7 +164,7 @@ final class TeamsSectionState {
     var replyDrafts: [String: String] = [:]
     /// Teams whose hidden channels are revealed in the list.
     private(set) var revealHidden: Set<String> = []
-    @ObservationIgnored private let key: String?
+    @PerceptionIgnored private let key: String?
 
     init(accountKey: String, persist: Bool) {
         key = persist ? "bt.teams.collapsed.\(accountKey)" : nil

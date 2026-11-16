@@ -2,6 +2,7 @@
 // §6 row conventions, R18 pane states).
 import OstMacCore
 import SwiftUI
+import Perception
 
 // MARK: states
 
@@ -99,22 +100,24 @@ struct ToDoListPane: View {
     @Environment(\.windowModel) private var model
 
     var body: some View {
-        if let model {
-            let state = ToDoListState.resolve(
-                reminders.state, listCount: reminders.lists.count,
-                forced: model.forced(.native(.todo)), offline: model.connection == .offline)
-            switch state {
-            case .loading: LoadingPane("Loading Lists\u{2026}")
-            case .error(let title, let message):
-                ErrorPane(title: title, message: message) { reminders.refresh() }
-            case .empty:
-                EmptyPane(ToDoListState.emptyTitle, systemImage: NativeAppID.todo.symbol,
-                          message: ToDoListState.emptyMessage)
-            case .lists:
-                // R12: a refresh runs behind the lists on screen.
-                list(model)
-                    .refreshStatus(reminders.state == .loading, failure: ToDoListState.failure(reminders.state),
-                                   label: "Updating Lists", retry: { reminders.refresh() })
+        WithPerceptionTracking {
+            if let model {
+                let state = ToDoListState.resolve(
+                    reminders.state, listCount: reminders.lists.count,
+                    forced: model.forced(.native(.todo)), offline: model.connection == .offline)
+                switch state {
+                case .loading: LoadingPane("Loading Lists\u{2026}")
+                case .error(let title, let message):
+                    ErrorPane(title: title, message: message) { reminders.refresh() }
+                case .empty:
+                    EmptyPane(ToDoListState.emptyTitle, systemImage: NativeAppID.todo.symbol,
+                              message: ToDoListState.emptyMessage)
+                case .lists:
+                    // R12: a refresh runs behind the lists on screen.
+                    list(model)
+                        .refreshStatus(reminders.state == .loading, failure: ToDoListState.failure(reminders.state),
+                                       label: "Updating Lists", retry: { reminders.refresh() })
+                }
             }
         }
     }
@@ -143,21 +146,23 @@ struct ToDoTasksPane: View {
     @State private var draft = ""
 
     var body: some View {
-        if let model {
-            let listID = model.forced(.native(.todo)) == nil ? ToDoSection.listID(model) : nil
-            let state = ToDoTasksState.resolve(
-                listSelected: listID != nil, showing: listID != nil && reminders.selectedListID == listID,
-                // A list whose rows are on hand reloads behind them.
-                loading: reminders.tasksLoading && reminders.tasksListID != listID, error: reminders.tasksError,
-                taskCount: reminders.tasks.count, offline: model.connection == .offline)
-            switch state {
-            case .noSelection: NoSelectionPane(ToDoTasksState.noSelectionTitle)
-            case .loading: LoadingPane("Loading Tasks\u{2026}")
-            case .error(let title, let message):
-                ErrorPane(title: title, message: message) { reminders.refreshTasks() }
-            case .tasks:
-                // Failures already show inline above the tasks.
-                tasks.refreshStatus(reminders.tasksLoading, label: "Updating Tasks")
+        WithPerceptionTracking {
+            if let model {
+                let listID = model.forced(.native(.todo)) == nil ? ToDoSection.listID(model) : nil
+                let state = ToDoTasksState.resolve(
+                    listSelected: listID != nil, showing: listID != nil && reminders.selectedListID == listID,
+                    // A list whose rows are on hand reloads behind them.
+                    loading: reminders.tasksLoading && reminders.tasksListID != listID, error: reminders.tasksError,
+                    taskCount: reminders.tasks.count, offline: model.connection == .offline)
+                switch state {
+                case .noSelection: NoSelectionPane(ToDoTasksState.noSelectionTitle)
+                case .loading: LoadingPane("Loading Tasks\u{2026}")
+                case .error(let title, let message):
+                    ErrorPane(title: title, message: message) { reminders.refreshTasks() }
+                case .tasks:
+                    // Failures already show inline above the tasks.
+                    tasks.refreshStatus(reminders.tasksLoading, label: "Updating Tasks")
+                }
             }
         }
     }
@@ -182,7 +187,7 @@ struct ToDoTasksPane: View {
                 // An add / complete failure with rows still on screen (R12).
                 Label(error, systemImage: "exclamationmark.triangle")
                     .font(.callout)
-                    .foregroundStyle(.secondary)
+                    .compatForeground(.secondary)
                     .lineLimit(2)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 16)
@@ -220,35 +225,42 @@ struct ToDoTaskRow: View {
     @Environment(\.contentTextScale) private var scale
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Toggle(isOn: Binding(get: { task.completed }, set: { setCompleted($0) })) {
-                EmptyView()
+        WithPerceptionTracking {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Toggle(isOn: Binding(get: { task.completed }, set: { setCompleted($0) })) {
+                    EmptyView()
+                }
+                .toggleStyle(.checkbox)
+                .labelsHidden()
+                .accessibilityLabel(task.completed ? "Completed" : "Not completed")
+                if ToDoFormat.isImportant(task) {
+                    Image(systemName: "exclamationmark")
+                        .font(AppFont.bodyEmphasized(scale))
+                        .compatForeground(.red)
+                        .accessibilityLabel("Important")
+                }
+                Text(task.title)
+                    .font(AppFont.body(scale))
+                    .compatForeground(task.completed ? .secondary : .primary)
+                    .overlay(alignment: .center) {
+                        // `Text.strikethrough` is macOS 13+.
+                        if task.completed {
+                            Rectangle().fill(Color.secondary).frame(height: 1)
+                        }
+                    }
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                if let due = ToDoFormat.dueDate(task.due) {
+                    Text(PlannerFormat.due(due, now: now))
+                        .font(AppFont.subheadline(scale))
+                        .monospacedDigit()
+                        .compatForeground(ToDoFormat.isOverdue(task, now: now) ? AnyShapeStyle(.red)
+                                                                              : AnyShapeStyle(.secondary))
+                        .accessibilityLabel("Due \(PlannerFormat.due(due, now: now))")
+                }
             }
-            .toggleStyle(.checkbox)
-            .labelsHidden()
-            .accessibilityLabel(task.completed ? "Completed" : "Not completed")
-            if ToDoFormat.isImportant(task) {
-                Image(systemName: "exclamationmark")
-                    .font(AppFont.bodyEmphasized(scale))
-                    .foregroundStyle(.red)
-                    .accessibilityLabel("Important")
-            }
-            Text(task.title)
-                .font(AppFont.body(scale))
-                .foregroundStyle(task.completed ? .secondary : .primary)
-                .strikethrough(task.completed)
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            if let due = ToDoFormat.dueDate(task.due) {
-                Text(PlannerFormat.due(due, now: now))
-                    .font(AppFont.subheadline(scale))
-                    .monospacedDigit()
-                    .foregroundStyle(ToDoFormat.isOverdue(task, now: now) ? AnyShapeStyle(.red)
-                                                                          : AnyShapeStyle(.secondary))
-                    .accessibilityLabel("Due \(PlannerFormat.due(due, now: now))")
-            }
+            .padding(.vertical, 2)
         }
-        .padding(.vertical, 2)
     }
 }

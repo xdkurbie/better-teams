@@ -12,11 +12,11 @@
 // the disk cache lives in a temporary folder.
 import AppKit
 import CryptoKit
-import Observation
+import Perception
 import OstMacCore
 import SwiftUI
 
-@Observable
+@Perceptible
 @MainActor
 final class AppIconCache {
     static let shared = AppIconCache(directory: defaultDirectory(), fetch: anonymousFetch)
@@ -27,11 +27,11 @@ final class AppIconCache {
     /// redraw with it.
     private(set) var landed: Set<URL> = []
 
-    @ObservationIgnored private var memory: [URL: NSImage] = [:]
-    @ObservationIgnored private var misses: Set<URL> = []
-    @ObservationIgnored private var running: Set<URL> = []
-    @ObservationIgnored private let directory: URL?
-    @ObservationIgnored private let fetch: @Sendable (URL) async -> Data?
+    @PerceptionIgnored private var memory: [URL: NSImage] = [:]
+    @PerceptionIgnored private var misses: Set<URL> = []
+    @PerceptionIgnored private var running: Set<URL> = []
+    @PerceptionIgnored private let directory: URL?
+    @PerceptionIgnored private let fetch: @Sendable (URL) async -> Data?
 
     init(directory: URL?, fetch: @escaping @Sendable (URL) async -> Data?) {
         self.directory = directory
@@ -148,16 +148,18 @@ struct AppIconImage<Fallback: View>: View {
     @ViewBuilder let fallback: () -> Fallback
 
     var body: some View {
-        if let url, let image = cache.image(url) {
-            Image(nsImage: image)
-                .resizable()
-                .interpolation(.high)
-                .scaledToFit()
-                .frame(width: size, height: size)
-                .clipShape(RoundedRectangle(cornerRadius: rounded ? size * 0.22 : 0, style: .continuous))
-        } else {
-            fallback()
-                .task(id: url) { if let url { await cache.load(url) } }
+        WithPerceptionTracking {
+            if let url, let image = cache.image(url) {
+                Image(nsImage: image)
+                    .resizable()
+                    .interpolation(.high)
+                    .scaledToFit()
+                    .frame(width: size, height: size)
+                    .clipShape(RoundedRectangle(cornerRadius: rounded ? size * 0.22 : 0, style: .continuous))
+            } else {
+                fallback()
+                    .task(id: url) { if let url { await cache.load(url) } }
+            }
         }
     }
 }

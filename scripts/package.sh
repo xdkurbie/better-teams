@@ -10,8 +10,21 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 "$ROOT/scripts/build-rust.sh"
 cd "$ROOT/swift"
-swift build -c release --product OstMac 2>&1 | tail -2
-swift build -c release --product ostmac-mcp 2>&1 | tail -2
+ARCH_ARGS=""
+if [[ -n "${SWIFT_ARCH:-}" ]]; then
+    ARCH_ARGS="--arch ${SWIFT_ARCH}"
+fi
+if [[ -n "${CI:-}" ]]; then
+    # shellcheck disable=SC2086
+    swift build -c release --product OstMac $ARCH_ARGS
+    # shellcheck disable=SC2086
+    swift build -c release --product ostmac-mcp $ARCH_ARGS
+else
+    # shellcheck disable=SC2086
+    swift build -c release --product OstMac $ARCH_ARGS 2>&1 | tail -2
+    # shellcheck disable=SC2086
+    swift build -c release --product ostmac-mcp $ARCH_ARGS 2>&1 | tail -2
+fi
 
 OUT_DIR="${PACKAGE_OUT_DIR:-$ROOT/tmp}"
 mkdir -p "$OUT_DIR"

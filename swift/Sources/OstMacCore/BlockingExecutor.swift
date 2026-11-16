@@ -24,8 +24,11 @@
 // Lint: BlockingLintTests fails on any `Task.detached` outside this file.
 import Foundation
 
-public final class BlockingExecutor: TaskExecutor, @unchecked Sendable {
-    /// The app-wide executor. 32 threads total, 16 usable by background work.
+public final class BlockingExecutor: @unchecked Sendable {
+    /// The app-wide pool. 32 threads total, 16 usable by background work.
+    /// On macOS 15+ this is a real `TaskExecutor` (`PoolExecutor`); earlier
+    /// systems run `Task.blocking` on the cooperative pool because custom
+    /// executors are not in the macOS 12 concurrency runtime.
     public static let shared = BlockingExecutor(
         name: "dev.ostmac.blocking", width: 32, backgroundWidth: 16)
 
@@ -38,13 +41,7 @@ public final class BlockingExecutor: TaskExecutor, @unchecked Sendable {
     public let width: Int
     public let backgroundWidth: Int
 
-    private let name: String
-    private let cond = NSCondition()
-    private var interactive: [UnownedJob] = []
-    private var background: [UnownedJob] = []
-    private var threads = 0
-    private var idle = 0
-    private var runningBackground = 0
+    public let name: String
 
     public init(name: String, width: Int, backgroundWidth: Int) {
         precondition(width >= 2 && backgroundWidth >= 1 && backgroundWidth < width)
@@ -53,19 +50,93 @@ public final class BlockingExecutor: TaskExecutor, @unchecked Sendable {
         self.backgroundWidth = backgroundWidth
     }
 
-    /// Threads spawned so far (never above `width`).
+    /// Threads spawned so far. Zero on macOS 12, where jobs use the cooperative pool.
     public var threadCount: Int {
+        if #available(macOS 15, *) { return PoolExecutor.shared.threadCount }
+        return 0
+    }
+
+    /// Run one synchronous, possibly blocking, throwing call off the
+    /// cooperative pool and return its result. Interactive by default
+    /// (the callers were user-driven list/timeline reads).
+    public static func run<T: Sendable>(
+        priority: TaskPriority = .userInitiated,
+        _ op: @escaping @Sendable () throws -> T
+    ) async throws -> T {
+        try await Task<T, Error>.blocking(priority: priority) { try op() }.value
+    }
+}
+
+// MARK: - Task.blocking (drop-in for Task.detached)
+
+extension Task where Failure == Never {
+    /// `Task.detached` whose body runs on `BlockingExecutor.shared`.
+    @discardableResult
+    public static func blocking(
+        priority: TaskPriority? = nil,
+        operation: sending @escaping @isolated(any) () async -> Success
+    ) -> Task<Success, Never> {
+        if BlockingExecutor.legacyCooperativePool {
+            return Task.detached(priority: priority, operation: operation)
+        }
+        if #available(macOS 15, *) {
+            return Task.detached(
+                executorPreference: PoolExecutor.shared, priority: priority, operation: operation)
+        }
+        return Task.detached(priority: priority, operation: operation)
+    }
+}
+
+extension Task where Failure == Error {
+    /// Throwing flavour of `Task.blocking`.
+    @discardableResult
+    public static func blocking(
+        priority: TaskPriority? = nil,
+        operation: sending @escaping @isolated(any) () async throws -> Success
+    ) -> Task<Success, Error> {
+        if BlockingExecutor.legacyCooperativePool {
+            return Task.detached(priority: priority, operation: operation)
+        }
+        if #available(macOS 15, *) {
+            return Task.detached(
+                executorPreference: PoolExecutor.shared, priority: priority, operation: operation)
+        }
+        return Task.detached(priority: priority, operation: operation)
+    }
+}
+
+/// Custom executor. macOS 15+ only: `ExecutorJob` and `Task.detached(executorPreference:)`
+/// are not in the macOS 12 concurrency runtime.
+@available(macOS 15, *)
+final class PoolExecutor: TaskExecutor, @unchecked Sendable {
+    static let shared = PoolExecutor(name: "dev.ostmac.blocking", width: 32, backgroundWidth: 16)
+
+    let width: Int
+    let backgroundWidth: Int
+    private let name: String
+    private let cond = NSCondition()
+    private var interactive: [UnownedJob] = []
+    private var background: [UnownedJob] = []
+    private var threads = 0
+    private var idle = 0
+    private var runningBackground = 0
+
+    init(name: String, width: Int, backgroundWidth: Int) {
+        self.name = name
+        self.width = width
+        self.backgroundWidth = backgroundWidth
+    }
+
+    var threadCount: Int {
         cond.lock(); defer { cond.unlock() }
         return threads
     }
 
-    public func enqueue(_ job: consuming ExecutorJob) {
+    func enqueue(_ job: consuming ExecutorJob) {
         let interactiveJob = job.priority.rawValue >= TaskPriority.userInitiated.rawValue
         let unowned = UnownedJob(job)
         cond.lock()
         if interactiveJob { interactive.append(unowned) } else { background.append(unowned) }
-        // Grow when runnable jobs outnumber idle threads (an idle thread
-        // already signalled but not yet awake still counts as idle).
         let runnable = interactive.count + min(background.count, max(0, backgroundWidth - runningBackground))
         if runnable > idle, threads < width {
             threads += 1
@@ -99,60 +170,15 @@ public final class BlockingExecutor: TaskExecutor, @unchecked Sendable {
                 }
             }
             cond.unlock()
-
             pthread_set_qos_class_self_np(
                 isBackground ? QOS_CLASS_UTILITY : QOS_CLASS_USER_INITIATED, 0)
             job!.runSynchronously(on: executor)
-
             if isBackground {
                 cond.lock()
                 runningBackground -= 1
-                // A background job may now be startable.
                 if !background.isEmpty { cond.signal() }
                 cond.unlock()
             }
         }
-    }
-
-    /// Run one synchronous, possibly blocking, throwing call off the
-    /// cooperative pool and return its result. Interactive by default
-    /// (the callers were user-driven list/timeline reads).
-    public static func run<T: Sendable>(
-        priority: TaskPriority = .userInitiated,
-        _ op: @escaping @Sendable () throws -> T
-    ) async throws -> T {
-        try await Task<T, Error>.blocking(priority: priority) { try op() }.value
-    }
-}
-
-// MARK: - Task.blocking (drop-in for Task.detached)
-
-extension Task where Failure == Never {
-    /// `Task.detached` whose body runs on `BlockingExecutor.shared`.
-    @discardableResult
-    public static func blocking(
-        priority: TaskPriority? = nil,
-        operation: sending @escaping @isolated(any) () async -> Success
-    ) -> Task<Success, Never> {
-        if BlockingExecutor.legacyCooperativePool {
-            return Task.detached(priority: priority, operation: operation)
-        }
-        return Task.detached(
-            executorPreference: BlockingExecutor.shared, priority: priority, operation: operation)
-    }
-}
-
-extension Task where Failure == Error {
-    /// Throwing flavour of `Task.blocking`.
-    @discardableResult
-    public static func blocking(
-        priority: TaskPriority? = nil,
-        operation: sending @escaping @isolated(any) () async throws -> Success
-    ) -> Task<Success, Error> {
-        if BlockingExecutor.legacyCooperativePool {
-            return Task.detached(priority: priority, operation: operation)
-        }
-        return Task.detached(
-            executorPreference: BlockingExecutor.shared, priority: priority, operation: operation)
     }
 }

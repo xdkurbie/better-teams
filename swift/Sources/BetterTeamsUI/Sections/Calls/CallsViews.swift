@@ -3,6 +3,7 @@
 // calls = red symbol + the word "Missed" (§10: never color alone).
 import OstMacCore
 import SwiftUI
+import Perception
 
 // MARK: list
 
@@ -14,8 +15,10 @@ struct CallsListPane: View {
     @Environment(\.windowModel) private var model
 
     var body: some View {
-        if let model {
-            content(model)
+        WithPerceptionTracking {
+            if let model {
+                content(model)
+            }
         }
     }
 
@@ -64,14 +67,14 @@ struct CallsListPane: View {
                             CallDurationText(session: current, scale: m.textScale)
                         }
                     } icon: {
-                        Image(systemName: "phone.connection.fill").foregroundStyle(Palette.presenceAvailable)
+                        Image(systemName: "phone.connection.fill").compatForeground(Palette.presenceAvailable)
                     }
                     .padding(.vertical, 3)
                     .tag(CallsListPane.currentCallID)
                 }
             }
             if !dial.isEmpty {
-                Section("Speed Dial") {
+                Section(header: Text("Speed Dial")) {
                     ForEach(dial) { c in
                         HStack(spacing: 8) {
                             Avatar(name: c.displayName, person: ContactRef(c))
@@ -92,7 +95,7 @@ struct CallsListPane: View {
                     .onMove { contacts.movePins(fromOffsets: $0, toOffset: $1) }
                 }
             }
-            Section("Recent") {
+            Section(header: Text("Recent")) {
                 ForEach(rows) { r in
                     CallsRow(row: r, now: now).tag(r.id)
                         .modifier(CallsRowAccessibility(id: r.id, m: m))
@@ -100,7 +103,7 @@ struct CallsListPane: View {
             }
         }
         .listStyle(.inset)
-        .contextMenu(forSelectionType: String.self) { ids in
+        .compatSelectionMenu(forSelectionType: String.self) { ids in
             if let id = ids.first, id != CallsListPane.currentCallID, let p = CallsSection.person(id, m) {
                 Button("Call Back") { CallsSection.call(p, m) }
                     .disabled(p.thread.isEmpty || !(m.call.map(\.ended) ?? true))
@@ -148,28 +151,28 @@ private struct CallsRowAccessibility: ViewModifier {
 
     @ViewBuilder
     func body(content: Content) -> some View {
-        if id == CallsListPane.currentCallID {
-            content
-        } else if let p = CallsSection.person(id, m) {
-            let idle = m.call.map(\.ended) ?? true
-            content.accessibilityActions {
-                if !p.thread.isEmpty, idle {
-                    Button("Call Back") { CallsSection.call(p, m) }
-                }
-                if CallsSection.chatID(p, m) != nil {
-                    Button("Message") { CallsSection.message(p, m) }
-                }
-                if CallsSection.isPinned(p, m) {
-                    Button("Remove from Speed Dial") { CallsSection.removeFromSpeedDial(p, m) }
-                } else if CallsSection.member(p) != nil {
-                    Button("Add to Speed Dial") { CallsSection.addToSpeedDial(p, m) }
-                }
-                if CallsSection.isRecent(id) {
-                    Button("Remove from Recents") { CallsSection.removeFromRecents([id], m) }
-                }
+        WithPerceptionTracking {
+            if id == CallsListPane.currentCallID {
+                content
+            } else if let p = CallsSection.person(id, m) {
+                let idle = m.call.map(\.ended) ?? true
+                content
+                    .accessibilityAction(named: "Call Back") {
+                        if !p.thread.isEmpty, idle { CallsSection.call(p, m) }
+                    }
+                    .accessibilityAction(named: "Message") {
+                        if CallsSection.chatID(p, m) != nil { CallsSection.message(p, m) }
+                    }
+                    .accessibilityAction(named: "Speed Dial") {
+                        if CallsSection.isPinned(p, m) { CallsSection.removeFromSpeedDial(p, m) }
+                        else if CallsSection.member(p) != nil { CallsSection.addToSpeedDial(p, m) }
+                    }
+                    .accessibilityAction(named: "Remove from Recents") {
+                        if CallsSection.isRecent(id) { CallsSection.removeFromRecents([id], m) }
+                    }
+            } else {
+                content
             }
-        } else {
-            content
         }
     }
 }
@@ -178,8 +181,10 @@ struct CallsEmptyPane: View {
     @Environment(\.windowModel) private var model
 
     var body: some View {
-        EmptyPane("No Recent Calls", systemImage: "phone") {
-            Button("New Call…") { model?.presentSheet(SheetRequest(CallsCommands.newCallSheet, in: .calls)) }
+        WithPerceptionTracking {
+            EmptyPane("No Recent Calls", systemImage: "phone") {
+                Button("New Call…") { model?.presentSheet(SheetRequest(CallsCommands.newCallSheet, in: .calls)) }
+            }
         }
     }
 }
@@ -192,35 +197,37 @@ struct CallsRow: View {
     @Environment(\.contentTextScale) private var scale
 
     var body: some View {
-        HStack(alignment: .center, spacing: 8) {
-            Image(systemName: row.symbol)
-                .font(AppFont.body(scale))
-                .foregroundStyle(row.isMissed ? AnyShapeStyle(Palette.failed) : AnyShapeStyle(.secondary))
-                .frame(width: 18)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text(row.name)
-                        .font(AppFont.body(scale))
-                        .foregroundStyle(row.isMissed ? AnyShapeStyle(Palette.failed) : AnyShapeStyle(.primary))
+        WithPerceptionTracking {
+            HStack(alignment: .center, spacing: 8) {
+                Image(systemName: row.symbol)
+                    .font(AppFont.body(scale))
+                    .compatForeground(row.isMissed ? AnyShapeStyle(Palette.failed) : AnyShapeStyle(.secondary))
+                    .frame(width: 18)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Text(row.name)
+                            .font(AppFont.body(scale))
+                            .compatForeground(row.isMissed ? AnyShapeStyle(Palette.failed) : AnyShapeStyle(.primary))
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        Text(ActivityRow.time(row.date, now: now))
+                            .font(AppFont.caption(scale))
+                            .compatForeground(.secondary)
+                            .fixedSize()
+                    }
+                    Text(row.detailLine)
+                        .font(AppFont.subheadline(scale))
+                        .monospacedDigit()
+                        .compatForeground(.secondary)
                         .lineLimit(1)
-                        .truncationMode(.tail)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    Text(ActivityRow.time(row.date, now: now))
-                        .font(AppFont.caption(scale))
-                        .foregroundStyle(.secondary)
-                        .fixedSize()
                 }
-                Text(row.detailLine)
-                    .font(AppFont.subheadline(scale))
-                    .monospacedDigit()
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
             }
+            .padding(.vertical, 3)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("\(row.name), \(row.detailLine), \(ActivityRow.time(row.date, now: now))")
         }
-        .padding(.vertical, 3)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(row.name), \(row.detailLine), \(ActivityRow.time(row.date, now: now))")
     }
 }
 
@@ -236,11 +243,13 @@ struct CallsDetailPane: View {
     @Environment(\.contentTextScale) private var scale
 
     var body: some View {
-        if let model, model.forced(.calls) == nil,
-           let p = CallsSection.person(model.nav.selection(in: .calls)?.id, model) {
-            detail(p, model)
-        } else {
-            NoSelectionPane("No Contact Selected")
+        WithPerceptionTracking {
+            if let model, model.forced(.calls) == nil,
+               let p = CallsSection.person(model.nav.selection(in: .calls)?.id, model) {
+                detail(p, model)
+            } else {
+                NoSelectionPane("No Contact Selected")
+            }
         }
     }
 
@@ -265,7 +274,7 @@ struct CallsDetailPane: View {
                         if let status {
                             Text(PeerPresence.label(status))
                                 .font(AppFont.subheadline(scale))
-                                .foregroundStyle(.secondary)
+                                .compatForeground(.secondary)
                         }
                     }
                     HStack(spacing: 8) {
@@ -289,7 +298,7 @@ struct CallsDetailPane: View {
                 .padding(.vertical, 8)
             }
             if !recent.isEmpty {
-                Section("Recent Calls") {
+                Section(header: Text("Recent Calls")) {
                     ForEach(Array(recent)) { r in
                         LabeledContent {
                             Text(ActivityRow.time(r.date, now: now)).monospacedDigit()
@@ -298,14 +307,14 @@ struct CallsDetailPane: View {
                                 Text(r.detailLine)
                             } icon: {
                                 Image(systemName: r.symbol)
-                                    .foregroundStyle(r.isMissed ? AnyShapeStyle(Palette.failed) : AnyShapeStyle(.secondary))
+                                    .compatForeground(r.isMissed ? AnyShapeStyle(Palette.failed) : AnyShapeStyle(.secondary))
                             }
                         }
                     }
                 }
             }
         }
-        .formStyle(.grouped)
+        .compatFormStyleGrouped()
     }
 }
 
@@ -334,35 +343,37 @@ struct NewCallSheet: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("New Call").font(.headline)
-            SearchField(text: $query, placeholder: "Search People")
-                .frame(height: 24)
-            if !people.isEmpty {
-                PickedPeople(people: $people)
+        WithPerceptionTracking {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("New Call").font(.headline)
+                SearchField(text: $query, placeholder: "Search People")
+                    .frame(height: 24)
+                if !people.isEmpty {
+                    PickedPeople(people: $people)
+                }
+                if let contacts, !query.trimmingCharacters(in: .whitespaces).isEmpty {
+                    DirectoryResults(contacts: contacts, people: $people)
+                } else {
+                    recentContacts
+                }
+                if let failure {
+                    Text(failure).font(.caption).compatForeground(Palette.failed)
+                }
+                HStack {
+                    Spacer()
+                    Button("Cancel", role: .cancel) { model?.dismissSheet() }
+                        .keyboardShortcut(.cancelAction)
+                    Button("Call") { call() }
+                        .keyboardShortcut(.defaultAction)
+                        .disabled(starting || (people.isEmpty && picked == nil))
+                }
             }
-            if let contacts, !query.trimmingCharacters(in: .whitespaces).isEmpty {
-                DirectoryResults(contacts: contacts, people: $people)
-            } else {
-                recentContacts
+            .padding(20)
+            .frame(width: 420)
+            .onChange(of: query) { q in
+                guard let contacts else { return }
+                debounce.schedule { Task { await contacts.search(query: q) } }
             }
-            if let failure {
-                Text(failure).font(.caption).foregroundStyle(Palette.failed)
-            }
-            HStack {
-                Spacer()
-                Button("Cancel", role: .cancel) { model?.dismissSheet() }
-                    .keyboardShortcut(.cancelAction)
-                Button("Call") { call() }
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(starting || (people.isEmpty && picked == nil))
-            }
-        }
-        .padding(20)
-        .frame(width: 420)
-        .onChange(of: query) { _, q in
-            guard let contacts else { return }
-            debounce.schedule { Task { await contacts.search(query: q) } }
         }
     }
 
@@ -381,14 +392,14 @@ struct NewCallSheet: View {
                     if let s = PeerPresence.status(presence, chatID: c.id, userID: nil) {
                         Text(PeerPresence.label(s))
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .compatForeground(.secondary)
                     }
                 }
                 .padding(.vertical, 2)
                 .tag(c.id)
             }
         }
-        .listStyle(.bordered(alternatesRowBackgrounds: false))
+        .compatBorderedList(alternates: false)
         .frame(height: 200)
         .overlay {
             if candidates.isEmpty { ContentUnavailableView.search(text: query) }

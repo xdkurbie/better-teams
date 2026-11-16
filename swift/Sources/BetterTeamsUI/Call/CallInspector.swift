@@ -4,16 +4,19 @@
 // `WindowModel.inspectorSegment` (route `inspector=people|chat`).
 import OstMacCore
 import SwiftUI
+import Perception
 
 struct CallInspector: View {
     let session: CallSession
     @Environment(\.windowModel) private var model
 
     var body: some View {
-        if let app = session.model?.app {
-            content(app)
-        } else {
-            EmptyPane("No Call", systemImage: "phone")
+        WithPerceptionTracking {
+            if let app = session.model?.app {
+                content(app)
+            } else {
+                EmptyPane("No Call", systemImage: "phone")
+            }
         }
     }
 
@@ -45,36 +48,38 @@ private struct CallPeopleList: View {
     @Environment(\.contentTextScale) private var scale
 
     var body: some View {
-        let own = model?.ownDisplayName ?? "You"
-        let people = CallTiles.make(
-            roster: session.isMeeting ? roster.participants : [], peer: session.peerName, ownName: own,
-            isOwn: { p in model?.isOwnID(p.id) == true || p.name == own || p.name == "Me" },
-            muted: session.controls.muted, cameraOn: session.controls.cameraOn, sharing: false)
-        List {
-            if let lobby = session.meetingVideo?.lobbyQueue {
-                LobbySection(lobby: lobby)
-            }
-            Section("In This Call (\(people.count))") {
-                ForEach(people) { p in
-                    HStack(spacing: 8) {
-                        Avatar(name: p.name)
-                            .contactHover(name: p.name, arrowEdge: .leading)
-                        Text(p.kind == .selfView ? "\(p.name) (You)" : p.name)
-                            .font(AppFont.body(scale))
-                            .lineLimit(1)
-                        Spacer(minLength: 4)
-                        if p.speaking {
-                            Image(systemName: "waveform")
-                                .foregroundStyle(.tint)
-                                .accessibilityLabel("Speaking")
+        WithPerceptionTracking {
+            let own = model?.ownDisplayName ?? "You"
+            let people = CallTiles.make(
+                roster: session.isMeeting ? roster.participants : [], peer: session.peerName, ownName: own,
+                isOwn: { p in model?.isOwnID(p.id) == true || p.name == own || p.name == "Me" },
+                muted: session.controls.muted, cameraOn: session.controls.cameraOn, sharing: false)
+            List {
+                if let lobby = session.meetingVideo?.lobbyQueue {
+                    LobbySection(lobby: lobby)
+                }
+                Section(header: Text("In This Call (\(people.count))")) {
+                    ForEach(people) { p in
+                        HStack(spacing: 8) {
+                            Avatar(name: p.name)
+                                .contactHover(name: p.name, arrowEdge: .leading)
+                            Text(p.kind == .selfView ? "\(p.name) (You)" : p.name)
+                                .font(AppFont.body(scale))
+                                .lineLimit(1)
+                            Spacer(minLength: 4)
+                            if p.speaking {
+                                Image(systemName: "waveform")
+                                    .compatForeground(.tint)
+                                    .accessibilityLabel("Speaking")
+                            }
+                            if p.muted {
+                                Image(systemName: "mic.slash.fill")
+                                    .compatForeground(.secondary)
+                                    .accessibilityLabel("Muted")
+                            }
                         }
-                        if p.muted {
-                            Image(systemName: "mic.slash.fill")
-                                .foregroundStyle(.secondary)
-                                .accessibilityLabel("Muted")
-                        }
+                        .padding(.vertical, 2)
                     }
-                    .padding(.vertical, 2)
                 }
             }
         }
@@ -86,17 +91,21 @@ private struct PeopleSegmentLabel: View {
     let lobby: MeetingLobbyModel?
 
     var body: some View {
-        if let lobby {
-            Counted(lobby: lobby)
-        } else {
-            Text("People")
+        WithPerceptionTracking {
+            if let lobby {
+                Counted(lobby: lobby)
+            } else {
+                Text("People")
+            }
         }
     }
 
     private struct Counted: View {
         @ObservedObject var lobby: MeetingLobbyModel
         var body: some View {
-            Text(lobby.waiting.isEmpty ? "People" : "People (\(lobby.waiting.count) waiting)")
+            WithPerceptionTracking {
+                Text(lobby.waiting.isEmpty ? "People" : "People (\(lobby.waiting.count) waiting)")
+            }
         }
     }
 }
@@ -108,34 +117,36 @@ struct LobbySection: View {
     @Environment(\.contentTextScale) private var scale
 
     var body: some View {
-        if !lobby.waiting.isEmpty {
-            Section {
-                ForEach(lobby.waiting) { p in
-                    HStack(spacing: 8) {
-                        Avatar(name: p.displayName)
-                        Text(p.displayName)
-                            .font(AppFont.body(scale))
-                            .lineLimit(1)
-                        Spacer(minLength: 4)
-                        Button("Deny") { Task { await lobby.deny(p) } }
-                            .buttonStyle(.bordered)
-                            .accessibilityLabel("Deny \(p.displayName)")
-                        Button("Admit") { Task { await lobby.admit(p) } }
-                            .buttonStyle(.borderedProminent)
-                            .accessibilityLabel("Admit \(p.displayName)")
-                    }
-                    .controlSize(.small)
-                    .disabled(lobby.pending.contains(p.id))
-                    .padding(.vertical, 2)
-                }
-            } header: {
-                HStack {
-                    Text("Waiting in Lobby (\(lobby.waiting.count))")
-                    Spacer()
-                    Button("Admit All") { Task { await lobby.admitAll() } }
-                        .buttonStyle(.borderless)
+        WithPerceptionTracking {
+            if !lobby.waiting.isEmpty {
+                Section {
+                    ForEach(lobby.waiting) { p in
+                        HStack(spacing: 8) {
+                            Avatar(name: p.displayName)
+                            Text(p.displayName)
+                                .font(AppFont.body(scale))
+                                .lineLimit(1)
+                            Spacer(minLength: 4)
+                            Button("Deny") { Task { await lobby.deny(p) } }
+                                .buttonStyle(.bordered)
+                                .accessibilityLabel("Deny \(p.displayName)")
+                            Button("Admit") { Task { await lobby.admit(p) } }
+                                .buttonStyle(.borderedProminent)
+                                .accessibilityLabel("Admit \(p.displayName)")
+                        }
                         .controlSize(.small)
-                        .disabled(lobby.waiting.allSatisfy { lobby.pending.contains($0.id) })
+                        .disabled(lobby.pending.contains(p.id))
+                        .padding(.vertical, 2)
+                    }
+                } header: {
+                    HStack {
+                        Text("Waiting in Lobby (\(lobby.waiting.count))")
+                        Spacer()
+                        Button("Admit All") { Task { await lobby.admitAll() } }
+                            .buttonStyle(.borderless)
+                            .controlSize(.small)
+                            .disabled(lobby.waiting.allSatisfy { lobby.pending.contains($0.id) })
+                    }
                 }
             }
         }
@@ -163,55 +174,57 @@ struct CallChatList: View {
     static func followsNewMessage(atNewest: Bool, lastIsOwn: Bool) -> Bool { atNewest || lastIsOwn }
 
     var body: some View {
-        if !isMeeting || chat.threadID == nil {
-            EmptyPane("No Meeting Chat", systemImage: "bubble.left.and.bubble.right",
-                      message: "This call has no meeting chat.")
-        } else {
-            VStack(spacing: 0) {
-                if chat.messages.isEmpty {
-                    EmptyPane("No Messages", systemImage: "bubble.left.and.bubble.right")
-                } else {
-                    ScrollViewReader { proxy in
-                        List(chat.messages) { m in
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(m.isOwn ? "You" : m.sender)
-                                    .font(AppFont.bodyEmphasized(scale))
-                                Text(m.content)
-                                    .font(AppFont.body(scale))
-                                    .textSelection(.enabled)
+        WithPerceptionTracking {
+            if !isMeeting || chat.threadID == nil {
+                EmptyPane("No Meeting Chat", systemImage: "bubble.left.and.bubble.right",
+                          message: "This call has no meeting chat.")
+            } else {
+                VStack(spacing: 0) {
+                    if chat.messages.isEmpty {
+                        EmptyPane("No Messages", systemImage: "bubble.left.and.bubble.right")
+                    } else {
+                        ScrollViewReader { proxy in
+                            List(chat.messages) { m in
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(m.isOwn ? "You" : m.sender)
+                                        .font(AppFont.bodyEmphasized(scale))
+                                    Text(m.content)
+                                        .font(AppFont.body(scale))
+                                        .textSelection(.enabled)
+                                }
+                                .padding(.vertical, 2)
                             }
-                            .padding(.vertical, 2)
-                        }
-                        .onScrollGeometryChange(for: Bool.self) { g in
-                            Self.isAtNewest(offsetY: g.contentOffset.y, containerHeight: g.containerSize.height, contentHeight: g.contentSize.height)
-                        } action: { _, now in atBottom = now }
-                        // Opens at the newest message; a new one follows only
-                        // while you are at the end (or when it is yours).
-                        .onAppear { scrollToNewest(proxy) }
-                        .onChange(of: chat.messages.last?.id) {
-                            if Self.followsNewMessage(atNewest: atBottom, lastIsOwn: chat.messages.last?.isOwn == true) { scrollToNewest(proxy) }
-                        }
-                        .overlay(alignment: .bottom) {
-                            if !atBottom {
-                                Button("Jump to Latest", systemImage: "chevron.down") { scrollToNewest(proxy) }
-                                    .buttonStyle(.borderedProminent)
-                                    .buttonBorderShape(.capsule)
-                                    .controlSize(.small)
-                                    .padding(.bottom, 8)
+                            .compatTrackScrolledToEnd($atBottom) { y, container, content in
+                                Self.isAtNewest(offsetY: y, containerHeight: container, contentHeight: content)
+                            }
+                            // Opens at the newest message; a new one follows only
+                            // while you are at the end (or when it is yours).
+                            .onAppear { scrollToNewest(proxy) }
+                            .onChange(of: chat.messages.last?.id) {
+                                _ in if Self.followsNewMessage(atNewest: atBottom, lastIsOwn: chat.messages.last?.isOwn == true) { scrollToNewest(proxy) }
+                            }
+                            .overlay(alignment: .bottom) {
+                                if !atBottom {
+                                    Button("Jump to Latest", systemImage: "chevron.down") { scrollToNewest(proxy) }
+                                        .buttonStyle(.borderedProminent)
+                                        .compatCapsuleBorder()
+                                        .controlSize(.small)
+                                        .padding(.bottom, 8)
+                                }
                             }
                         }
                     }
+                    Divider()
+                    TextField("Message", text: $draft)
+                        .textFieldStyle(.roundedBorder)
+                        .padding(10)
+                        .onSubmit {
+                            let t = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+                            guard !t.isEmpty else { return }
+                            chat.send(text: t)
+                            draft = ""
+                        }
                 }
-                Divider()
-                TextField("Message", text: $draft)
-                    .textFieldStyle(.roundedBorder)
-                    .padding(10)
-                    .onSubmit {
-                        let t = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-                        guard !t.isEmpty else { return }
-                        chat.send(text: t)
-                        draft = ""
-                    }
             }
         }
     }

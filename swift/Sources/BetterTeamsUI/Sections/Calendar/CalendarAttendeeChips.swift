@@ -4,6 +4,7 @@
 // addresses.
 import OstMacCore
 import SwiftUI
+import Perception
 
 struct AttendeeChipsEditor: View {
     @Binding var people: [EventAttendee]
@@ -11,21 +12,23 @@ struct AttendeeChipsEditor: View {
     @Environment(\.contentTextScale) private var scale
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Attendees (\(people.count))")
-                .font(AppFont.caption(scale).weight(.semibold))
-                .foregroundStyle(.secondary)
-            if people.isEmpty {
-                Text("None").font(AppFont.caption(scale)).foregroundStyle(.secondary)
-            } else {
-                ForEach(people) { row($0) }
-            }
-            HStack(spacing: 6) {
-                TextField("Attendees", text: $typed,
-                          prompt: Text("Add people: name@example.com; \u{2026}").foregroundStyle(Color(nsColor: .placeholderTextColor)))
-                    .onSubmit(addTyped)
-                Button("Add", action: addTyped)
-                    .disabled(CalendarWeekStore.recipients(typed).isEmpty)
+        WithPerceptionTracking {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Attendees (\(people.count))")
+                    .font(AppFont.caption(scale).compatWeight(.semibold))
+                    .compatForeground(.secondary)
+                if people.isEmpty {
+                    Text("None").font(AppFont.caption(scale)).compatForeground(.secondary)
+                } else {
+                    ForEach(people) { row($0) }
+                }
+                HStack(spacing: 6) {
+                    TextField("Attendees", text: $typed,
+                              prompt: Text("Add people: name@example.com; \u{2026}").foregroundColor(Color(nsColor: .placeholderTextColor)))
+                        .onSubmit(addTyped)
+                    Button("Add", action: addTyped)
+                        .disabled(CalendarWeekStore.recipients(typed).isEmpty)
+                }
             }
         }
     }

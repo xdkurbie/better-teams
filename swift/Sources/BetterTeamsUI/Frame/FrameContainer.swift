@@ -6,6 +6,7 @@
 import AppKit
 import SwiftUI
 import WebKit
+import Perception
 
 /// `app:<id>` or `tab:<id>` (§7.3).
 public struct FrameKey: Hashable, Sendable {
@@ -31,13 +32,15 @@ public struct FrameContainer: View {
     }
 
     public var body: some View {
-        if let m = model, let page = m.frameHost.page(key) {
-            FrameContent(page: page, host: m.frameHost, forced: forced,
-                         connectionOffline: m.connection == .offline, demo: m.options.demo)
-        } else {
-            // Registered by its owner in the same pass (channel tabs load
-            // their list first).
-            LoadingPane("Loading\u{2026}", rows: false)
+        WithPerceptionTracking {
+            if let m = model, let page = m.frameHost.page(key) {
+                FrameContent(page: page, host: m.frameHost, forced: forced,
+                             connectionOffline: m.connection == .offline, demo: m.options.demo)
+            } else {
+                // Registered by its owner in the same pass (channel tabs load
+                // their list first).
+                LoadingPane("Loading\u{2026}", rows: false)
+            }
         }
     }
 }
@@ -51,9 +54,11 @@ private struct FrameContent: View {
     let demo: Bool
 
     var body: some View {
-        ZStack(alignment: .top) {
-            FrameWebView(key: page.key, host: host)
-            overlay
+        WithPerceptionTracking {
+            ZStack(alignment: .top) {
+                FrameWebView(key: page.key, host: host)
+                overlay
+            }
         }
     }
 

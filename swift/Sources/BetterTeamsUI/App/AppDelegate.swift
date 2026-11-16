@@ -145,7 +145,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         } else {
             wc.showWindow(nil)
             wc.window?.makeKeyAndOrderFront(nil)
-            NSApp.activate()
+            activateApp()
         }
         startSystemIntegration(wc)
         // A forced load error (`state=error`) is the offline failure, so it
@@ -230,7 +230,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     static func openDeepLink(_ url: URL, shell: ShellWindowController?) {
         if let route = deepLinkRoute(url) {
             guard let shell else { return }
-            NSApp.activate()
+            activateApp()
             shell.window?.makeKeyAndOrderFront(nil)
             shell.navigator.apply(route)
         } else if let wrapped = deepLinkWrappedURL(url) {

@@ -11,17 +11,20 @@ import AppKit
 import OstMacCore
 import SwiftUI
 import UniformTypeIdentifiers
+import Perception
 
 struct SearchResultsList: View {
     @Environment(\.windowModel) private var model
 
     var body: some View {
-        if let model, let app = model.app {
-            SearchResultsContent(search: model.search, messages: app.messageSearch, local: app.localSearch,
-                                 filePeople: app.filePeople, chats: model.graph.chats, presence: app.presence)
-        } else {
-            EmptyPane("Search Unavailable", systemImage: "magnifyingglass",
-                      message: "Search this account from its own window.")
+        WithPerceptionTracking {
+            if let model, let app = model.app {
+                SearchResultsContent(search: model.search, messages: app.messageSearch, local: app.localSearch,
+                                     filePeople: app.filePeople, chats: model.graph.chats, presence: app.presence)
+            } else {
+                EmptyPane("Search Unavailable", systemImage: "magnifyingglass",
+                          message: "Search this account from its own window.")
+            }
         }
     }
 }
@@ -37,13 +40,15 @@ private struct SearchResultsContent: View {
     @Environment(\.contentTextScale) private var scale
 
     var body: some View {
-        VStack(spacing: 0) {
-            SearchScopeBar(search: search)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-            Divider()
-            results
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        WithPerceptionTracking {
+            VStack(spacing: 0) {
+                SearchScopeBar(search: search)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                Divider()
+                results
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
         }
     }
 
@@ -105,9 +110,9 @@ private struct SearchResultsContent: View {
                             ProgressView().controlSize(.small)
                             Text("Searching online\u{2026}")
                                 .font(AppFont.subheadline(scale))
-                                .foregroundStyle(.secondary)
+                                .compatForeground(.secondary)
                         }
-                        .selectionDisabled()
+                        .compatSelectionDisabled()
                     } else if search.scope == .messages || search.inConversation, !offline, messages.canLoadMore {
                         Button("Show More Results") { Task { await messages.loadMore() } }
                             .buttonStyle(.link)
@@ -132,7 +137,7 @@ private struct SearchResultsContent: View {
             }
         }
         .listStyle(.inset)
-        .contextMenu(forSelectionType: String.self) { tags in
+        .compatSelectionMenu(forSelectionType: String.self) { tags in
             if let id = tags.first.flatMap(SearchResultID.init(tag:)) {
                 Button("Open") { search.activate(id) }
             }
@@ -152,16 +157,16 @@ private struct SearchResultsContent: View {
         Section {
             if let title {
                 Text(title)
-                    .font(AppFont.subheadline(scale).weight(.semibold))
-                    .foregroundStyle(.secondary)
+                    .font(AppFont.subheadline(scale).compatWeight(.semibold))
+                    .compatForeground(.secondary)
                     .padding(.top, 4)
-                    .selectionDisabled()
-                    .listRowSeparator(.hidden)
+                    .compatSelectionDisabled()
+                    .compatListRowSeparatorHidden()
                     .accessibilityAddTraits(.isHeader)
             }
             content()
         }
-        .listSectionSeparator(.hidden)
+        .compatListSectionSeparator()
     }
 
     private func placeName(_ h: SearchHit) -> String {
@@ -186,31 +191,43 @@ struct SearchScopeBar: View {
     }
 
     var body: some View {
-        let binding = Binding<Choice>(
-            get: { search.inConversation ? .conversation : .scope(search.scope) },
-            set: { c in
-                switch c {
-                case .conversation: search.setConversationScopeActive()
-                case .scope(let s): search.setScope(s)
+        WithPerceptionTracking {
+            let binding = Binding<Choice>(
+                get: { search.inConversation ? .conversation : .scope(search.scope) },
+                set: { c in
+                    switch c {
+                    case .conversation: search.setConversationScopeActive()
+                    case .scope(let s): search.setScope(s)
+                    }
+                })
+            Group {
+                if #available(macOS 13, *) {
+                ViewThatFits(in: .horizontal) {
+                    picker(binding)
+                        .pickerStyle(.segmented)
+                        .controlSize(.small)
+                        .fixedSize()
+                    picker(binding)
+                        .pickerStyle(.segmented)
+                        .controlSize(.mini)
+                        .fixedSize()
+                    picker(binding)
+                        .pickerStyle(.menu)
+                        .controlSize(.small)
+                        .fixedSize()
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
-            })
-        ViewThatFits(in: .horizontal) {
-            picker(binding)
-                .pickerStyle(.segmented)
-                .controlSize(.small)
-                .fixedSize()
-            picker(binding)
-                .pickerStyle(.segmented)
-                .controlSize(.mini)
-                .fixedSize()
-            picker(binding)
-                .pickerStyle(.menu)
-                .controlSize(.small)
-                .fixedSize()
-                .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    picker(binding)
+                        .pickerStyle(.menu)
+                        .controlSize(.small)
+                        .fixedSize()
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .labelsHidden()
+            .frame(maxWidth: .infinity)
         }
-        .labelsHidden()
-        .frame(maxWidth: .infinity)
     }
 
     private func picker(_ binding: Binding<Choice>) -> some View {
@@ -243,26 +260,28 @@ struct SearchTargetRow: View {
     @Environment(\.contentTextScale) private var scale
 
     var body: some View {
-        HStack(spacing: 8) {
-            switch target.kind {
-            case .channel, .team:
-                Image(systemName: target.kind == .team ? "person.3" : "number")
-                    .font(AppFont.body(scale))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 28, height: 28)
-            default:
-                Avatar(name: target.title, isGroup: target.kind == .chat)
+        WithPerceptionTracking {
+            HStack(spacing: 8) {
+                switch target.kind {
+                case .channel, .team:
+                    Image(systemName: target.kind == .team ? "person.3" : "number")
+                        .font(AppFont.body(scale))
+                        .compatForeground(.secondary)
+                        .frame(width: 28, height: 28)
+                default:
+                    Avatar(name: target.title, isGroup: target.kind == .chat)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    // Channel titles carry "#"; the leading symbol already says it.
+                    Text(target.kind == .channel && target.title.hasPrefix("#") ? String(target.title.dropFirst()) : target.title)
+                        .font(AppFont.body(scale)).lineLimit(1)
+                    Text(target.subtitle).font(AppFont.subheadline(scale)).compatForeground(.secondary).lineLimit(1)
+                }
+                Spacer(minLength: 0)
             }
-            VStack(alignment: .leading, spacing: 2) {
-                // Channel titles carry "#"; the leading symbol already says it.
-                Text(target.kind == .channel && target.title.hasPrefix("#") ? String(target.title.dropFirst()) : target.title)
-                    .font(AppFont.body(scale)).lineLimit(1)
-                Text(target.subtitle).font(AppFont.subheadline(scale)).foregroundStyle(.secondary).lineLimit(1)
-            }
-            Spacer(minLength: 0)
+            .padding(.vertical, 2)
+            .accessibilityElement(children: .combine)
         }
-        .padding(.vertical, 2)
-        .accessibilityElement(children: .combine)
     }
 }
 
@@ -278,49 +297,51 @@ struct SearchMessageRow: View {
     private var showsPlace: Bool { !place.isEmpty && place != hit.sender }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 8) {
-            Avatar(name: hit.sender.isEmpty ? place : hit.sender)
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(alignment: .firstTextBaseline, spacing: 4) {
-                    Text(hit.sender.isEmpty ? place : hit.sender)
-                        .font(AppFont.bodyEmphasized(scale))
-                        .lineLimit(1)
-                    Spacer(minLength: 4)
-                    Text(ChatListFormat.previewTime(hit.timestamp, now: now))
-                        .font(AppFont.caption(scale))
-                        .foregroundStyle(.secondary)
-                        .fixedSize()
-                }
-                // Up to two lines; a one-line message takes one line.
-                Text(hit.preview)
-                    .font(AppFont.subheadline(scale))
-                    .foregroundStyle(.primary)
-                    .lineLimit(2)
-                    .truncationMode(.tail)
-                    .fixedSize(horizontal: false, vertical: true)
-                if showsPlace || onThisMac {
-                    HStack(spacing: 6) {
-                        if showsPlace {
-                            Text(place)
-                                .font(AppFont.caption(scale))
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                        }
+        WithPerceptionTracking {
+            HStack(alignment: .top, spacing: 8) {
+                Avatar(name: hit.sender.isEmpty ? place : hit.sender)
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(alignment: .firstTextBaseline, spacing: 4) {
+                        Text(hit.sender.isEmpty ? place : hit.sender)
+                            .font(AppFont.bodyEmphasized(scale))
+                            .lineLimit(1)
                         Spacer(minLength: 4)
-                        if onThisMac {
-                            Label("On This Mac", systemImage: "internaldrive")
-                                .font(AppFont.caption(scale))
-                                .foregroundStyle(.secondary)
-                                .labelStyle(.titleAndIcon)
-                                .fixedSize()
-                                .help("Found in messages saved on this Mac")
+                        Text(ChatListFormat.previewTime(hit.timestamp, now: now))
+                            .font(AppFont.caption(scale))
+                            .compatForeground(.secondary)
+                            .fixedSize()
+                    }
+                    // Up to two lines; a one-line message takes one line.
+                    Text(hit.preview)
+                        .font(AppFont.subheadline(scale))
+                        .compatForeground(.primary)
+                        .lineLimit(2)
+                        .truncationMode(.tail)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if showsPlace || onThisMac {
+                        HStack(spacing: 6) {
+                            if showsPlace {
+                                Text(place)
+                                    .font(AppFont.caption(scale))
+                                    .compatForeground(.secondary)
+                                    .lineLimit(1)
+                            }
+                            Spacer(minLength: 4)
+                            if onThisMac {
+                                Label("On This Mac", systemImage: "internaldrive")
+                                    .font(AppFont.caption(scale))
+                                    .compatForeground(.secondary)
+                                    .labelStyle(.titleAndIcon)
+                                    .fixedSize()
+                                    .help("Found in messages saved on this Mac")
+                            }
                         }
                     }
                 }
             }
+            .padding(.vertical, 3)
+            .accessibilityElement(children: .combine)
         }
-        .padding(.vertical, 3)
-        .accessibilityElement(children: .combine)
     }
 }
 
@@ -330,26 +351,28 @@ struct SearchPersonRow: View {
     @Environment(\.contentTextScale) private var scale
 
     var body: some View {
-        HStack(spacing: 8) {
-            // Presence = shape + color on the avatar corner (§6, §10).
-            Avatar(name: person.displayName, person: ContactRef(person))
-                .overlay(alignment: .bottomTrailing) {
-                    // 4 pt out: at 2 pt the ring clipped the monogram's
-                    // trailing letter ("AL").
-                    if let presence { PresenceBadge(status: presence).offset(x: 4, y: 4) }
+        WithPerceptionTracking {
+            HStack(spacing: 8) {
+                // Presence = shape + color on the avatar corner (§6, §10).
+                Avatar(name: person.displayName, person: ContactRef(person))
+                    .overlay(alignment: .bottomTrailing) {
+                        // 4 pt out: at 2 pt the ring clipped the monogram's
+                        // trailing letter ("AL").
+                        if let presence { PresenceBadge(status: presence).offset(x: 4, y: 4) }
+                    }
+                    .contactHover(ContactRef(person), arrowEdge: .bottom)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(person.displayName).font(AppFont.body(scale)).lineLimit(1)
+                    if let email = person.email, !email.isEmpty {
+                        Text(email).font(AppFont.subheadline(scale)).compatForeground(.secondary).lineLimit(1)
+                    }
                 }
-                .contactHover(ContactRef(person), arrowEdge: .bottom)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(person.displayName).font(AppFont.body(scale)).lineLimit(1)
-                if let email = person.email, !email.isEmpty {
-                    Text(email).font(AppFont.subheadline(scale)).foregroundStyle(.secondary).lineLimit(1)
-                }
+                Spacer(minLength: 0)
             }
-            Spacer(minLength: 0)
+            .padding(.vertical, 2)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(presence.map { "\(person.displayName), \(PeerPresence.label($0))" } ?? person.displayName)
         }
-        .padding(.vertical, 2)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(presence.map { "\(person.displayName), \(PeerPresence.label($0))" } ?? person.displayName)
     }
 }
 
@@ -359,23 +382,25 @@ struct SearchFileRow: View {
     @Environment(\.contentTextScale) private var scale
 
     var body: some View {
-        HStack(spacing: 8) {
-            FileIcon(file: file, size: 28)
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(alignment: .firstTextBaseline, spacing: 4) {
-                    Text(file.name).font(AppFont.body(scale)).lineLimit(1).truncationMode(.middle)
-                    Spacer(minLength: 4)
-                    Text(ChatListFormat.previewTime(file.modified ?? file.created, now: now))
-                        .font(AppFont.caption(scale))
-                        .foregroundStyle(.secondary)
-                        .fixedSize()
+        WithPerceptionTracking {
+            HStack(spacing: 8) {
+                FileIcon(file: file, size: 28)
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(alignment: .firstTextBaseline, spacing: 4) {
+                        Text(file.name).font(AppFont.body(scale)).lineLimit(1).truncationMode(.middle)
+                        Spacer(minLength: 4)
+                        Text(ChatListFormat.previewTime(file.modified ?? file.created, now: now))
+                            .font(AppFont.caption(scale))
+                            .compatForeground(.secondary)
+                            .fixedSize()
+                    }
+                    Text(Self.rowLine(file))
+                        .font(AppFont.subheadline(scale)).compatForeground(.secondary).lineLimit(1)
                 }
-                Text(Self.rowLine(file))
-                    .font(AppFont.subheadline(scale)).foregroundStyle(.secondary).lineLimit(1)
             }
+            .padding(.vertical, 2)
+            .accessibilityElement(children: .combine)
         }
-        .padding(.vertical, 2)
-        .accessibilityElement(children: .combine)
     }
 
     /// Row line 2: where it was shared · who shared it (size when
@@ -418,11 +443,13 @@ struct FileIcon: View {
     let size: CGFloat
 
     var body: some View {
-        Image(nsImage: NSWorkspace.shared.icon(for: Self.type(file)))
-            .resizable()
-            .aspectRatio(contentMode: .fit)
-            .frame(width: size, height: size)
-            .accessibilityHidden(true)
+        WithPerceptionTracking {
+            Image(nsImage: NSWorkspace.shared.icon(for: Self.type(file)))
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: size, height: size)
+                .accessibilityHidden(true)
+        }
     }
 
     static func type(_ f: SharedFile) -> UTType {

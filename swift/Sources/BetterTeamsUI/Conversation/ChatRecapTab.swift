@@ -7,6 +7,7 @@
 // with Try Again, never "no recording".
 import OstMacCore
 import SwiftUI
+import Perception
 
 struct ChatRecapTab: View {
     let chatID: String
@@ -16,11 +17,13 @@ struct ChatRecapTab: View {
     @ObservedObject var transcripts: TranscriptsViewModel
 
     var body: some View {
-        let files = ChatRecapMatch.recap(forChatNamed: chatName, in: RecapsSection.recaps(recordings, transcripts))
-        let recap = store.model(threadID: chatID, title: chatName)
-        MeetingRecapView(recap: recap, recordings: recordings, identity: chatID)
-            .task(id: (files?.recording?.id ?? "-") + "|" + (files?.transcript?.id ?? "-")) {
-                recap.updateFiles(recording: files?.recording, transcript: files?.transcript)
-            }
+        WithPerceptionTracking {
+            let files = ChatRecapMatch.recap(forChatNamed: chatName, in: RecapsSection.recaps(recordings, transcripts))
+            let recap = store.model(threadID: chatID, title: chatName)
+            MeetingRecapView(recap: recap, recordings: recordings, identity: chatID)
+                .task(id: (files?.recording?.id ?? "-") + "|" + (files?.transcript?.id ?? "-")) {
+                    recap.updateFiles(recording: files?.recording, transcript: files?.transcript)
+                }
+        }
     }
 }

@@ -9,11 +9,11 @@
 // the person's device preferences.
 import AppKit
 import Combine
-import Observation
+import Perception
 import OstMacCore
 import SwiftUI
 
-@Observable
+@Perceptible
 @MainActor
 final class CallDevices: NSObject, NSPopoverDelegate {
     enum LevelClient: Hashable { case preJoin, popover, settings }
@@ -38,15 +38,15 @@ final class CallDevices: NSObject, NSPopoverDelegate {
     private(set) var micResult = "Not tested"
     private(set) var micDenied = false
 
-    @ObservationIgnored private let live: Bool
-    @ObservationIgnored private let store: CallStore?
+    @PerceptionIgnored private let live: Bool
+    @PerceptionIgnored private let store: CallStore?
     /// The local camera the pickers select (Settings ▸ Calls previews it).
-    @ObservationIgnored let capture: CameraCapture?
-    @ObservationIgnored private var previewWanted = false
-    @ObservationIgnored private var av: AvPanelModel?
-    @ObservationIgnored private var subs: Set<AnyCancellable> = []
-    @ObservationIgnored private var levelClients: Set<LevelClient> = []
-    @ObservationIgnored private var popover: NSPopover?
+    @PerceptionIgnored let capture: CameraCapture?
+    @PerceptionIgnored private var previewWanted = false
+    @PerceptionIgnored private var av: AvPanelModel?
+    @PerceptionIgnored private var subs: Set<AnyCancellable> = []
+    @PerceptionIgnored private var levelClients: Set<LevelClient> = []
+    @PerceptionIgnored private var popover: NSPopover?
 
     /// Demo fixtures (deterministic evidence).
     static let demoMics = ["MacBook Pro Microphone", "Studio Display Microphone"]
@@ -193,33 +193,35 @@ struct CallDevicesForm: View {
     let devices: CallDevices
 
     var body: some View {
-        Form {
-            Picker("Microphone", selection: Binding(get: { devices.mic ?? "" },
-                                                    set: { devices.selectMic($0.isEmpty ? nil : $0) })) {
-                if devices.mics.isEmpty { Text("No Microphone").tag("") }
-                ForEach(devices.mics, id: \.description) { Text($0).tag($0) }
+        WithPerceptionTracking {
+            Form {
+                Picker("Microphone", selection: Binding(get: { devices.mic ?? "" },
+                                                        set: { devices.selectMic($0.isEmpty ? nil : $0) })) {
+                    if devices.mics.isEmpty { Text("No Microphone").tag("") }
+                    ForEach(devices.mics, id: \.description) { Text($0).tag($0) }
+                }
+                LabeledContent("Input Level") {
+                    ProgressView(value: devices.levelLive ? devices.level : 0)
+                        .progressViewStyle(.linear)
+                        .frame(maxWidth: 160)
+                        .accessibilityLabel(devices.levelLive ? "Input level" : "No input")
+                }
+                Picker("Speaker", selection: Binding(get: { devices.speaker ?? "" },
+                                                     set: { devices.selectSpeaker($0.isEmpty ? nil : $0) })) {
+                    Text("System Default").tag("")
+                    ForEach(devices.speakers, id: \.description) { Text($0).tag($0) }
+                }
+                Picker("Camera", selection: Binding(get: { devices.camera ?? "" },
+                                                    set: { devices.selectCamera($0.isEmpty ? nil : $0) })) {
+                    if devices.cameras.isEmpty { Text("No Camera").tag("") }
+                    ForEach(devices.cameras) { Text($0.name).tag($0.id) }
+                }
+                if let e = devices.error {
+                    Text(e).font(.caption).compatForeground(.secondary)
+                }
             }
-            LabeledContent("Input Level") {
-                Gauge(value: devices.levelLive ? devices.level : 0) { EmptyView() }
-                    .gaugeStyle(.accessoryLinearCapacity)
-                    .frame(maxWidth: 160)
-                    .accessibilityLabel(devices.levelLive ? "Input level" : "No input")
-            }
-            Picker("Speaker", selection: Binding(get: { devices.speaker ?? "" },
-                                                 set: { devices.selectSpeaker($0.isEmpty ? nil : $0) })) {
-                Text("System Default").tag("")
-                ForEach(devices.speakers, id: \.description) { Text($0).tag($0) }
-            }
-            Picker("Camera", selection: Binding(get: { devices.camera ?? "" },
-                                                set: { devices.selectCamera($0.isEmpty ? nil : $0) })) {
-                if devices.cameras.isEmpty { Text("No Camera").tag("") }
-                ForEach(devices.cameras) { Text($0.name).tag($0.id) }
-            }
-            if let e = devices.error {
-                Text(e).font(.caption).foregroundStyle(.secondary)
-            }
+            .compatFormStyleColumns()
+            .disabled(!devices.loaded)
         }
-        .formStyle(.columns)
-        .disabled(!devices.loaded)
     }
 }

@@ -104,8 +104,11 @@ public final class CallWindowController: NSWindowController, NSWindowDelegate, N
     // MARK: toolbar (controls live in the toolbar, never a bottom bar)
 
     private var identifiers: [NSToolbarItem.Identifier] {
-        Self.controlItems.map { NSToolbarItem.Identifier($0.rawValue) }
-            + [.flexibleSpace, .toggleInspector, Self.leaveItem]
+        var ids = Self.controlItems.map { NSToolbarItem.Identifier($0.rawValue) }
+        ids.append(.flexibleSpace)
+        if #available(macOS 14, *) { ids.append(.toggleInspector) }
+        ids.append(Self.leaveItem)
+        return ids
     }
 
     public func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] { identifiers }
@@ -126,8 +129,7 @@ public final class CallWindowController: NSWindowController, NSWindowDelegate, N
         case CallCommands.leave:
             item.label = "Leave"
             item.toolTip = "Leave Call (⇧⌘H)"
-            item.style = .prominent
-            item.backgroundTintColor = .systemRed
+            Chrome.applyProminent(item)
             item.action = #selector(leaveCall(_:))
         case CallCommands.mute:
             item.action = #selector(toggleMute(_:))
@@ -161,7 +163,7 @@ public final class CallWindowController: NSWindowController, NSWindowDelegate, N
 
     /// People | Chat inspector toggle (the stock `.toggleInspector`).
     @objc public func toggleInspector(_ sender: Any?) {
-        split.toggleInspector(sender)
+        if #available(macOS 14, *) { split.toggleInspector(sender) }
     }
 
     // MARK: menu commands while the call window is key

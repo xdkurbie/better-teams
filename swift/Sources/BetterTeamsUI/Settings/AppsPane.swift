@@ -10,6 +10,7 @@
 import AppKit
 import OstMacCore
 import SwiftUI
+import Perception
 
 struct AppsPane: View {
     let host: FrameHost
@@ -45,88 +46,90 @@ struct AppsPane: View {
     }
 
     var body: some View {
-        Form {
-            Section {
-                Picker(selection: $keep) {
-                    ForEach(Self.keepOptions, id: \.n) { o in
-                        Text("\(o.title) (\(o.n))").tag(o.n)
+        WithPerceptionTracking {
+            Form {
+                Section {
+                    Picker(selection: $keep) {
+                        ForEach(Self.keepOptions, id: \.n) { o in
+                            Text("\(o.title) (\(o.n))").tag(o.n)
+                        }
+                    } label: {
+                        InfoLabel(title: "Keep apps in memory", subject: "keeping apps in memory",
+                                  text: "How many hidden apps stay loaded at once.")
                     }
-                } label: {
-                    InfoLabel(title: "Keep apps in memory", subject: "keeping apps in memory",
-                              text: "How many hidden apps stay loaded at once.")
-                }
-                Picker(selection: $suspendMinutes) {
-                    ForEach(Self.suspendOptions, id: \.description) { v in
-                        Text(v == 0 ? "Immediately" : "\(v) minutes").tag(v)
+                    Picker(selection: $suspendMinutes) {
+                        ForEach(Self.suspendOptions, id: \.description) { v in
+                            Text(v == 0 ? "Immediately" : "\(v) minutes").tag(v)
+                        }
+                    } label: {
+                        InfoLabel(title: "Suspend background apps after", subject: "suspending background apps",
+                                  text: "How long a hidden app stays active before it is suspended.")
                     }
-                } label: {
-                    InfoLabel(title: "Suspend background apps after", subject: "suspending background apps",
-                              text: "How long a hidden app stays active before it is suspended.")
+                    Toggle(isOn: $unloadIdle) {
+                        InfoLabel(title: "Unload apps after 30 minutes hidden", subject: "unloading hidden apps",
+                                  text: "Apps you have not opened for 30 minutes are unloaded to free memory. Opening one reloads it where you left off. Notifications, calls and unread counts are not affected.")
+                    }
+                    Toggle(isOn: $pauseInBackground) {
+                        InfoLabel(title: "Pause apps while Better Teams is in the background", subject: "pausing apps in the background",
+                                  text: "While another app is in front, the app pages stop updating to save battery and processor time. They resume when you return. Notifications, calls and unread counts keep working.")
+                    }
                 }
-                Toggle(isOn: $unloadIdle) {
-                    InfoLabel(title: "Unload apps after 30 minutes hidden", subject: "unloading hidden apps",
-                              text: "Apps you have not opened for 30 minutes are unloaded to free memory. Opening one reloads it where you left off. Notifications, calls and unread counts are not affected.")
-                }
-                Toggle(isOn: $pauseInBackground) {
-                    InfoLabel(title: "Pause apps while Better Teams is in the background", subject: "pausing apps in the background",
-                              text: "While another app is in front, the app pages stop updating to save battery and processor time. They resume when you return. Notifications, calls and unread counts keep working.")
-                }
-            }
-            Section("Apps in Memory") {
-                let _ = residentsTick
-                let residents = host.residentPages
-                if residents.isEmpty {
-                    Text("No apps are in memory.").foregroundStyle(.secondary)
-                } else {
-                    ForEach(residents, id: \.key.raw) { p in
-                        LabeledContent(p.title) {
-                            if p.isOnScreen {
-                                Text("On screen").foregroundStyle(.secondary)
-                            } else {
-                                Button("Unload") {
-                                    host.unload(p.key)
-                                    residentsTick += 1
+                Section(header: Text("Apps in Memory")) {
+                    let _ = residentsTick
+                    let residents = host.residentPages
+                    if residents.isEmpty {
+                        Text("No apps are in memory.").compatForeground(.secondary)
+                    } else {
+                        ForEach(residents, id: \.key.raw) { p in
+                            LabeledContent(p.title) {
+                                if p.isOnScreen {
+                                    Text("On screen").compatForeground(.secondary)
+                                } else {
+                                    Button("Unload") {
+                                        host.unload(p.key)
+                                        residentsTick += 1
+                                    }
+                                    .accessibilityLabel("Unload \(p.title)")
                                 }
-                                .accessibilityLabel("Unload \(p.title)")
                             }
                         }
                     }
                 }
-            }
-            Section {
-                LabeledContent("Save downloads to") {
-                    HStack {
-                        Label(downloads.lastPathComponent, systemImage: "folder")
-                            .help(downloads.path)
-                        Button("Choose\u{2026}") { chooseDownloads() }
+                Section {
+                    LabeledContent("Save downloads to") {
+                        HStack {
+                            Label(downloads.lastPathComponent, systemImage: "folder")
+                                .help(downloads.path)
+                            Button("Choose\u{2026}") { chooseDownloads() }
+                        }
+                    }
+                }
+                Section {
+                    LabeledContent("Apps library") {
+                        Button("Refresh Library") { host.library.refresh() }
                     }
                 }
             }
-            Section {
-                LabeledContent("Apps library") {
-                    Button("Refresh Library") { host.library.refresh() }
-                }
+            .compatFormStyleGrouped()
+            .compatScrollDisabled()
+            .frame(width: SettingsWindowController.paneWidth)
+            .fixedSize(horizontal: false, vertical: true)
+            .onChange(of: keep) { n in
+                FrameHost.forEachHost { $0.keepInMemory = n }
+                defaults.set(n, forKey: FramePolicy.keepInMemoryKey)
             }
-        }
-        .formStyle(.grouped)
-        .scrollDisabled(true)
-        .frame(width: SettingsWindowController.paneWidth)
-        .fixedSize(horizontal: false, vertical: true)
-        .onChange(of: keep) { _, n in
-            FrameHost.forEachHost { $0.keepInMemory = n }
-            defaults.set(n, forKey: FramePolicy.keepInMemoryKey)
-        }
-        .onChange(of: unloadIdle) { _, on in
-            FrameHost.forEachHost { $0.unloadIdleApps = on }
-            defaults.set(on, forKey: FramePolicy.unloadIdleAppsKey)
-        }
-        .onChange(of: pauseInBackground) { _, on in
-            FrameHost.forEachHost { $0.pauseInBackground = on }
-            defaults.set(on, forKey: FramePolicy.pauseInBackgroundKey)
-        }
-        .onChange(of: suspendMinutes) { _, v in
-            FrameHost.forEachHost { $0.keepAlive = TimeInterval(v * 60) }
-            defaults.set(v, forKey: TeamsFrameConfig.keepAliveMinutesKey)
+            .onChange(of: unloadIdle) { on in
+                FrameHost.forEachHost { $0.unloadIdleApps = on }
+                defaults.set(on, forKey: FramePolicy.unloadIdleAppsKey)
+            }
+            .onChange(of: pauseInBackground) { on in
+                FrameHost.forEachHost { $0.pauseInBackground = on }
+                defaults.set(on, forKey: FramePolicy.pauseInBackgroundKey)
+            }
+            .onChange(of: suspendMinutes) { v in
+                FrameHost.forEachHost { $0.keepAlive = TimeInterval(v * 60) }
+                defaults.set(v, forKey: TeamsFrameConfig.keepAliveMinutesKey)
+            }
         }
     }
 

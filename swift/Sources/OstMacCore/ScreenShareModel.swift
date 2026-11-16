@@ -26,8 +26,11 @@ public final class ScreenShareModel: NSObject, ObservableObject {
         session.source.map(ScreenShareSummary.label)
     }
 
-    private var stream: SCStream?
-    private var sink: ShareFrameSink?
+    /// Type-erased `SCStream` (macOS 12.3+). Stored as AnyObject so this
+    /// model can be constructed on the macOS 12 deployment floor.
+    private var streamObject: AnyObject?
+    /// Type-erased `ShareFrameSink`.
+    private var sinkObject: AnyObject?
     private let queue = DispatchQueue(label: "dev.ostmac.screenshare")
     /// Queue-confined live-send state (mirrors CameraCapture's boxes).
     private nonisolated let liveBox = ShareEncoderBox()
@@ -75,6 +78,20 @@ public final class ScreenShareModel: NSObject, ObservableObject {
         refreshPermission()
         guard permission != .denied else { return }
         guard session.beginPick() else { return }
+        if #available(macOS 14, *) {
+            presentSystemPicker()
+        } else if #available(macOS 12.3, *) {
+            // Monterey has ScreenCaptureKit streams but not the system
+            // picker (macOS 14). Share the main display.
+            shareMainDisplay()
+        } else {
+            session.didFail("Screen sharing requires macOS 12.3 or later.")
+        }
+    }
+
+    /// System content picker (macOS 14+).
+    @available(macOS 14, *)
+    private func presentSystemPicker() {
         let picker = SCContentSharingPicker.shared
         var config = SCContentSharingPickerConfiguration()
         config.allowedPickerModes = [.singleDisplay, .singleWindow, .singleApplication]
@@ -85,13 +102,41 @@ public final class ScreenShareModel: NSObject, ObservableObject {
         picker.present()
     }
 
+    /// Main display, no picker (macOS 12.3–13).
+    @available(macOS 12.3, *)
+    private func shareMainDisplay() {
+        Task { @MainActor in
+            do {
+                let content = try await SCShareableContent.excludingDesktopWindows(
+                    false, onScreenWindowsOnly: true)
+                guard let display = content.displays.first else {
+                    self.session.didFail("No display to share")
+                    return
+                }
+                self.adopt(filter: SCContentFilter(display: display, excludingWindows: []))
+            } catch {
+                self.notePickerFailed(error)
+            }
+        }
+    }
+
     /// Stop sharing (live, or mid-bring-up — honored when the start lands).
     public func stop() {
         guard session.beginStop() else { return }
-        guard let stream else {
-            // Bring-up never built a stream (or already torn down).
+        if #available(macOS 12.3, *) {
+            stopCapture()
+        } else {
             setLiveSend(false)
-            sink = nil
+            sinkObject = nil
+            _ = session.didStop()
+        }
+    }
+
+    @available(macOS 12.3, *)
+    private func stopCapture() {
+        guard let stream = streamObject as? SCStream else {
+            setLiveSend(false)
+            sinkObject = nil
             _ = session.didStop()
             return
         }
@@ -100,8 +145,8 @@ public final class ScreenShareModel: NSObject, ObservableObject {
             await MainActor.run { [weak self] in
                 guard let self else { return }
                 self.setLiveSend(false)
-                self.stream = nil
-                self.sink = nil
+                self.streamObject = nil
+                self.sinkObject = nil
                 _ = self.session.didStop()
             }
         }
@@ -109,24 +154,28 @@ public final class ScreenShareModel: NSObject, ObservableObject {
 
     // MARK: Picker results (main-actor; observer methods hop here)
 
-    private func adoptPicked(filter: SCContentFilter) {
-        SCContentSharingPicker.shared.remove(self)
-        SCContentSharingPicker.shared.isActive = false
+    @available(macOS 12.3, *)
+    private func adopt(filter: SCContentFilter) {
+        if #available(macOS 14, *) { dismissPicker() }
         guard session.didPick(Self.describe(filter: filter)) else { return }
         let sink = ShareFrameSink(owner: self, box: liveBox, flag: liveFlag)
-        self.sink = sink
+        sinkObject = sink
         Task { await bringUp(filter: filter, sink: sink) }
     }
 
-    private func notePickCancelled() {
+    @available(macOS 14, *)
+    private func dismissPicker() {
         SCContentSharingPicker.shared.remove(self)
         SCContentSharingPicker.shared.isActive = false
+    }
+
+    private func notePickCancelled() {
+        if #available(macOS 14, *) { dismissPicker() }
         session.didCancelPick()
     }
 
     private func notePickerFailed(_ error: Error) {
-        SCContentSharingPicker.shared.remove(self)
-        SCContentSharingPicker.shared.isActive = false
+        if #available(macOS 14, *) { dismissPicker() }
         if !ScreenShareAccess.granted() {
             permission = .denied
             session.didFail("permission denied")
@@ -137,6 +186,7 @@ public final class ScreenShareModel: NSObject, ObservableObject {
 
     // MARK: Stream bring-up / teardown (main-actor)
 
+    @available(macOS 12.3, *)
     private func bringUp(filter: SCContentFilter, sink: ShareFrameSink) async {
         let config = SCStreamConfiguration()
         config.width = 960
@@ -145,7 +195,7 @@ public final class ScreenShareModel: NSObject, ObservableObject {
         config.pixelFormat = kCVPixelFormatType_32BGRA
         config.showsCursor = true
         config.scalesToFit = true
-        config.preservesAspectRatio = true
+        if #available(macOS 14, *) { config.preservesAspectRatio = true }
         config.queueDepth = 4
         let stream = SCStream(filter: filter, configuration: config, delegate: self)
         do {
@@ -156,20 +206,20 @@ public final class ScreenShareModel: NSObject, ObservableObject {
             return
         }
         if session.phase == .starting {
-            self.stream = stream
+            streamObject = stream
             _ = session.didStart()
         } else {
             // Stopped mid-bring-up: tear the just-started stream down.
             try? await stream.stopCapture()
             setLiveSend(false)
-            self.sink = nil
+            sinkObject = nil
             _ = session.didStop()
         }
     }
 
     private func noteStartFailed(_ error: Error) {
         setLiveSend(false)
-        sink = nil
+        sinkObject = nil
         if !ScreenShareAccess.granted() {
             permission = .denied
             session.didFail("permission denied")
@@ -183,8 +233,8 @@ public final class ScreenShareModel: NSObject, ObservableObject {
     private func noteStreamDied(_ error: Error) {
         guard session.phase == .live else { return }
         setLiveSend(false)
-        stream = nil
-        sink = nil
+        streamObject = nil
+        sinkObject = nil
         session.didFail("stream ended")
     }
 
@@ -197,23 +247,31 @@ public final class ScreenShareModel: NSObject, ObservableObject {
 
     /// Filter -> pure source descriptor (style + content-rect size; SCK
     /// exposes no display/window names on the macOS 14 floor).
+    @available(macOS 12.3, *)
     static func describe(filter: SCContentFilter) -> ScreenShareSource {
         let kind: ScreenShareSource.Kind
-        if filter.style == .window {
-            kind = .window
-        } else if filter.style == .application {
-            kind = .app
+        let dims: String
+        if #available(macOS 14, *) {
+            if filter.style == .window {
+                kind = .window
+            } else if filter.style == .application {
+                kind = .app
+            } else {
+                kind = .display
+            }
+            let rect = filter.contentRect
+            dims = "\(Int(rect.width))×\(Int(rect.height))"
         } else {
             kind = .display
+            dims = "display"
         }
-        let rect = filter.contentRect
-        let dims = "\(Int(rect.width))×\(Int(rect.height))"
         return ScreenShareSource(id: "\(kind.rawValue)-\(dims)", kind: kind, name: dims)
     }
 }
 
 // MARK: - SCK callbacks (hop to main; never block the SCK queues)
 
+@available(macOS 14, *)
 extension ScreenShareModel: SCContentSharingPickerObserver {
     public nonisolated func contentSharingPicker(
         _ picker: SCContentSharingPicker, didCancelFor stream: SCStream?
@@ -225,7 +283,7 @@ extension ScreenShareModel: SCContentSharingPickerObserver {
         _ picker: SCContentSharingPicker, didUpdateWith filter: SCContentFilter,
         for stream: SCStream?
     ) {
-        Task { @MainActor [weak self] in self?.adoptPicked(filter: filter) }
+        Task { @MainActor [weak self] in self?.adopt(filter: filter) }
     }
 
     public nonisolated func contentSharingPickerStartDidFailWithError(_ error: Error) {
@@ -233,6 +291,7 @@ extension ScreenShareModel: SCContentSharingPickerObserver {
     }
 }
 
+@available(macOS 12.3, *)
 extension ScreenShareModel: SCStreamDelegate {
     public nonisolated func stream(_ stream: SCStream, didStopWithError error: Error) {
         Task { @MainActor [weak self] in self?.noteStreamDied(error) }
@@ -243,6 +302,7 @@ extension ScreenShareModel: SCStreamDelegate {
 
 /// Queue-side SCK output: complete frames -> preview CGImage + optional
 /// VT-encode + send-queue push. Publish hops to main via the weak owner.
+@available(macOS 12.3, *)
 private final class ShareFrameSink: NSObject, SCStreamOutput, @unchecked Sendable {
     private weak var owner: ScreenShareModel?
     private let box: ShareEncoderBox

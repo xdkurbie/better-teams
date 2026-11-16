@@ -10,6 +10,7 @@ import AppKit
 import OstMacCore
 import SwiftUI
 import WebKit
+import Perception
 
 /// Why the embedded page can't finish on its own.
 enum SignInWebProblem: Equatable {
@@ -246,37 +247,39 @@ struct SignInWebFooter: View {
     let cancel: () -> Void
 
     var body: some View {
-        VStack(spacing: 0) {
-            Divider()
-            HStack(spacing: 8) {
-                if let problem = chrome.problem {
-                    Label {
-                        Text(problem.title)
-                    } icon: {
-                        Image(systemName: "exclamationmark.triangle.fill").symbolRenderingMode(.multicolor)
-                    }
-                    .lineLimit(1)
-                    InfoButton(subject: problem.title, text: problem.detail)
-                } else {
-                    Button("Use a Code Instead", action: useCode)
-                    if chrome.loading {
-                        ProgressView().controlSize(.small).accessibilityLabel("Loading")
-                    }
-                }
-                Spacer(minLength: 12)
-                if let problem = chrome.problem {
-                    if problem == .loadFailed {
-                        Button("Use a Code Instead", action: useCode)
-                        Button("Try Again", action: retry).keyboardShortcut(.defaultAction)
+        WithPerceptionTracking {
+            VStack(spacing: 0) {
+                Divider()
+                HStack(spacing: 8) {
+                    if let problem = chrome.problem {
+                        Label {
+                            Text(problem.title)
+                        } icon: {
+                            Image(systemName: "exclamationmark.triangle.fill").symbolRenderingMode(.multicolor)
+                        }
+                        .lineLimit(1)
+                        InfoButton(subject: problem.title, text: problem.detail)
                     } else {
-                        Button("Use a Code Instead", action: useCode).keyboardShortcut(.defaultAction)
+                        Button("Use a Code Instead", action: useCode)
+                        if chrome.loading {
+                            ProgressView().controlSize(.small).accessibilityLabel("Loading")
+                        }
                     }
+                    Spacer(minLength: 12)
+                    if let problem = chrome.problem {
+                        if problem == .loadFailed {
+                            Button("Use a Code Instead", action: useCode)
+                            Button("Try Again", action: retry).keyboardShortcut(.defaultAction)
+                        } else {
+                            Button("Use a Code Instead", action: useCode).keyboardShortcut(.defaultAction)
+                        }
+                    }
+                    Button("Cancel", role: .cancel, action: cancel).keyboardShortcut(.cancelAction)
                 }
-                Button("Cancel", role: .cancel, action: cancel).keyboardShortcut(.cancelAction)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 12)
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 12)
+            .background(.bar)
         }
-        .background(.bar)
     }
 }

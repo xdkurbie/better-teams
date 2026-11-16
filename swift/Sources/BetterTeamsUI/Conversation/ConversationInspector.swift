@@ -5,6 +5,7 @@
 // (pinned messages; click to jump).
 import OstMacCore
 import SwiftUI
+import Perception
 
 enum InspectorSegment: String, CaseIterable {
     case info, catchup, pinned
@@ -25,45 +26,47 @@ struct ConversationInspector: View {
     @Environment(\.windowModel) private var model
 
     var body: some View {
-        if let model {
-            let seg = model.inspectorSegment.flatMap(InspectorSegment.init(rawValue:)) ?? .info
-            VStack(spacing: 0) {
-                Picker("Inspector", selection: Binding(get: { seg },
-                                                       set: { model.setInspectorSegment($0.rawValue) })) {
-                    ForEach(InspectorSegment.allCases, id: \.rawValue) { s in Text(s.title).tag(s) }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .padding(.horizontal, 12)
-                // Same height as the conversation header, so the two
-                // hairlines meet in one line across the window.
-                .frame(maxWidth: .infinity, minHeight: ConversationHeader.minHeight)
-                Divider()
-                Group {
-                    if let ref {
-                        switch seg {
-                        case .info:
-                            let services = ConversationServices.of(model)
-                            InfoPane(ref: ref, chats: chats, unread: unread, conv: model.graph.conv,
-                                     rules: services.rules(model), snooze: services.snooze(model),
-                                     presence: model.app?.presence)
-                        case .catchup:
-                            if let app = model.app {
-                                CatchUpPane(store: app.catchUp, items: app.actionItems, conv: model.graph.conv,
-                                            digest: app.catchUpDigest, feedback: app.catchUpFeedback, chatID: ref)
-                            } else {
-                                EmptyPane("Catch Up Unavailable", systemImage: "sparkles",
-                                          message: "Catch Up runs in the active account's window.")
-                            }
-                        case .pinned:
-                            PinnedPane(store: model.graph.pinnedMessages, conv: model.graph.conv, chatID: ref)
-                        }
-                    } else {
-                        NoSelectionPane("No Chat Selected")
+        WithPerceptionTracking {
+            if let model {
+                let seg = model.inspectorSegment.flatMap(InspectorSegment.init(rawValue:)) ?? .info
+                VStack(spacing: 0) {
+                    Picker("Inspector", selection: Binding(get: { seg },
+                                                           set: { model.setInspectorSegment($0.rawValue) })) {
+                        ForEach(InspectorSegment.allCases, id: \.rawValue) { s in Text(s.title).tag(s) }
                     }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .padding(.horizontal, 12)
+                    // Same height as the conversation header, so the two
+                    // hairlines meet in one line across the window.
+                    .frame(maxWidth: .infinity, minHeight: ConversationHeader.minHeight)
+                    Divider()
+                    Group {
+                        if let ref {
+                            switch seg {
+                            case .info:
+                                let services = ConversationServices.of(model)
+                                InfoPane(ref: ref, chats: chats, unread: unread, conv: model.graph.conv,
+                                         rules: services.rules(model), snooze: services.snooze(model),
+                                         presence: model.app?.presence)
+                            case .catchup:
+                                if let app = model.app {
+                                    CatchUpPane(store: app.catchUp, items: app.actionItems, conv: model.graph.conv,
+                                                digest: app.catchUpDigest, feedback: app.catchUpFeedback, chatID: ref)
+                                } else {
+                                    EmptyPane("Catch Up Unavailable", systemImage: "sparkles",
+                                              message: "Catch Up runs in the active account's window.")
+                                }
+                            case .pinned:
+                                PinnedPane(store: model.graph.pinnedMessages, conv: model.graph.conv, chatID: ref)
+                            }
+                        } else {
+                            NoSelectionPane("No Chat Selected")
+                        }
+                    }
+                    // Fills the pane: the segmented header stays at the top.
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
-                // Fills the pane: the segmented header stays at the top.
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
     }
@@ -83,82 +86,84 @@ struct InfoPane: View {
     @Environment(\.windowModel) private var model
 
     var body: some View {
-        let row = chats.chat(id: ref)
-        let name = row?.name ?? DemoFixture.name(for: ref, demo: model?.options.demo == true) ?? conv.headerTitle
-        let isGroup = row?.is_group ?? false
-        let messages = conv.chatID == ref ? conv.messages : []
-        Form {
-            Section {
-                VStack(spacing: 8) {
-                    Avatar(name: name, isGroup: isGroup, diameter: 56)
-                    Text(name).font(.title3.weight(.semibold)).multilineTextAlignment(.center)
-                    RosterBound(chatID: ref, roster: model?.app?.chatRoster) { count in
-                        let sub = ConversationDetail.subtitle(isGroup: isGroup, messages: messages, rosterCount: count)
-                        if !sub.isEmpty { Text(sub).foregroundStyle(.secondary) }
+        WithPerceptionTracking {
+            let row = chats.chat(id: ref)
+            let name = row?.name ?? DemoFixture.name(for: ref, demo: model?.options.demo == true) ?? conv.headerTitle
+            let isGroup = row?.is_group ?? false
+            let messages = conv.chatID == ref ? conv.messages : []
+            Form {
+                Section {
+                    VStack(spacing: 8) {
+                        Avatar(name: name, isGroup: isGroup, diameter: 56)
+                        Text(name).font(.title3.compatWeight(.semibold)).multilineTextAlignment(.center)
+                        RosterBound(chatID: ref, roster: model?.app?.chatRoster) { count in
+                            let sub = ConversationDetail.subtitle(isGroup: isGroup, messages: messages, rosterCount: count)
+                            if !sub.isEmpty { Text(sub).compatForeground(.secondary) }
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 6)
+                }
+                Section(header: Text("Notifications")) {
+                    Picker("Notify Me", selection: Binding(get: { rules.level(chatID: ref) },
+                                                           set: { rules.setLevel(chatID: ref, level: $0) })) {
+                        Text("All Messages").tag(ChatNotifyLevel.all)
+                        Text("Mentions Only").tag(ChatNotifyLevel.mentions)
+                        Text("Off").tag(ChatNotifyLevel.muted)
+                    }
+                    // A pop-up like Notify Me (both pick one state and show
+                    // it): Off, the live expiry, the presets, Custom… (sheet).
+                    Picker("Snooze", selection: Binding(get: { SnoozeChoice.current(snooze, ref) },
+                                                        set: { choose($0) })) {
+                        Text("Off").tag(SnoozeChoice.off)
+                        if let until = snooze.expiry(for: ref) {
+                            Text("Until \(SnoozeStore.timeLabel(for: until))").tag(SnoozeChoice.active)
+                        }
+                        Divider()
+                        ForEach(SnoozeDuration.allCases, id: \.rawValue) { d in
+                            Text(Self.title(d)).tag(SnoozeChoice.preset(d))
+                        }
+                        Divider()
+                        Text("Custom…").tag(SnoozeChoice.custom)
                     }
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 6)
-            }
-            Section("Notifications") {
-                Picker("Notify Me", selection: Binding(get: { rules.level(chatID: ref) },
-                                                       set: { rules.setLevel(chatID: ref, level: $0) })) {
-                    Text("All Messages").tag(ChatNotifyLevel.all)
-                    Text("Mentions Only").tag(ChatNotifyLevel.mentions)
-                    Text("Off").tag(ChatNotifyLevel.muted)
+                Section {
+                    Toggle("Pin to Top of List", isOn: Binding(get: { chats.isPinned(ref) },
+                                                              set: { $0 ? chats.pin(ref) : chats.unpin(ref) }))
                 }
-                // A pop-up like Notify Me (both pick one state and show
-                // it): Off, the live expiry, the presets, Custom… (sheet).
-                Picker("Snooze", selection: Binding(get: { SnoozeChoice.current(snooze, ref) },
-                                                    set: { choose($0) })) {
-                    Text("Off").tag(SnoozeChoice.off)
-                    if let until = snooze.expiry(for: ref) {
-                        Text("Until \(SnoozeStore.timeLabel(for: until))").tag(SnoozeChoice.active)
-                    }
-                    Divider()
-                    ForEach(SnoozeDuration.allCases, id: \.rawValue) { d in
-                        Text(Self.title(d)).tag(SnoozeChoice.preset(d))
-                    }
-                    Divider()
-                    Text("Custom…").tag(SnoozeChoice.custom)
-                }
-            }
-            Section {
-                Toggle("Pin to Top of List", isOn: Binding(get: { chats.isPinned(ref) },
-                                                          set: { $0 ? chats.pin(ref) : chats.unpin(ref) }))
-            }
-            Section("People in This Conversation") {
-                if let app = model?.app {
-                    RosterPeople(chatID: ref, roster: app.chatRoster, presence: app.presence, isGroup: isGroup) {
+                Section(header: Text("People in This Conversation")) {
+                    if let app = model?.app {
+                        RosterPeople(chatID: ref, roster: app.chatRoster, presence: app.presence, isGroup: isGroup) {
+                            senderPeople(isGroup: isGroup, messages: messages)
+                        }
+                    } else {
                         senderPeople(isGroup: isGroup, messages: messages)
                     }
-                } else {
-                    senderPeople(isGroup: isGroup, messages: messages)
+                    if isGroup {
+                        Button("Add People…") { ChatManageActions.addPeople(ref, model) }
+                    }
                 }
-                if isGroup {
-                    Button("Add People…") { ChatManageActions.addPeople(ref, model) }
-                }
-            }
-            Section {
-                let hidden = rules.isHidden(chatID: ref)
-                Button(hidden ? "Show Chat in List" : "Hide Chat") {
-                    rules.setHidden(chatID: ref, hidden: !hidden)
-                }
-                // A standard push button: the destructive step is the
-                // NSAlert it opens (§9.5), which carries the red role.
-                if isGroup {
-                    Button("Rename Chat…") { ChatManageActions.rename(ref, model) }
-                    Button("Leave Chat…") {
-                        model?.confirm(title: "Leave \(name)?",
-                                       message: "You won't get new messages from this chat.",
-                                       action: "Leave", perform: {
-                                           Task { await chats.leave(chatID: ref) }
-                                       })
+                Section {
+                    let hidden = rules.isHidden(chatID: ref)
+                    Button(hidden ? "Show Chat in List" : "Hide Chat") {
+                        rules.setHidden(chatID: ref, hidden: !hidden)
+                    }
+                    // A standard push button: the destructive step is the
+                    // NSAlert it opens (§9.5), which carries the red role.
+                    if isGroup {
+                        Button("Rename Chat…") { ChatManageActions.rename(ref, model) }
+                        Button("Leave Chat…") {
+                            model?.confirm(title: "Leave \(name)?",
+                                           message: "You won't get new messages from this chat.",
+                                           action: "Leave", perform: {
+                                               Task { await chats.leave(chatID: ref) }
+                                           })
+                        }
                     }
                 }
             }
+            .compatFormStyleGrouped()
         }
-        .formStyle(.grouped)
     }
 
     /// Until the chat roster loads (or without one): the people in the
@@ -167,7 +172,7 @@ struct InfoPane: View {
     private func senderPeople(isGroup: Bool, messages: [ChatMessage]) -> some View {
         let people = MentionCompose.roster(from: messages)
         if people.isEmpty {
-            Text("No messages yet").foregroundStyle(.secondary)
+            Text("No messages yet").compatForeground(.secondary)
         } else {
             ForEach(Indexed.wrap(people)) { p in
                 let you = messages.contains { $0.isOwn && $0.sender == p.value }
@@ -233,25 +238,27 @@ private struct RosterPeople<Fallback: View>: View {
     @Environment(\.windowModel) private var model
 
     var body: some View {
-        if roster.chatID == chatID, roster.state == .loaded, !roster.members.isEmpty {
-            Group {
-                ForEach(roster.members) { m in
-                    let you = model?.isOwnID(m.presenceID) == true || model?.isOwnID(m.mri) == true
-                    MemberRow(name: you ? (model?.ownDisplayName ?? m.displayName) : Self.name(m), isYou: you,
-                              status: status(m, you: you), isOwner: isGroup && m.isOwner)
-                    .contextMenu {
-                        if isGroup, !you {
-                            Button("Remove from Chat…") {
-                                ChatManageActions.remove(m, name: Self.name(m), chatID: chatID, model)
+        WithPerceptionTracking {
+            if roster.chatID == chatID, roster.state == .loaded, !roster.members.isEmpty {
+                Group {
+                    ForEach(roster.members) { m in
+                        let you = model?.isOwnID(m.presenceID) == true || model?.isOwnID(m.mri) == true
+                        MemberRow(name: you ? (model?.ownDisplayName ?? m.displayName) : Self.name(m), isYou: you,
+                                  status: status(m, you: you), isOwner: isGroup && m.isOwner)
+                        .contextMenu {
+                            if isGroup, !you {
+                                Button("Remove from Chat…") {
+                                    ChatManageActions.remove(m, name: Self.name(m), chatID: chatID, model)
+                                }
                             }
                         }
                     }
                 }
+                // R24: presence follows the roster through its store hook
+                // (`ChatRosterStore.onMembersUpdated`), never from here.
+            } else {
+                fallback()
             }
-            // R24: presence follows the roster through its store hook
-            // (`ChatRosterStore.onMembersUpdated`), never from here.
-        } else {
-            fallback()
         }
     }
 
@@ -279,24 +286,26 @@ private struct MemberRow: View {
     var isOwner = false
 
     var body: some View {
-        HStack(spacing: 8) {
-            Avatar(name: name, diameter: 22)
-                .overlay(alignment: .bottomTrailing) {
-                    if let status { PresenceBadge(status: status, size: 9).offset(x: 2, y: 2) }
+        WithPerceptionTracking {
+            HStack(spacing: 8) {
+                Avatar(name: name, diameter: 22)
+                    .overlay(alignment: .bottomTrailing) {
+                        if let status { PresenceBadge(status: status, size: 9).offset(x: 2, y: 2) }
+                    }
+                    .contactHover(name: name, arrowEdge: .leading)
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(isYou ? "You" : name).lineLimit(1)
+                    if isOwner {
+                        Text("Owner").font(.caption).compatForeground(.secondary)
+                    }
                 }
-                .contactHover(name: name, arrowEdge: .leading)
-            VStack(alignment: .leading, spacing: 0) {
-                Text(isYou ? "You" : name).lineLimit(1)
-                if isOwner {
-                    Text("Owner").font(.caption).foregroundStyle(.secondary)
+                Spacer(minLength: 8)
+                if let status {
+                    Text(status.availabilityTitle).compatForeground(.secondary)
                 }
             }
-            Spacer(minLength: 8)
-            if let status {
-                Text(status.availabilityTitle).foregroundStyle(.secondary)
-            }
+            .accessibilityElement(children: .combine)
         }
-        .accessibilityElement(children: .combine)
     }
 }
 
@@ -329,16 +338,18 @@ struct CatchUpPane: View {
     let chatID: String
 
     var body: some View {
-        VStack(spacing: 0) {
-            CatchUpPeriodBar(digest: digest)
-            content
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-        // CATCHTABS: a tab switch re-reads this conversation for the new
-        // period (instant from cache; the period's last text stays up
-        // while it refreshes). Nothing runs before the first click.
-        .onChange(of: digest.period) { _, _ in
-            if store.stateChatID == chatID, store.state != .idle { run() }
+        WithPerceptionTracking {
+            VStack(spacing: 0) {
+                CatchUpPeriodBar(digest: digest)
+                content
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            // CATCHTABS: a tab switch re-reads this conversation for the new
+            // period (instant from cache; the period's last text stays up
+            // while it refreshes). Nothing runs before the first click.
+            .onChange(of: digest.period) { _ in
+                if store.stateChatID == chatID, store.state != .idle { run() }
+            }
         }
     }
 
@@ -378,7 +389,7 @@ struct CatchUpPane: View {
                 CatchUpMentionsSection(mentions: flagged, collapsed: $digest.mentionsCollapsed,
                                        chatName: { _ in nil }, open: jump)
             }
-            Section("Summary") {
+            Section(header: Text("Summary")) {
                 if parsed.isEmpty {
                     Text(text).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
                 } else {
@@ -387,11 +398,11 @@ struct CatchUpPane: View {
                                        dismiss: { feedback.dismiss($0, chatID: chatID) })
                 }
             }
-            Section("Action Items") {
+            Section(header: Text("Action Items")) {
                 if parsed.actions.isEmpty {
                     actionItems(updating: updating)
                 } else if actions.isEmpty {
-                    Text("None").foregroundStyle(.secondary)
+                    Text("None").compatForeground(.secondary)
                 } else {
                     ForEach(actions) { a in
                         CatchUpBulletRow(text: a.text, bullet: false) { feedback.dismiss(a.text, chatID: chatID) }
@@ -403,7 +414,7 @@ struct CatchUpPane: View {
                     .disabled(updating)
             }
         }
-        .formStyle(.grouped)
+        .compatFormStyleGrouped()
         .refreshStatus(updating, label: "Updating summary")
     }
 
@@ -438,13 +449,13 @@ struct CatchUpPane: View {
             ForEach(list) { item in
                 VStack(alignment: .leading, spacing: 1) {
                     Text(item.title)
-                    Text(item.owner).font(.caption).foregroundStyle(.secondary)
+                    Text(item.owner).font(.caption).compatForeground(.secondary)
                 }
             }
         case .empty(let copy):
-            Text(copy).foregroundStyle(.secondary)
+            Text(copy).compatForeground(.secondary)
         case .failed(let message):
-            Text(message).foregroundStyle(.secondary)
+            Text(message).compatForeground(.secondary)
         }
     }
 
@@ -474,23 +485,25 @@ struct CatchUpSummaryBody: View {
     var dismiss: ((String) -> Void)?
 
     var body: some View {
-        let points = parsed.pointLines.filter { !isHidden($0.text) }
-        let actions = parsed.actionLines.filter { !isHidden($0.text) }
-        VStack(alignment: .leading, spacing: 6) {
-            if !parsed.summary.isEmpty {
-                Text(parsed.summary).textSelection(.enabled)
-            }
-            ForEach(points) { p in
-                CatchUpBulletRow(text: p.text, dismiss: dismiss.map { d in { d(p.text) } })
-            }
-            if includeActions, !actions.isEmpty {
-                Text("Action Items").font(.subheadline.weight(.semibold)).padding(.top, 2)
-                ForEach(actions) { a in
-                    CatchUpBulletRow(text: a.text, dismiss: dismiss.map { d in { d(a.text) } })
+        WithPerceptionTracking {
+            let points = parsed.pointLines.filter { !isHidden($0.text) }
+            let actions = parsed.actionLines.filter { !isHidden($0.text) }
+            VStack(alignment: .leading, spacing: 6) {
+                if !parsed.summary.isEmpty {
+                    Text(parsed.summary).textSelection(.enabled)
+                }
+                ForEach(points) { p in
+                    CatchUpBulletRow(text: p.text, dismiss: dismiss.map { d in { d(p.text) } })
+                }
+                if includeActions, !actions.isEmpty {
+                    Text("Action Items").font(.subheadline.compatWeight(.semibold)).padding(.top, 2)
+                    ForEach(actions) { a in
+                        CatchUpBulletRow(text: a.text, dismiss: dismiss.map { d in { d(a.text) } })
+                    }
                 }
             }
+            .fixedSize(horizontal: false, vertical: true)
         }
-        .fixedSize(horizontal: false, vertical: true)
     }
 }
 
@@ -504,31 +517,33 @@ struct CatchUpBulletRow: View {
     @State private var hovering = false
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 6) {
-            if bullet { Text("\u{2022}").foregroundStyle(.secondary) }
-            Text(text)
-                .textSelection(.enabled)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            if let dismiss {
-                Button(action: dismiss) {
-                    Image(systemName: "xmark.circle")
+        WithPerceptionTracking {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                if bullet { Text("\u{2022}").compatForeground(.secondary) }
+                Text(text)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                if let dismiss {
+                    Button(action: dismiss) {
+                        Image(systemName: "xmark.circle")
+                    }
+                    .buttonStyle(.borderless)
+                    .compatForeground(.secondary)
+                    .opacity(hovering ? 1 : 0)
+                    .allowsHitTesting(hovering)
+                    .help("Not Important")
+                    .accessibilityHidden(true)
                 }
-                .buttonStyle(.borderless)
-                .foregroundStyle(.secondary)
-                .opacity(hovering ? 1 : 0)
-                .allowsHitTesting(hovering)
-                .help("Not Important")
-                .accessibilityHidden(true)
             }
+            .contentShape(Rectangle())
+            .onHover { hovering = $0 }
+            .contextMenu {
+                if let dismiss { Button("Not Important", action: dismiss) }
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityAction(named: "Not Important") { dismiss?() }
         }
-        .contentShape(Rectangle())
-        .onHover { hovering = $0 }
-        .contextMenu {
-            if let dismiss { Button("Not Important", action: dismiss) }
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityAction(named: "Not Important") { dismiss?() }
     }
 }
 
@@ -537,16 +552,18 @@ struct CatchUpPeriodBar: View {
     @ObservedObject var digest: CatchUpDigestStore
 
     var body: some View {
-        Picker("Catch Up Period", selection: Binding(get: { digest.period }, set: { digest.select($0) })) {
-            ForEach(CatchUpPeriod.allCases) { Text($0.title).tag($0) }
+        WithPerceptionTracking {
+            Picker("Catch Up Period", selection: Binding(get: { digest.period }, set: { digest.select($0) })) {
+                ForEach(CatchUpPeriod.allCases) { Text($0.title).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 12)
+            .padding(.top, 10)
+            .padding(.bottom, 4)
+            .accessibilityLabel("Catch Up period")
         }
-        .pickerStyle(.segmented)
-        .labelsHidden()
-        .frame(maxWidth: .infinity)
-        .padding(.horizontal, 12)
-        .padding(.top, 10)
-        .padding(.bottom, 4)
-        .accessibilityLabel("Catch Up period")
     }
 }
 
@@ -560,39 +577,41 @@ struct CatchUpMentionsSection: View {
     let open: (CatchUpMention) -> Void
 
     var body: some View {
-        Section {
-            if !collapsed {
-                if mentions.isEmpty {
-                    if let emptyText { Text(emptyText).foregroundStyle(.secondary) }
-                } else {
-                    ForEach(mentions) { m in
-                        CatchUpMentionRow(mention: m, chatName: chatName(m)) { open(m) }
+        WithPerceptionTracking {
+            Section {
+                if !collapsed {
+                    if mentions.isEmpty {
+                        if let emptyText { Text(emptyText).compatForeground(.secondary) }
+                    } else {
+                        ForEach(mentions) { m in
+                            CatchUpMentionRow(mention: m, chatName: chatName(m)) { open(m) }
+                        }
                     }
                 }
-            }
-        } header: {
-            Button {
-                withAnimation(.snappy(duration: 0.2)) { collapsed.toggle() }
-            } label: {
-                HStack(spacing: 5) {
-                    Image(systemName: "chevron.right")
-                        .font(.caption.weight(.semibold))
-                        .rotationEffect(.degrees(collapsed ? 0 : 90))
-                    Text("Mentions You")
-                    if collapsed, !mentions.isEmpty {
-                        Text("\(mentions.count)")
-                            .monospacedDigit()
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+            } header: {
+                Button {
+                    withAnimation(.snappy(duration: 0.2)) { collapsed.toggle() }
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "chevron.right")
+                            .font(.caption.compatWeight(.semibold))
+                            .rotationEffect(.degrees(collapsed ? 0 : 90))
+                        Text("Mentions You")
+                        if collapsed, !mentions.isEmpty {
+                            Text("\(mentions.count)")
+                                .monospacedDigit()
+                                .font(.caption)
+                                .compatForeground(.secondary)
+                        }
+                        Spacer()
                     }
-                    Spacer()
+                    .contentShape(Rectangle())
                 }
-                .contentShape(Rectangle())
+                .buttonStyle(.plain)
+                .help(collapsed ? "Show mentions" : "Hide mentions")
+                .accessibilityLabel("Mentions You, \(mentions.count)")
+                .accessibilityValue(collapsed ? "Collapsed" : "Expanded")
             }
-            .buttonStyle(.plain)
-            .help(collapsed ? "Show mentions" : "Hide mentions")
-            .accessibilityLabel("Mentions You, \(mentions.count)")
-            .accessibilityValue(collapsed ? "Collapsed" : "Expanded")
         }
     }
 }
@@ -606,30 +625,32 @@ struct CatchUpMentionRow: View {
     let open: () -> Void
 
     var body: some View {
-        Button(action: open) {
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(mention.sender).fontWeight(.semibold)
-                    if mention.kind == .everyone {
-                        Text("@everyone").font(.caption).foregroundStyle(.secondary)
-                    } else if mention.kind == .tag {
-                        Text("@tag").font(.caption).foregroundStyle(.secondary)
+        WithPerceptionTracking {
+            Button(action: open) {
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(mention.sender).compatWeight(.semibold)
+                        if mention.kind == .everyone {
+                            Text("@everyone").font(.caption).compatForeground(.secondary)
+                        } else if mention.kind == .tag {
+                            Text("@tag").font(.caption).compatForeground(.secondary)
+                        }
+                        Spacer(minLength: 8)
+                        Text(ChatMessage.shortTime(mention.timestamp)).font(.caption).compatForeground(.secondary)
                     }
-                    Spacer(minLength: 8)
-                    Text(ChatMessage.shortTime(mention.timestamp)).font(.caption).foregroundStyle(.secondary)
+                    if let chatName, !chatName.isEmpty {
+                        Text(chatName).font(.caption).compatForeground(.secondary)
+                    }
+                    Text(mention.preview).lineLimit(2).compatForeground(.secondary)
                 }
-                if let chatName, !chatName.isEmpty {
-                    Text(chatName).font(.caption).foregroundStyle(.secondary)
-                }
-                Text(mention.preview).lineLimit(2).foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+            .help("Show this message")
+            .accessibilityLabel(accessibilityText)
+            .accessibilityHint("Shows this message in its conversation")
         }
-        .buttonStyle(.plain)
-        .help("Show this message")
-        .accessibilityLabel(accessibilityText)
-        .accessibilityHint("Shows this message in its conversation")
     }
 
     /// VoiceOver: who mentioned whom, where, when, then the message.
@@ -675,49 +696,51 @@ struct PinnedPane: View {
     @Environment(\.windowModel) private var model
 
     var body: some View {
-        let rows = store.rows(for: chatID, messages: conv.chatID == chatID ? conv.messages : [])
-        if rows.isEmpty, let why = store.loadFailure(for: chatID) {
-            // A failed read is an error, never "nothing pinned".
-            ErrorPane(title: "Couldn\u{2019}t Load Pinned Messages", message: why) {
-                let s = store, id = chatID
-                Task { await s.refreshFromServer(chatID: id) }
-            }
-        } else if rows.isEmpty {
-            EmptyPane("No Pinned Messages", systemImage: "pin",
-                      message: "Pin a message from its context menu to keep it here.")
-        } else {
-            List {
-                ForEach(rows) { r in
-                    let own = !r.sender.isEmpty && r.sender == conv.ownDisplayName
-                    Button { if r.isAvailable { conv.seek(messageID: r.messageID) } } label: {
-                        // Sender avatar, name and time over the pinned text.
-                        HStack(alignment: .top, spacing: 8) {
-                            Avatar(name: own ? (model?.ownDisplayName ?? r.sender) : r.sender, diameter: 28)
-                            VStack(alignment: .leading, spacing: 2) {
-                                HStack(alignment: .firstTextBaseline) {
-                                    Text(own ? "You" : r.sender).font(.headline).lineLimit(1)
-                                    Spacer(minLength: 4)
-                                    Text(Self.when(r.timestamp)).font(.caption).foregroundStyle(.secondary)
-                                        .fixedSize()
-                                }
-                                Text(r.preview).foregroundStyle(.secondary).lineLimit(2)
-                                if !r.isAvailable {
-                                    Text("Not in loaded history").font(.caption).foregroundStyle(.tertiary)
+        WithPerceptionTracking {
+            let rows = store.rows(for: chatID, messages: conv.chatID == chatID ? conv.messages : [])
+            if rows.isEmpty, let why = store.loadFailure(for: chatID) {
+                // A failed read is an error, never "nothing pinned".
+                ErrorPane(title: "Couldn\u{2019}t Load Pinned Messages", message: why) {
+                    let s = store, id = chatID
+                    Task { await s.refreshFromServer(chatID: id) }
+                }
+            } else if rows.isEmpty {
+                EmptyPane("No Pinned Messages", systemImage: "pin",
+                          message: "Pin a message from its context menu to keep it here.")
+            } else {
+                List {
+                    ForEach(rows) { r in
+                        let own = !r.sender.isEmpty && r.sender == conv.ownDisplayName
+                        Button { if r.isAvailable { conv.seek(messageID: r.messageID) } } label: {
+                            // Sender avatar, name and time over the pinned text.
+                            HStack(alignment: .top, spacing: 8) {
+                                Avatar(name: own ? (model?.ownDisplayName ?? r.sender) : r.sender, diameter: 28)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    HStack(alignment: .firstTextBaseline) {
+                                        Text(own ? "You" : r.sender).font(.headline).lineLimit(1)
+                                        Spacer(minLength: 4)
+                                        Text(Self.when(r.timestamp)).font(.caption).compatForeground(.secondary)
+                                            .fixedSize()
+                                    }
+                                    Text(r.preview).compatForeground(.secondary).lineLimit(2)
+                                    if !r.isAvailable {
+                                        Text("Not in loaded history").font(.caption).compatForeground(.tertiary)
+                                    }
                                 }
                             }
+                            .padding(.vertical, 2)
+                            .contentShape(Rectangle())
                         }
-                        .padding(.vertical, 2)
-                        .contentShape(Rectangle())
+                        .buttonStyle(.plain)
+                        .contextMenu {
+                            Button("Unpin") { store.unpin(chatID: chatID, messageID: r.messageID) }
+                        }
+                        .help(r.isAvailable ? "Show in Conversation" : "Not in loaded history")
+                        .accessibilityHint("Shows the message in the conversation")
                     }
-                    .buttonStyle(.plain)
-                    .contextMenu {
-                        Button("Unpin") { store.unpin(chatID: chatID, messageID: r.messageID) }
-                    }
-                    .help(r.isAvailable ? "Show in Conversation" : "Not in loaded history")
-                    .accessibilityHint("Shows the message in the conversation")
                 }
+                .listStyle(.inset)
             }
-            .listStyle(.inset)
         }
     }
 

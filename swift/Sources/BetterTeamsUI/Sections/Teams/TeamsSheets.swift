@@ -4,6 +4,7 @@
 // the core view models (demo: in-memory fetchers).
 import OstMacCore
 import SwiftUI
+import Perception
 
 /// Shared sheet frame: title, content, error line, Cancel + action.
 private struct TeamsSheetFrame<Content: View>: View {
@@ -17,44 +18,46 @@ private struct TeamsSheetFrame<Content: View>: View {
     @Environment(\.windowModel) private var model
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(title).font(.headline)
-            content
-            // Status (progress or error, never both) shares the button
-            // row, leading, as in stock dialogs: no reserved empty line
-            // above the buttons, and nothing moves when it appears.
-            HStack(spacing: 8) {
-                HStack(spacing: 6) {
-                    if let busy {
-                        ProgressView().controlSize(.small)
-                        Text(busy).foregroundStyle(.secondary)
-                    } else if let error {
-                        Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Palette.failed)
-                        Text(error).foregroundStyle(.secondary)
+        WithPerceptionTracking {
+            VStack(alignment: .leading, spacing: 12) {
+                Text(title).font(.headline)
+                content
+                // Status (progress or error, never both) shares the button
+                // row, leading, as in stock dialogs: no reserved empty line
+                // above the buttons, and nothing moves when it appears.
+                HStack(spacing: 8) {
+                    HStack(spacing: 6) {
+                        if let busy {
+                            ProgressView().controlSize(.small)
+                            Text(busy).compatForeground(.secondary)
+                        } else if let error {
+                            Image(systemName: "exclamationmark.triangle.fill").compatForeground(Palette.failed)
+                            Text(error).compatForeground(.secondary)
+                        }
                     }
+                    .font(.caption)
+                    .lineLimit(2)
+                    // A real spacer: the status stack is empty when idle, and a
+                    // frame on empty content does not render, which pinned the
+                    // buttons leading. Buttons trail (HIG).
+                    Spacer(minLength: 0)
+                    Button("Cancel", role: .cancel) { model?.dismissSheet() }
+                        .keyboardShortcut(.cancelAction)
+                    Button(action, action: perform)
+                        .keyboardShortcut(.defaultAction)
+                        .disabled(!enabled || busy != nil)
                 }
-                .font(.caption)
-                .lineLimit(2)
-                // A real spacer: the status stack is empty when idle, and a
-                // frame on empty content does not render, which pinned the
-                // buttons leading. Buttons trail (HIG).
-                Spacer(minLength: 0)
-                Button("Cancel", role: .cancel) { model?.dismissSheet() }
-                    .keyboardShortcut(.cancelAction)
-                Button(action, action: perform)
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(!enabled || busy != nil)
             }
+            .padding(20)
+            .frame(width: 440)
         }
-        .padding(20)
-        .frame(width: 440)
     }
 }
 
 /// Field prompt in the system placeholder color, so a prompt never
 /// reads as a typed value in dark sheets (§10).
 private func prompt(_ s: String) -> Text {
-    Text(s).foregroundStyle(Color(nsColor: .placeholderTextColor))
+    Text(s).foregroundColor(Color(nsColor: .placeholderTextColor))
 }
 
 private func trimmed(_ s: String) -> String { s.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -67,19 +70,21 @@ struct CreateTeamSheet: View {
     @Environment(\.windowModel) private var model
 
     var body: some View {
-        TeamsSheetFrame(title: "Create Team", action: "Create", enabled: !trimmed(name).isEmpty,
-                        busy: teams.teamCreating ? "Creating team… This can take up to two minutes." : nil,
-                        error: submitted ? teams.teamCreateError : nil, perform: create) {
-            Form {
-                TextField("Name", text: $name, prompt: prompt("Team name"))
-                TextField("Description", text: $about, prompt: prompt("Optional"), axis: .vertical)
-                    .lineLimit(2...4)
-            }
-            .formStyle(.columns)
-            HStack {
-                Spacer()
-                InfoButton(subject: "the new team",
-                           text: "A standard team with a General channel. You\u{2019}re its owner.")
+        WithPerceptionTracking {
+            TeamsSheetFrame(title: "Create Team", action: "Create", enabled: !trimmed(name).isEmpty,
+                            busy: teams.teamCreating ? "Creating team… This can take up to two minutes." : nil,
+                            error: submitted ? teams.teamCreateError : nil, perform: create) {
+                Form {
+                    TextField("Name", text: $name, prompt: prompt("Team name"))
+                    TextField("Description", text: $about, prompt: prompt("Optional"))
+                        .lineLimit(4)
+                }
+                .compatFormStyleColumns()
+                HStack {
+                    Spacer()
+                    InfoButton(subject: "the new team",
+                               text: "A standard team with a General channel. You\u{2019}re its owner.")
+                }
             }
         }
     }
@@ -142,43 +147,45 @@ struct JoinTeamSheet: View {
     private var canJoin: Bool { !target.isEmpty && !(pickedTeam.map(teams.isMember) ?? false) }
 
     var body: some View {
-        TeamsSheetFrame(title: "Join a Team", action: "Join", enabled: canJoin,
-                        busy: teams.joiningIDs.isEmpty ? nil : "Joining…",
-                        error: submitted ? teams.joinError : nil, perform: join) {
-            SearchField(text: $query, placeholder: "Search Public Teams", onSubmit: searchNow)
-                .frame(height: 24)
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Public Teams")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                List(selection: $picked) {
-                    if forced == nil {
-                        ForEach(teams.publicResults) { t in row(t).tag(t.id) }
+        WithPerceptionTracking {
+            TeamsSheetFrame(title: "Join a Team", action: "Join", enabled: canJoin,
+                            busy: teams.joiningIDs.isEmpty ? nil : "Joining…",
+                            error: submitted ? teams.joinError : nil, perform: join) {
+                SearchField(text: $query, placeholder: "Search Public Teams", onSubmit: searchNow)
+                    .frame(height: 24)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Public Teams")
+                        .font(.subheadline.compatWeight(.semibold))
+                        .compatForeground(.secondary)
+                    List(selection: $picked) {
+                        if forced == nil {
+                            ForEach(teams.publicResults) { t in row(t).tag(t.id) }
+                        }
                     }
+                    .compatBorderedList(alternates: false)
+                    .frame(height: 200)
+                    .overlay { overlay }
                 }
-                .listStyle(.bordered(alternatesRowBackgrounds: false))
-                .frame(height: 200)
-                .overlay { overlay }
+                Form {
+                    TextField("Code or ID", text: $code, prompt: prompt("Team code or ID"))
+                        .onChange(of: code) { v in if !trimmed(v).isEmpty { picked = nil } }
+                }
+                .compatFormStyleColumns()
             }
-            Form {
-                TextField("Code or ID", text: $code, prompt: prompt("Team code or ID"))
-                    .onChange(of: code) { _, v in if !trimmed(v).isEmpty { picked = nil } }
+            .onAppear {
+                teams.clearPublicSearch()
+                if !trimmed(query).isEmpty { searchNow() }
             }
-            .formStyle(.columns)
+            .onDisappear {
+                debounce.cancel()
+                teams.clearPublicSearch()
+            }
+            .onChange(of: query) { q in
+                picked = nil
+                debounce.schedule { Task { await teams.searchPublic(query: q) } }
+            }
+            .onChange(of: picked) { v in if v != nil { code = "" } }
         }
-        .onAppear {
-            teams.clearPublicSearch()
-            if !trimmed(query).isEmpty { searchNow() }
-        }
-        .onDisappear {
-            debounce.cancel()
-            teams.clearPublicSearch()
-        }
-        .onChange(of: query) { _, q in
-            picked = nil
-            debounce.schedule { Task { await teams.searchPublic(query: q) } }
-        }
-        .onChange(of: picked) { _, v in if v != nil { code = "" } }
     }
 
     private func row(_ t: PublicTeam) -> some View {
@@ -187,12 +194,12 @@ struct JoinTeamSheet: View {
             VStack(alignment: .leading, spacing: 0) {
                 Text(t.name)
                 if let d = t.description, !d.isEmpty {
-                    Text(d).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    Text(d).font(.caption).compatForeground(.secondary).lineLimit(1)
                 }
             }
             Spacer(minLength: 8)
             if teams.isMember(t) {
-                Text("Joined").font(.caption).foregroundStyle(.secondary)
+                Text("Joined").font(.caption).compatForeground(.secondary)
             }
         }
         .accessibilityElement(children: .combine)
@@ -249,19 +256,21 @@ struct CreateChannelSheet: View {
     }
 
     var body: some View {
-        TeamsSheetFrame(title: "Create Channel", action: "Create",
-                        enabled: !trimmed(name).isEmpty && teams.teams.contains { $0.teamId == teamID },
-                        busy: creating ? "Creating channel…" : nil,
-                        error: submitted ? teams.createError : nil, perform: create) {
-            Form {
-                Picker("Team", selection: $teamID) {
-                    ForEach(teams.teams) { t in Text(t.name).tag(t.teamId) }
+        WithPerceptionTracking {
+            TeamsSheetFrame(title: "Create Channel", action: "Create",
+                            enabled: !trimmed(name).isEmpty && teams.teams.contains { $0.teamId == teamID },
+                            busy: creating ? "Creating channel…" : nil,
+                            error: submitted ? teams.createError : nil, perform: create) {
+                Form {
+                    Picker("Team", selection: $teamID) {
+                        ForEach(teams.teams) { t in Text(t.name).tag(t.teamId) }
+                    }
+                    TextField("Name", text: $name, prompt: prompt("Channel name"))
+                    TextField("Description", text: $about, prompt: prompt("Optional"))
+                        .lineLimit(4)
                 }
-                TextField("Name", text: $name, prompt: prompt("Channel name"))
-                TextField("Description", text: $about, prompt: prompt("Optional"), axis: .vertical)
-                    .lineLimit(2...4)
+                .compatFormStyleColumns()
             }
-            .formStyle(.columns)
         }
     }
 
@@ -291,23 +300,25 @@ struct EditChannelSheet: View {
     let channelID: String
 
     var body: some View {
-        // The sheet can open before the list loads (launch routes): the
-        // form appears once the channel resolves, seeded from it.
-        if let (team, ch) = TeamsListPane.locate(channelID, in: teams.teams) {
-            EditChannelForm(teams: teams, teamID: team.teamId, channel: ch)
-        } else {
-            TeamsSheetFrame(title: "Edit Channel", action: "Save", enabled: false,
-                            busy: teams.state == .loading ? "Loading…" : nil,
-                            error: teams.state == .loading ? nil : "This channel is no longer available.",
-                            perform: {}) {
-                // Same fields, disabled, so the sheet keeps its size.
-                Form {
-                    TextField("Name", text: .constant(""), prompt: prompt("Channel name"))
-                    TextField("Description", text: .constant(""), prompt: prompt("Optional"), axis: .vertical)
-                        .lineLimit(2...4)
+        WithPerceptionTracking {
+            // The sheet can open before the list loads (launch routes): the
+            // form appears once the channel resolves, seeded from it.
+            if let (team, ch) = TeamsListPane.locate(channelID, in: teams.teams) {
+                EditChannelForm(teams: teams, teamID: team.teamId, channel: ch)
+            } else {
+                TeamsSheetFrame(title: "Edit Channel", action: "Save", enabled: false,
+                                busy: teams.state == .loading ? "Loading…" : nil,
+                                error: teams.state == .loading ? nil : "This channel is no longer available.",
+                                perform: {}) {
+                    // Same fields, disabled, so the sheet keeps its size.
+                    Form {
+                        TextField("Name", text: .constant(""), prompt: prompt("Channel name"))
+                        TextField("Description", text: .constant(""), prompt: prompt("Optional"))
+                            .lineLimit(4)
+                    }
+                    .compatFormStyleColumns()
+                    .disabled(true)
                 }
-                .formStyle(.columns)
-                .disabled(true)
             }
         }
     }
@@ -337,16 +348,18 @@ private struct EditChannelForm: View {
     }
 
     var body: some View {
-        TeamsSheetFrame(title: "Edit Channel", action: "Save",
-                        enabled: changed && !trimmed(name).isEmpty,
-                        busy: saving ? "Saving…" : nil,
-                        error: submitted ? teams.actionError : nil, perform: save) {
-            Form {
-                TextField("Name", text: $name, prompt: prompt("Channel name"))
-                TextField("Description", text: $about, prompt: prompt("Optional"), axis: .vertical)
-                    .lineLimit(2...4)
+        WithPerceptionTracking {
+            TeamsSheetFrame(title: "Edit Channel", action: "Save",
+                            enabled: changed && !trimmed(name).isEmpty,
+                            busy: saving ? "Saving…" : nil,
+                            error: submitted ? teams.actionError : nil, perform: save) {
+                Form {
+                    TextField("Name", text: $name, prompt: prompt("Channel name"))
+                    TextField("Description", text: $about, prompt: prompt("Optional"))
+                        .lineLimit(4)
+                }
+                .compatFormStyleColumns()
             }
-            .formStyle(.columns)
         }
     }
 
@@ -374,13 +387,15 @@ struct AddMemberSheet: View {
     @Environment(\.windowModel) private var model
 
     var body: some View {
-        TeamsSheetFrame(title: "Add Member", action: "Add", enabled: !trimmed(user).isEmpty,
-                        busy: adding ? "Adding…" : nil, error: errorText, perform: add) {
-            Form {
-                TextField("Person", text: $user, prompt: prompt("Email or user ID"))
-                Toggle("Make owner", isOn: $owner)
+        WithPerceptionTracking {
+            TeamsSheetFrame(title: "Add Member", action: "Add", enabled: !trimmed(user).isEmpty,
+                            busy: adding ? "Adding…" : nil, error: errorText, perform: add) {
+                Form {
+                    TextField("Person", text: $user, prompt: prompt("Email or user ID"))
+                    Toggle("Make owner", isOn: $owner)
+                }
+                .compatFormStyleColumns()
             }
-            .formStyle(.columns)
         }
     }
 

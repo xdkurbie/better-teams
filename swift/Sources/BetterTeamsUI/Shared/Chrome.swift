@@ -13,6 +13,7 @@
 import AppKit
 import Combine
 import SwiftUI
+import Perception
 
 /// Every control-layer site that can wear glass. The guard checks each
 /// case is used outside this file and resolves differently per mode.
@@ -102,9 +103,23 @@ enum Chrome {
         let bordered = look(site, glass: glass) == .glass
         for item in items where item.view == nil && !(item is NSSearchToolbarItem)
             && !(item is NSTrackingSeparatorToolbarItem) && !(item is NSToolbarItemGroup)
-            && item.style != .prominent && item.itemIdentifier != .flexibleSpace
+            && !isProminent(item) && item.itemIdentifier != .flexibleSpace
             && item.itemIdentifier != .space {
             item.isBordered = bordered
+        }
+    }
+
+    /// Prominent toolbar items are a macOS 26 style. Older systems keep a
+    /// plain bordered item (Leave still reads Leave).
+    static func isProminent(_ item: NSToolbarItem) -> Bool {
+        if #available(macOS 26, *) { return item.style == .prominent }
+        return false
+    }
+
+    static func applyProminent(_ item: NSToolbarItem) {
+        if #available(macOS 26, *) {
+            item.style = .prominent
+            item.backgroundTintColor = .systemRed
         }
     }
 }
@@ -147,7 +162,7 @@ final class ChromeBackgroundView: NSView {
         contentView.removeFromSuperview()
         let next: NSView
         var inset: CGFloat = 0
-        if glass {
+        if #available(macOS 26, *), glass {
             inset = glassInset
             let g = NSGlassEffectView()
             g.cornerRadius = cornerRadius
@@ -221,10 +236,12 @@ private struct ChromeBackground<S: Shape, P: View>: ViewModifier {
     let plain: P
 
     func body(content: Content) -> some View {
-        if ChromeMode.glass {
-            content.glassEffect(.regular, in: shape)
-        } else {
-            content.background { plain }
+        WithPerceptionTracking {
+            if #available(macOS 26, *), ChromeMode.glass {
+                content.glassEffect(.regular, in: shape)
+            } else {
+                content.background { plain }
+            }
         }
     }
 }
@@ -233,10 +250,12 @@ private struct ChromeButton: ViewModifier {
     let site: ChromeSite
 
     func body(content: Content) -> some View {
-        if ChromeMode.glass {
-            content.buttonStyle(.glass)
-        } else {
-            content.buttonStyle(.bordered)
+        WithPerceptionTracking {
+            if #available(macOS 26, *), ChromeMode.glass {
+                content.buttonStyle(.glass)
+            } else {
+                content.buttonStyle(.bordered)
+            }
         }
     }
 }
@@ -247,18 +266,20 @@ private struct ChromeBarModifier: ViewModifier {
     let inset: CGFloat
 
     func body(content: Content) -> some View {
-        if ChromeMode.glass {
-            content
-                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-                .padding(.horizontal, inset)
-                .padding(.top, inset)
-                .padding(.bottom, inset / 2)
-        } else {
-            VStack(spacing: 0) {
+        WithPerceptionTracking {
+            if #available(macOS 26, *), ChromeMode.glass {
                 content
-                Divider()
+                    .glassEffect(.regular, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+                    .padding(.horizontal, inset)
+                    .padding(.top, inset)
+                    .padding(.bottom, inset / 2)
+            } else {
+                VStack(spacing: 0) {
+                    content
+                    Divider()
+                }
+                .background(.bar)
             }
-            .background(.bar)
         }
     }
 }

@@ -10,6 +10,7 @@
 import AppKit
 import OstMacCore
 import SwiftUI
+import Perception
 
 /// The mention under the pointer: person name, character range and the
 /// run's bounds (top-left origin, text coordinates).
@@ -171,22 +172,24 @@ struct MentionHoverModifier: ViewModifier {
     static func anchor(base: String, _ hit: MentionHit) -> String { base + ":" + String(hit.range.location) }
 
     func body(content: Content) -> some View {
-        if model?.app != nil, MentionLayout.hasMention(text) {
-            content
-                .overlay {
-                    MentionTracker(text: MentionLayout.attributed(text, scale: scale)) { left, entered in
-                        if let left { hover.pointer(false, anchor: Self.anchor(base: base, left)) }
-                        if let entered {
-                            shown = entered
-                            hover.pointer(true, anchor: Self.anchor(base: base, entered))
+        WithPerceptionTracking {
+            if model?.app != nil, MentionLayout.hasMention(text) {
+                content
+                    .overlay {
+                        MentionTracker(text: MentionLayout.attributed(text, scale: scale)) { left, entered in
+                            if let left { hover.pointer(false, anchor: Self.anchor(base: base, left)) }
+                            if let entered {
+                                shown = entered
+                                hover.pointer(true, anchor: Self.anchor(base: base, entered))
+                            }
                         }
                     }
-                }
-                .overlay(alignment: .topLeading) {
-                    if let shown { anchorView(shown) }
-                }
-        } else {
-            content
+                    .overlay(alignment: .topLeading) {
+                        if let shown { anchorView(shown) }
+                    }
+            } else {
+                content
+            }
         }
     }
 

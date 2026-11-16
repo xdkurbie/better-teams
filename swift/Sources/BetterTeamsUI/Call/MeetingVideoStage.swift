@@ -10,6 +10,7 @@
 // people in the strip (`SpotlightLayout`), back to the grid when it ends.
 import OstMacCore
 import SwiftUI
+import Perception
 
 struct MeetingVideoStage: View {
     let session: CallSession
@@ -36,38 +37,54 @@ struct MeetingVideoStage: View {
     }
 
     var body: some View {
-        VStack(spacing: 12) {
-            if !session.connected {
-                Text(status)
-                    .font(AppFont.body(scale))
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: 480)
-                    .accessibilityAddTraits(.updatesFrequently)
-            }
-            layout {
-                ForEach(items) { item in
-                    switch item {
-                    case .remote(let t):
-                        MeetingTileView(tile: t, decoder: video.videos[t.id], demo: video.demo,
-                                        animated: !session.isEvidence, seed: Self.seed(t.id),
-                                        pinned: video.pinnedID == t.id,
-                                        onPin: { video.pin(video.pinnedID == t.id ? nil : t.id) })
-                    case .remoteShare(let m):
-                        RemoteShareView(model: m, presenter: video.presenter?.name)
-                    case .demoShare:
-                        DemoShareView(presenter: video.presenter?.name)
-                    case .local(let t):
-                        CallTileView(tile: t, camera: session.camera)
+        WithPerceptionTracking {
+            VStack(spacing: 12) {
+                if !session.connected {
+                    Text(status)
+                        .font(AppFont.body(scale))
+                        .compatForeground(.secondary)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: 480)
+                        .accessibilityAddTraits(.updatesFrequently)
+                }
+                stageTiles {
+                    ForEach(items) { item in
+                        switch item {
+                        case .remote(let t):
+                            MeetingTileView(tile: t, decoder: video.videos[t.id], demo: video.demo,
+                                            animated: !session.isEvidence, seed: Self.seed(t.id),
+                                            pinned: video.pinnedID == t.id,
+                                            onPin: { video.pin(video.pinnedID == t.id ? nil : t.id) })
+                        case .remoteShare(let m):
+                            RemoteShareView(model: m, presenter: video.presenter?.name)
+                        case .demoShare:
+                            DemoShareView(presenter: video.presenter?.name)
+                        case .local(let t):
+                            CallTileView(tile: t, camera: session.camera)
+                        }
                     }
                 }
+                .animation(VideoFade.animation, value: video.pinnedID)
+                .animation(VideoFade.animation, value: video.shareVideo != nil)
             }
-            .animation(VideoFade.animation, value: video.pinnedID)
-            .animation(VideoFade.animation, value: video.shareVideo != nil)
+            .padding(16)
         }
-        .padding(16)
     }
 
+    @ViewBuilder
+    private func stageTiles<V: View>(@ViewBuilder content: () -> V) -> some View {
+        if #available(macOS 13, *) {
+            layout {
+                content()
+            }
+        } else {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), spacing: 8)], spacing: 8) {
+                content()
+            }
+        }
+    }
+
+    @available(macOS 13, *)
     private var layout: AnyLayout {
         video.pinnedID == nil && video.shareVideo == nil && !video.demoPresenting
             ? AnyLayout(TileGridLayout(spacing: 8)) : AnyLayout(SpotlightLayout(spacing: 8))
@@ -111,31 +128,33 @@ struct MeetingTileView: View {
     private var showsVideo: Bool { tile.videoOn && (demo || decoder != nil) }
 
     var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 10, style: .continuous).fill(.fill.tertiary)
-            if showsVideo {
-                videoLayer.transition(.opacity)
-            } else {
-                Avatar(name: tile.name, diameter: 72)
-                    .padding(4)
-                    .transition(.opacity)
+        WithPerceptionTracking {
+            ZStack {
+                RoundedRectangle(cornerRadius: 10, style: .continuous).fill(CompatFill.tertiary)
+                if showsVideo {
+                    videoLayer.transition(.opacity)
+                } else {
+                    Avatar(name: tile.name, diameter: 72)
+                        .padding(4)
+                        .transition(.opacity)
+                }
             }
+            .animation(VideoFade.animation, value: showsVideo)
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .strokeBorder(.tint, lineWidth: 3)
+                    .opacity(tile.speaking ? 1 : 0)
+                    .animation(VideoFade.animation, value: tile.speaking)
+            }
+            .overlay(alignment: .bottomLeading) { chip.padding(8) }
+            .contextMenu {
+                Button(pinned ? "Unpin" : "Pin", action: onPin)
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(accessibility)
+            .accessibilityAction(named: pinned ? "Unpin" : "Pin", onPin)
         }
-        .animation(VideoFade.animation, value: showsVideo)
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .strokeBorder(.tint, lineWidth: 3)
-                .opacity(tile.speaking ? 1 : 0)
-                .animation(VideoFade.animation, value: tile.speaking)
-        }
-        .overlay(alignment: .bottomLeading) { chip.padding(8) }
-        .contextMenu {
-            Button(pinned ? "Unpin" : "Pin", action: onPin)
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(accessibility)
-        .accessibilityAction(named: pinned ? "Unpin" : "Pin", onPin)
     }
 
     @ViewBuilder
@@ -150,10 +169,10 @@ struct MeetingTileView: View {
     private var chip: some View {
         HStack(spacing: 4) {
             if pinned {
-                Image(systemName: "pin.fill").foregroundStyle(.secondary)
+                Image(systemName: "pin.fill").compatForeground(.secondary)
             }
             if tile.muted {
-                Image(systemName: "mic.slash.fill").foregroundStyle(.secondary)
+                Image(systemName: "mic.slash.fill").compatForeground(.secondary)
             }
             Text(tile.name)
                 .lineLimit(1)
@@ -195,28 +214,30 @@ private struct RemoteShareView: View {
     }
 
     var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 10, style: .continuous).fill(.fill.tertiary)
-            if let img = model.remoteImage {
-                Image(decorative: img, scale: 1)
-                    .resizable()
-                    .interpolation(.high)
-                    .scaledToFit()
-                    .transition(.opacity)
-            } else {
-                Text(waiting)
-                    .font(AppFont.body(scale))
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .padding(12)
-                    .transition(.opacity)
+        WithPerceptionTracking {
+            ZStack {
+                RoundedRectangle(cornerRadius: 10, style: .continuous).fill(CompatFill.tertiary)
+                if let img = model.remoteImage {
+                    Image(decorative: img, scale: 1)
+                        .resizable()
+                        .interpolation(.high)
+                        .scaledToFit()
+                        .transition(.opacity)
+                } else {
+                    Text(waiting)
+                        .font(AppFont.body(scale))
+                        .compatForeground(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(12)
+                        .transition(.opacity)
+                }
             }
+            .animation(VideoFade.animation, value: model.remoteImage == nil)
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay(alignment: .bottomLeading) { PresentingChip(title: title).padding(8) }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(model.remoteImage == nil ? waiting : title)
         }
-        .animation(VideoFade.animation, value: model.remoteImage == nil)
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .overlay(alignment: .bottomLeading) { PresentingChip(title: title).padding(8) }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(model.remoteImage == nil ? waiting : title)
     }
 }
 
@@ -226,18 +247,20 @@ private struct PresentingChip: View {
     @Environment(\.contentTextScale) private var scale
 
     var body: some View {
-        HStack(spacing: 4) {
-            Image(systemName: "rectangle.on.rectangle").foregroundStyle(.secondary)
-            Text(title)
-                .lineLimit(1)
-                .truncationMode(.tail)
-        }
-        .font(AppFont.subheadline(scale))
-        .padding(.horizontal, 6)
-        .padding(.vertical, 3)
-        .chromeBackground(.callNameChip, in: RoundedRectangle(cornerRadius: 5, style: .continuous)) {
-            RoundedRectangle(cornerRadius: 5, style: .continuous)
-                .fill(Color(nsColor: .windowBackgroundColor).opacity(0.85))
+        WithPerceptionTracking {
+            HStack(spacing: 4) {
+                Image(systemName: "rectangle.on.rectangle").compatForeground(.secondary)
+                Text(title)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+            .font(AppFont.subheadline(scale))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .chromeBackground(.callNameChip, in: RoundedRectangle(cornerRadius: 5, style: .continuous)) {
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .fill(Color(nsColor: .windowBackgroundColor).opacity(0.85))
+            }
         }
     }
 }
@@ -248,20 +271,22 @@ private struct DemoShareView: View {
     let presenter: String?
 
     var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 10, style: .continuous).fill(.fill.tertiary)
-            if let slide = DemoSlide.image {
-                Image(nsImage: slide)
-                    .resizable()
-                    .aspectRatio(16.0 / 9.0, contentMode: .fit)
+        WithPerceptionTracking {
+            ZStack {
+                RoundedRectangle(cornerRadius: 10, style: .continuous).fill(CompatFill.tertiary)
+                if let slide = DemoSlide.image {
+                    Image(nsImage: slide)
+                        .resizable()
+                        .aspectRatio(16.0 / 9.0, contentMode: .fit)
+                }
             }
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay(alignment: .bottomLeading) {
+                PresentingChip(title: presenter.map { "\($0) is presenting" } ?? "Screen share").padding(8)
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(presenter.map { "\($0) is presenting" } ?? "Screen share")
         }
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .overlay(alignment: .bottomLeading) {
-            PresentingChip(title: presenter.map { "\($0) is presenting" } ?? "Screen share").padding(8)
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(presenter.map { "\($0) is presenting" } ?? "Screen share")
     }
 }
 
@@ -283,61 +308,61 @@ private struct DemoSlide: View {
     ]
 
     /// The slide as a 2x image (rendered once; the demo slide never changes).
-    @MainActor static let image: NSImage? = {
-        let r = ImageRenderer(content: DemoSlide())
-        r.scale = 2
-        return r.nsImage
-    }()
+    @MainActor static let image: NSImage? = Hosting.rasterize(
+        DemoSlide(), size: CGSize(width: DemoSlide.width, height: DemoSlide.height), scale: 2
+    )
 
     var body: some View {
-        ZStack(alignment: .topLeading) {
-            Color.white
-            Rectangle().fill(Palette.slideAccent).frame(width: Self.width, height: u * 0.8)
-            VStack(alignment: .leading, spacing: u * 1.2) {
-                Text("SPRINT 14 REVIEW")
-                    .font(AppFont.slide(u * 1.5, .semibold))
-                    .kerning(u * 0.15)
-                    .foregroundStyle(Palette.slideAccent)
-                Text("Onboarding refresh")
-                    .font(AppFont.slide(u * 4.2, .bold))
-                    .foregroundStyle(Palette.slideInk)
-                Text("Shorter setup, faster first message")
-                    .font(AppFont.slide(u * 2))
-                    .foregroundStyle(Palette.slideMuted)
-                HStack(alignment: .top, spacing: u * 5) {
-                    VStack(alignment: .leading, spacing: u * 2.6) {
-                        ForEach(Self.points, id: \.0) { p in
-                            VStack(alignment: .leading, spacing: u * 0.5) {
-                                Text(p.0)
-                                    .font(AppFont.slide(u * 1.6))
-                                    .foregroundStyle(Palette.slideMuted)
-                                Text(p.1)
-                                    .font(AppFont.slide(u * 2.8, .semibold))
-                                    .foregroundStyle(Palette.slideInk)
+        WithPerceptionTracking {
+            ZStack(alignment: .topLeading) {
+                Color.white
+                Rectangle().fill(Palette.slideAccent).frame(width: Self.width, height: u * 0.8)
+                VStack(alignment: .leading, spacing: u * 1.2) {
+                    Text("SPRINT 14 REVIEW")
+                        .font(AppFont.slide(u * 1.5, .semibold))
+                        .compatKerning(u * 0.15)
+                        .compatForeground(Palette.slideAccent)
+                    Text("Onboarding refresh")
+                        .font(AppFont.slide(u * 4.2, .bold))
+                        .compatForeground(Palette.slideInk)
+                    Text("Shorter setup, faster first message")
+                        .font(AppFont.slide(u * 2))
+                        .compatForeground(Palette.slideMuted)
+                    HStack(alignment: .top, spacing: u * 5) {
+                        VStack(alignment: .leading, spacing: u * 2.6) {
+                            ForEach(Self.points, id: \.0) { p in
+                                VStack(alignment: .leading, spacing: u * 0.5) {
+                                    Text(p.0)
+                                        .font(AppFont.slide(u * 1.6))
+                                        .compatForeground(Palette.slideMuted)
+                                    Text(p.1)
+                                        .font(AppFont.slide(u * 2.8, .semibold))
+                                        .compatForeground(Palette.slideInk)
+                                }
                             }
                         }
+                        .frame(width: u * 34, alignment: .leading)
+                        chart(u)
                     }
-                    .frame(width: u * 34, alignment: .leading)
-                    chart(u)
+                    .padding(.top, u * 3)
                 }
-                .padding(.top, u * 3)
+                .padding(.horizontal, u * 6)
+                .padding(.top, u * 5.5)
+                Text("Product Team \u{00B7} Engineering standup")
+                    .font(AppFont.slide(u * 1.3))
+                    .compatForeground(Palette.slideMuted)
+                    .position(x: u * 12, y: Self.height - u * 3)
             }
-            .padding(.horizontal, u * 6)
-            .padding(.top, u * 5.5)
-            Text("Product Team \u{00B7} Engineering standup")
-                .font(AppFont.slide(u * 1.3))
-                .foregroundStyle(Palette.slideMuted)
-                .position(x: u * 12, y: Self.height - u * 3)
+            .frame(width: Self.width, height: Self.height)
+            .environment(\.colorScheme, .light)
         }
-        .frame(width: Self.width, height: Self.height)
-        .environment(\.colorScheme, .light)
     }
 
     private func chart(_ u: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: u * 1.2) {
             Text("Weekly sign-ups completed")
                 .font(AppFont.slide(u * 1.6, .medium))
-                .foregroundStyle(Palette.slideInk)
+                .compatForeground(Palette.slideInk)
             HStack(alignment: .bottom, spacing: u * 2) {
                 ForEach(Self.bars, id: \.0) { b in
                     VStack(spacing: u * 0.8) {
@@ -346,7 +371,7 @@ private struct DemoSlide: View {
                             .frame(width: u * 4.4, height: u * 22 * b.1)
                         Text(b.0)
                             .font(AppFont.slide(u * 1.3))
-                            .foregroundStyle(Palette.slideMuted)
+                            .compatForeground(Palette.slideMuted)
                     }
                 }
             }
@@ -362,32 +387,37 @@ private struct TileVideo: View {
     let name: String
 
     var body: some View {
-        ZStack {
-            if let img = model.remoteImage {
-                Color.clear
-                    .overlay {
-                        Image(decorative: img, scale: 1)
-                            .resizable()
-                            .scaledToFill()
-                    }
-                    .clipped()
-                    .transition(.opacity)
-            } else {
-                Avatar(name: name, diameter: 72)
-                    .padding(4)
-                    .transition(.opacity)
+        WithPerceptionTracking {
+            ZStack {
+                if let img = model.remoteImage {
+                    Color.clear
+                        .overlay {
+                            Image(decorative: img, scale: 1)
+                                .resizable()
+                                .scaledToFill()
+                        }
+                        .clipped()
+                        .transition(.opacity)
+                } else {
+                    Avatar(name: name, diameter: 72)
+                        .padding(4)
+                        .transition(.opacity)
+                }
             }
+            .animation(VideoFade.animation, value: model.remoteImage == nil)
         }
-        .animation(VideoFade.animation, value: model.remoteImage == nil)
     }
 }
 
 /// Spotlight: the first tile large, the rest in one row along the
 /// bottom. Pure function of the proposal (no geometry readers).
-struct SpotlightLayout: Layout {
+struct SpotlightLayout {
     var spacing: CGFloat = 8
     var aspect: CGFloat = 16.0 / 9.0
+}
 
+@available(macOS 13, *)
+extension SpotlightLayout: Layout {
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         proposal.replacingUnspecifiedDimensions(by: CGSize(width: 640, height: 360))
     }

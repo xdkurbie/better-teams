@@ -5,6 +5,14 @@ import AVFoundation
 import Combine
 import Foundation
 
+/// Built-in cameras on every OS; external and Continuity Camera from macOS 14.
+func cameraDeviceTypes() -> [AVCaptureDevice.DeviceType] {
+    if #available(macOS 14, *) {
+        return [.builtInWideAngleCamera, .external, .continuityCamera]
+    }
+    return [.builtInWideAngleCamera, .externalUnknown]
+}
+
 /// AVCapture owner: BGRA frame output -> RustCore.cameraPush. Main-actor
 /// published state; delegate callbacks arrive on a private queue.
 @MainActor
@@ -78,7 +86,7 @@ public final class CameraCapture: NSObject, ObservableObject {
     /// Cameras available right now (no permission needed to list).
     public static func videoDevices() -> [CameraDevice] {
         let found = AVCaptureDevice.DiscoverySession(
-            deviceTypes: [.builtInWideAngleCamera, .external, .continuityCamera],
+            deviceTypes: cameraDeviceTypes(),
             mediaType: .video, position: .unspecified
         ).devices
         return found.map { CameraDevice(id: $0.uniqueID, name: $0.localizedName) }
@@ -220,7 +228,7 @@ public final class CameraCapture: NSObject, ObservableObject {
 
         let device: AVCaptureDevice? = if let want = deviceID {
             AVCaptureDevice.DiscoverySession(
-                deviceTypes: [.builtInWideAngleCamera, .external, .continuityCamera],
+                deviceTypes: cameraDeviceTypes(),
                 mediaType: .video, position: .unspecified
             ).devices.first(where: { $0.uniqueID == want })
                 ?? AVCaptureDevice.default(for: .video)
