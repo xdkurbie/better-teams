@@ -242,7 +242,12 @@ struct ToDoTaskRow: View {
                 Text(task.title)
                     .font(AppFont.body(scale))
                     .compatForeground(task.completed ? .secondary : .primary)
-                    .strikethrough(task.completed)
+                    .overlay(alignment: .center) {
+                        // `Text.strikethrough` is macOS 13+.
+                        if task.completed {
+                            Rectangle().fill(Color.secondary).frame(height: 1)
+                        }
+                    }
                     .lineLimit(1)
                     .truncationMode(.tail)
                     .frame(maxWidth: .infinity, alignment: .leading)
