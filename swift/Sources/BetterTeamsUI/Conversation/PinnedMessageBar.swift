@@ -25,12 +25,16 @@ struct PinnedMessageBar: View {
                                 .compatForeground(.secondary)
                                 .accessibilityHidden(true)
                             Button { jump(newest) } label: {
-                                (Text(sender(newest)).compatWeight(.medium) + Text("  ") + Text(newest.preview)
-                                    .compatForeground(.secondary))
-                                    .lineLimit(1)
-                                    .truncationMode(.tail)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .contentShape(Rectangle())
+                                HStack(spacing: 6) {
+                                    Text(sender(newest)).compatWeight(.medium)
+                                    Text(newest.preview)
+                                        .compatForeground(.secondary)
+                                        .lineLimit(1)
+                                }
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
                             .help(newest.isAvailable ? "Show in Conversation" : "Not in loaded history")

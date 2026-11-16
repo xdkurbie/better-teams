@@ -65,32 +65,82 @@ struct ShiftsWeekPane: View {
                   message: ShiftsSection.weekRange(store.weekStart))
     }
 
+    @ViewBuilder
     private func table(_ week: ShiftWeek, _ rows: [ShiftsRow], _ m: WindowModel) -> some View {
         let days = ShiftsDay.week(week.weekStart)
         let selection = Binding<String?>(
             get: { ShiftsSection.selectedRowID(m) },
             set: { ShiftsSection.select($0, m) })
-        return Table(rows, selection: selection) {
+        // `TableColumnBuilder` availability checks exist only on macOS 14.4+.
+        if #available(macOS 14.4, *) {
+            weekTable(rows, selection: selection, days: days, model: m)
+        } else {
+            weekTableLegacy(rows, selection: selection, days: days, model: m)
+        }
+    }
+
+    @available(macOS 14.4, *)
+    private func weekTable(
+        _ rows: [ShiftsRow],
+        selection: Binding<String?>,
+        days: [ShiftsDay],
+        model: WindowModel
+    ) -> some View {
+        Table(rows, selection: selection) {
             TableColumn("Member") { row in ShiftsPersonCell(row: row) }
                 .width(min: 140, ideal: 180)
-            if #available(macOS 14.4, *) {
-                TableColumnForEach(days) { day in
-                    TableColumn(day.title) { row in ShiftsDayCell(cells: row.days[day.id]) }
-                        .width(min: 96, ideal: 130)
-                }
-            } else if let day = days.first {
+            TableColumnForEach(days) { day in
                 TableColumn(day.title) { row in ShiftsDayCell(cells: row.days[day.id]) }
                     .width(min: 96, ideal: 130)
             }
         }
-        // Plain rows: alternating stripes also paint empty filler rows
-        // below the last member.
-        .compatAlternatingRowsDisabled()
-        .compatSelectionMenu(forSelectionType: String.self) { _ in
-            EmptyView()
-        } primaryAction: { ids in
-            if let id = ids.first { ShiftsSection.open(id, m) }
+        .modifier(ShiftsTableChrome(model: model))
+    }
+
+    private func weekTableLegacy(
+        _ rows: [ShiftsRow],
+        selection: Binding<String?>,
+        days: [ShiftsDay],
+        model: WindowModel
+    ) -> some View {
+        // A week is always seven columns. Conditionals inside `Table` need
+        // `TableColumnBuilder.buildIf`, which is macOS 14.4+.
+        let c0 = days[0], c1 = days[1], c2 = days[2], c3 = days[3]
+        let c4 = days[4], c5 = days[5], c6 = days[6]
+        return Table(rows, selection: selection) {
+            TableColumn("Member") { row in ShiftsPersonCell(row: row) }
+                .width(min: 140, ideal: 180)
+            TableColumn(c0.title) { row in ShiftsDayCell(cells: row.days[c0.id]) }
+                .width(min: 96, ideal: 130)
+            TableColumn(c1.title) { row in ShiftsDayCell(cells: row.days[c1.id]) }
+                .width(min: 96, ideal: 130)
+            TableColumn(c2.title) { row in ShiftsDayCell(cells: row.days[c2.id]) }
+                .width(min: 96, ideal: 130)
+            TableColumn(c3.title) { row in ShiftsDayCell(cells: row.days[c3.id]) }
+                .width(min: 96, ideal: 130)
+            TableColumn(c4.title) { row in ShiftsDayCell(cells: row.days[c4.id]) }
+                .width(min: 96, ideal: 130)
+            TableColumn(c5.title) { row in ShiftsDayCell(cells: row.days[c5.id]) }
+                .width(min: 96, ideal: 130)
+            TableColumn(c6.title) { row in ShiftsDayCell(cells: row.days[c6.id]) }
+                .width(min: 96, ideal: 130)
         }
+        .modifier(ShiftsTableChrome(model: model))
+    }
+}
+
+/// Plain rows: alternating stripes also paint empty filler rows below the last member.
+private struct ShiftsTableChrome: ViewModifier {
+    let model: WindowModel
+
+    func body(content: Content) -> some View {
+        content
+            .compatAlternatingRowsDisabled()
+            .compatSelectionMenu(forSelectionType: String.self) { _ in
+                EmptyView()
+            } primaryAction: { ids in
+                if let id = ids.first { ShiftsSection.open(id, model) }
+            }
     }
 }
 
@@ -192,32 +242,41 @@ struct ShiftsInspectorPane: View {
             }
             ForEach(days) { day in
                 if !row.days[day.id].isEmpty {
-                    Section(day.date.formatted(.dateTime.weekday(.wide).month(.abbreviated).day())) {
+                    Section(header: Text(day.date.formatted(.dateTime.weekday(.wide).month(.abbreviated).day()))) {
                         ForEach(row.days[day.id]) { cell in
-                            LabeledContent {
-                                Text(cell.time).monospacedDigit()
-                            } label: {
-                                Label {
-                                    Text(cell.label)
-                                } icon: {
-                                    Circle().fill(ShiftsTheme.color(cell.theme)).frame(width: 8, height: 8)
-                                }
-                            }
-                            if cell.isDraft {
-                                LabeledContent("Status", value: "Draft (not shared)")
-                            }
-                            if let notes = cell.notes, !notes.isEmpty {
-                                Text(notes)
-                                    .font(AppFont.body(scale))
-                                    .compatForeground(.secondary)
-                                    .textSelection(.enabled)
-                            }
+                            ShiftInspectorEntry(cell: cell)
                         }
                     }
                 }
             }
         }
         .compatFormStyleGrouped()
+    }
+}
+
+private struct ShiftInspectorEntry: View {
+    let cell: ShiftsCell
+    @Environment(\.contentTextScale) private var scale
+
+    var body: some View {
+        LabeledContent {
+            Text(cell.time).monospacedDigit()
+        } label: {
+            Label {
+                Text(cell.label)
+            } icon: {
+                Circle().fill(ShiftsTheme.color(cell.theme)).frame(width: 8, height: 8)
+            }
+        }
+        if cell.isDraft {
+            LabeledContent("Status", value: "Draft (not shared)")
+        }
+        if let notes = cell.notes, !notes.isEmpty {
+            Text(notes)
+                .font(AppFont.body(scale))
+                .compatForeground(.secondary)
+                .textSelection(.enabled)
+        }
     }
 }
 

@@ -327,59 +327,7 @@ private struct WeekEventBlock: View {
             Button(action: action) {
                 HStack(spacing: 0) {
                     Rectangle().fill(color).frame(width: 3)
-                    Group {
-                        if isShort {
-                            // 30 minutes or less: one line, so the chip stays inside its slot.
-                            // Title and start time when both fit; in a narrow lane
-                            // the title alone, never a clipped time.
-                            if #available(macOS 13, *) {
-                                ViewThatFits(in: .horizontal) {
-                                    HStack(spacing: 4) {
-                                        Text(meeting.subject)
-                                            .font(AppFont.caption(scale).compatWeight(.semibold))
-                                            .lineLimit(1)
-                                        Text(CalendarFormat.date(meeting.start).map(CalendarFormat.time) ?? "")
-                                            .font(AppFont.caption(scale))
-                                            .monospacedDigit()
-                                            .compatForeground(.secondary)
-                                            .lineLimit(1)
-                                    }
-                                    // Narrow lane: a 30-minute block has room for two lines
-                                    // of title; a 15-minute one keeps one and truncates.
-                                    Text(meeting.subject)
-                                        .font(AppFont.caption(scale).compatWeight(.semibold))
-                                        .lineLimit(isTiny ? 1 : 2)
-                                        // Wrap onto the second line rather than cutting the first
-                                        // with an ellipsis; the block's edge trims any overflow.
-                                        .fixedSize(horizontal: false, vertical: true)
-                                }
-                            } else {
-                                Text(meeting.subject)
-                                    .font(AppFont.caption(scale).compatWeight(.semibold))
-                                    .lineLimit(isTiny ? 1 : 2)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                        } else {
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text(meeting.subject)
-                                    .font(AppFont.caption(scale).compatWeight(.semibold))
-                                    .lineLimit(4)
-                                // Narrow lanes: start time only, never a clipped range.
-                                if #available(macOS 13, *) {
-                                    ViewThatFits(in: .horizontal) {
-                                        Text(CalendarFormat.range(meeting))
-                                        Text(CalendarFormat.date(meeting.start).map(CalendarFormat.time) ?? "")
-                                    }
-                                } else {
-                                    Text(CalendarFormat.date(meeting.start).map(CalendarFormat.time) ?? "")
-                                }
-                                .font(AppFont.caption(scale))
-                                .monospacedDigit()
-                                .compatForeground(.secondary)
-                                .lineLimit(1)
-                            }
-                        }
-                    }
+                    WeekEventText(meeting: meeting, isShort: isShort, isTiny: isTiny)
                     .padding(.horizontal, 3)
                     .padding(.top, isTiny ? 0 : (isShort ? 1 : 2))
                     .padding(.bottom, isTiny || isShort ? 0 : 2)
@@ -397,6 +345,78 @@ private struct WeekEventBlock: View {
             .accessibilityLabel("\(meeting.subject), \(CalendarFormat.range(meeting))")
             .accessibilityAddTraits(selected ? .isSelected : [])
         }
+    }
+}
+
+/// Title and time inside a week block. Split out so the chip button stays type-checkable.
+private struct WeekEventText: View {
+    let meeting: MeetingItem
+    let isShort: Bool
+    let isTiny: Bool
+    @Environment(\.contentTextScale) private var scale
+
+    var body: some View {
+        if isShort {
+            shortTitle
+        } else {
+            tallTitle
+        }
+    }
+
+    private var titleFont: Font { AppFont.caption(scale).compatWeight(.semibold) }
+
+    @ViewBuilder
+    private var shortTitle: some View {
+        if #available(macOS 13, *) {
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 4) {
+                    Text(meeting.subject).font(titleFont).lineLimit(1)
+                    Text(startTime)
+                        .font(AppFont.caption(scale))
+                        .monospacedDigit()
+                        .compatForeground(.secondary)
+                        .lineLimit(1)
+                }
+                Text(meeting.subject)
+                    .font(titleFont)
+                    .lineLimit(isTiny ? 1 : 2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        } else {
+            Text(meeting.subject)
+                .font(titleFont)
+                .lineLimit(isTiny ? 1 : 2)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var tallTitle: some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(meeting.subject)
+                .font(titleFont)
+                .lineLimit(4)
+            timeLine
+                .font(AppFont.caption(scale))
+                .monospacedDigit()
+                .compatForeground(.secondary)
+                .lineLimit(1)
+        }
+    }
+
+    @ViewBuilder
+    private var timeLine: some View {
+        if #available(macOS 13, *) {
+            ViewThatFits(in: .horizontal) {
+                Text(CalendarFormat.range(meeting))
+                Text(startTime)
+            }
+        } else {
+            Text(startTime)
+        }
+    }
+
+    private var startTime: String {
+        CalendarFormat.date(meeting.start).map(CalendarFormat.time) ?? ""
     }
 }
 

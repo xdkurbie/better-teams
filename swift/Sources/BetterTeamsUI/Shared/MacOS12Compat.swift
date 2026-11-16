@@ -334,7 +334,7 @@ extension View {
                 for provider in providers {
                     group.enter()
                     _ = provider.loadObject(ofClass: URL.self) { object, _ in
-                        if let url = object as? URL {
+                        if let url = object {
                             box.append(url)
                         }
                         group.leave()
@@ -437,32 +437,64 @@ struct LabeledContent: View {
     private let title: String
     private let value: String?
     private let content: AnyView?
+    private let labelView: AnyView?
 
     init(_ title: String, value: String) {
         self.title = title
         self.value = value
         content = nil
+        labelView = nil
     }
 
     init<C: View>(_ title: String, @ViewBuilder content: () -> C) {
         self.title = title
         value = nil
         self.content = AnyView(content())
+        labelView = nil
+    }
+
+    /// `LabeledContent { value } label: { label }` (macOS 13+).
+    init<C: View, L: View>(@ViewBuilder content: () -> C, @ViewBuilder label: () -> L) {
+        title = ""
+        value = nil
+        self.content = AnyView(content())
+        labelView = AnyView(label())
     }
 
     var body: some View {
-        if #available(macOS 13, *), let value {
-            SwiftUI.LabeledContent(title, value: value)
-        } else if #available(macOS 13, *), let content {
-            SwiftUI.LabeledContent(title) { content }
+        if let labelView, let content {
+            pair(labelView, content)
+        } else if let value {
+            titled(Text(title), trailing: AnyView(Text(value).compatForeground(.secondary)), value: value)
+        } else if let content {
+            titled(Text(title), trailing: content, value: nil)
+        }
+    }
+
+    @ViewBuilder
+    private func pair(_ label: AnyView, _ content: AnyView) -> some View {
+        if #available(macOS 13, *) {
+            SwiftUI.LabeledContent { content } label: { label }
         } else {
             HStack(alignment: .firstTextBaseline) {
-                Text(title)
+                label
                 Spacer(minLength: 12)
-                if let value {
-                    Text(value).compatForeground(.secondary)
-                }
-                if let content { content }
+                content
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func titled(_ label: Text, trailing: AnyView, value: String?) -> some View {
+        if #available(macOS 13, *), let value {
+            SwiftUI.LabeledContent(title, value: value)
+        } else if #available(macOS 13, *) {
+            SwiftUI.LabeledContent(title) { trailing }
+        } else {
+            HStack(alignment: .firstTextBaseline) {
+                label
+                Spacer(minLength: 12)
+                trailing
             }
         }
     }

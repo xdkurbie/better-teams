@@ -179,24 +179,34 @@ struct RecapDetailPane: View {
 
     var body: some View {
         WithPerceptionTracking {
-            if let model {
-                if model.forced(.native(.recaps)) == nil, let recap = RecapsSection.current(model) {
-                    let vm = RecapsSection.model(for: recap, store)
-                    MeetingRecapView(recap: vm, recordings: recordings, identity: recap.id)
-                        .task(id: (recap.recording?.id ?? "-") + "|" + (recap.transcript?.id ?? "-") + "|"
-                              + (Self.listError(recordings.state) ?? "") + "|" + (Self.listError(transcripts.state) ?? "")) {
-                            if recap.threadID != nil {
-                                vm.updateFiles(recording: recap.recording, transcript: recap.transcript)
-                            } else {
-                                vm.updateListErrors(recordings: Self.listError(recordings.state),
-                                                    transcripts: Self.listError(transcripts.state))
-                            }
-                        }
-                } else {
-                    NoSelectionPane(RecapDetailState.noSelectionTitle)
-                }
+            detail
+        }
+    }
+
+    @ViewBuilder
+    private var detail: some View {
+        if let model {
+            if model.forced(.native(.recaps)) == nil, let recap = RecapsSection.current(model) {
+                recapView(recap)
+            } else {
+                NoSelectionPane(RecapDetailState.noSelectionTitle)
             }
         }
+    }
+
+    private func recapView(_ recap: Recap) -> some View {
+        let vm = RecapsSection.model(for: recap, store)
+        let token = (recap.recording?.id ?? "-") + "|" + (recap.transcript?.id ?? "-") + "|"
+            + (Self.listError(recordings.state) ?? "") + "|" + (Self.listError(transcripts.state) ?? "")
+        return MeetingRecapView(recap: vm, recordings: recordings, identity: recap.id)
+            .task(id: token) {
+                if recap.threadID != nil {
+                    vm.updateFiles(recording: recap.recording, transcript: recap.transcript)
+                } else {
+                    vm.updateListErrors(recordings: Self.listError(recordings.state),
+                                        transcripts: Self.listError(transcripts.state))
+                }
+            }
     }
 }
 
